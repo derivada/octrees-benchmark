@@ -18,26 +18,7 @@ class LinearOctree : public OctreeV2 {
 private:
     LinearOctreeMap* map;
     uint64_t code;
-    uint32_t childMask;
-
-    int getNextChildIndex() {
-        int index;
-        #if defined(__GNUC__)
-        index = childMask ? 32 - __builtin_clz(childMask) : 0;
-        #else
-        if (childMask == 0) {
-            index = 0;
-        } else {
-            index = 0;
-            uint32_t mask = childMask;
-            while (mask >>= 1) {
-                ++index;
-            }
-        }
-        #endif
-        return index;
-    };
-
+    uint8_t childMask = 0; // nth bit set to 1 if the nth child exists
 public:
     LinearOctree();
     explicit LinearOctree(std::vector<Lpoint>& points);

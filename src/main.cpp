@@ -39,7 +39,7 @@ int main(int argc, char *argv[]) {
             << " seconds\n";
 
   // Global Octree Creation
-/*   std::cout << "Building global octree..." << std::endl;
+  std::cout << "Building global octree..." << std::endl;
   tw.start();
   Octree gOctree(points);
   tw.stop();
@@ -57,7 +57,7 @@ int main(int argc, char *argv[]) {
   std::cout << "Time to build global (pointer) octree: " << tw.getElapsedDecimalSeconds()
             << " seconds\n";
   std::ofstream pOctreeStream(mainOptions.outputDirName / "pointer_octree.txt");
-  pOctree.writeOctree(pOctreeStream, 0); */
+  pOctree.writeOctree(pOctreeStream, 0);
 
   // Global Linear Octree Creation
   std::cout << "Building global (linear) octree..." << std::endl;

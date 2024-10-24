@@ -20,6 +20,7 @@ LinearOctree* LinearOctreeMap::getParent(uint64_t locCode) {
     if (getDepth(locCode) <= 1) return nullptr;
     return getNode(getParentCode(locCode));
 }
+
 void LinearOctreeMap::replaceChild(uint64_t locCode, int index, const LinearOctree& node) {
     replaceNode(getChildCode(locCode, index), node);
 }
@@ -31,13 +32,13 @@ void LinearOctreeMap::clearChild(uint64_t locCode, int index) {
 }
 
 // Static bitwise methods
-inline uint64_t LinearOctreeMap::getParentCode(int locCode) {
+uint64_t LinearOctreeMap::getParentCode(uint64_t locCode) {
     return locCode >> 3;
 }
-inline uint64_t LinearOctreeMap::getChildCode(int locCode, int index) {
+uint64_t LinearOctreeMap::getChildCode(uint64_t locCode, int index) {
     return (locCode << 3) | index;
 }
-inline size_t LinearOctreeMap::getDepth(uint64_t locCode) {
+size_t LinearOctreeMap::getDepth(uint64_t locCode) {
     if (!locCode) return 0;
     #if defined(__GNUC__)
     return (31 - __builtin_clz(locCode)) / 3;

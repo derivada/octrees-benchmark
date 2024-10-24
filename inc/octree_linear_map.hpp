@@ -22,7 +22,7 @@ public:
     void replaceParent(uint64_t locCode, const LinearOctree& node);
     void clearChild(uint64_t locCode, int index);
 
-    static uint64_t getParentCode(int locCode);
-    static uint64_t getChildCode(int locCode, int index);
+    static uint64_t getParentCode(uint64_t locCode);
+    static uint64_t getChildCode(uint64_t locCode, int index);
     static size_t getDepth(uint64_t locCode);
 };
