@@ -37,7 +37,8 @@ class OctreeV2
 	float                radius_{};
 	bool 				 octantsCreated = false; // Flag to check if octants have been created
 	std::vector<Lpoint*> points_{};
-
+	std::vector<Lpoint> points_storage_{}; // Storage for the points in the octree
+	
 	public:
 	OctreeV2();
 

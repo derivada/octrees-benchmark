@@ -164,17 +164,74 @@ bool OctreeV2::isInside2D(const Point& p) const
 
 void OctreeV2::insertPoints(std::vector<Lpoint>& points)
 {
-	for (Lpoint& p : points)
-	{
-		insertPoint(&p);
+	// for (Lpoint& p : points)
+	// {
+	// 	insertPoint(&p);
+	// }
+
+	// We start by checking if we need to create the child octants
+	if (points.size() > MAX_POINTS && radius_ >= MIN_OCTANT_RADIUS && !maxDepthReached()) {
+		std::vector<std::vector<Lpoint*>> child_points(OCTANTS_PER_NODE, std::vector<Lpoint*>());
+		// Compute the morton codes of each point and redistribute them into an array for each octant
+		for(auto& p : points)
+		{
+			child_points[octantIdx(&p)].emplace_back(&p);
+		}
+		// Create the new octants
+		createOctants();
+		// Insert the points into the new octants recursively
+		for (int i = 0; i < OCTANTS_PER_NODE; i++)
+		{
+			auto octant = getOctant(i);
+			octant->insertPoints(child_points[i]);
+		}
+	} else {
+		// Fit all points in the current octree
+		points_storage_.reserve(points.size());
+		points_.reserve(points.size());
+		
+		// Move actual points to storage and update pointers
+		for(int i = 0; i < points.size(); i++)
+		{
+			points_storage_[i] = points[i];  // Copy the point
+			points_[i] = &points_storage_[i];  // Store pointer to the copied point
+		}
 	}
 }
 
 void OctreeV2::insertPoints(std::vector<Lpoint*>& points)
 {
-	for (Lpoint* p : points)
-	{
-		insertPoint(p);
+	// for (Lpoint* p : points)
+	// {
+	// 	insertPoint(p);
+	// }
+	
+	if (points.size() > MAX_POINTS && radius_ >= MIN_OCTANT_RADIUS && !maxDepthReached()) {
+		std::vector<std::vector<Lpoint*>> child_points(OCTANTS_PER_NODE, std::vector<Lpoint*>());
+		// Compute the morton codes of each point and redistribute them into an array for each octant
+		for(const auto& p : points)
+		{
+			child_points[octantIdx(p)].emplace_back(p);
+		}
+		// Create the new octants
+		createOctants();
+		// Insert the points into the new octants recursively
+		for (int i = 0; i < OCTANTS_PER_NODE; i++)
+		{
+			auto octant = getOctant(i);
+			octant->insertPoints(child_points[i]);
+		}
+	} else {
+		// Fit all points in the current octree
+		points_storage_.resize(points.size());
+		points_.resize(points.size());
+		
+		// Copy points to storage and update pointers
+		for(size_t i = 0; i < points.size(); i++)
+		{
+			points_storage_[i] = *points[i];  // Copy the point that the pointer points to
+			points_[i] = &points_storage_[i];  // Store pointer to our copied point
+		}
 	}
 }
 
@@ -210,6 +267,7 @@ void OctreeV2::insertPoint(Lpoint* p)
 
 void OctreeV2::fillOctants()
 {
+	// Vector for re-allocating the points
 	for (Lpoint* p : points_)
 	{
 		// Idx of the octant where a point should be inserted.
@@ -221,7 +279,7 @@ void OctreeV2::fillOctants()
 	points_.clear();
 }
 
-size_t OctreeV2::octantIdx(const Point* p) const
+inline size_t OctreeV2::octantIdx(const Point* p) const
 {
 	size_t child = 0;
 
@@ -301,7 +359,7 @@ void OctreeV2::writeOctree(std::ofstream& f, size_t index) const
 	{
 		for (const auto& p : points_)
 		{
-			f << "\t " << p << " " << p->getClass() << "\n";
+			f << "\t " << *p << " " << p->getClass() << " at: " << p << "\n";
 		}
 	}
 	else

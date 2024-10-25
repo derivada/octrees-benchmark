@@ -190,11 +190,11 @@ class Point
 
 
 	// Overload << operator for Point*
-	friend std::ostream& operator<<(std::ostream& out, const Point* p)
-	{
-		out << *p;
-		return out;
-	}
+	// friend std::ostream& operator<<(std::ostream& out, const Point* p)
+	// {
+	// 	out << *p;
+	// 	return out;
+	// }
 
 	friend Point abs(const Point& p) { return { std::abs(p.x_), std::abs(p.y_), std::abs(p.z_) }; }
 

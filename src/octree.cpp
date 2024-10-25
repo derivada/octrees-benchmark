@@ -205,7 +205,9 @@ void Octree::insertPoint(Lpoint* p)
 		if (isEmpty()) { points_.emplace_back(p); }
 		else
 		{
-			if (points_.size() > MAX_POINTS && radius_ >= MIN_OCTANT_RADIUS)
+			// NOTE: This was wrong because it allowed nodes with MAX_POINTS + 1 children
+			// if (points_.size() > MAX_POINTS && radius_ >= MIN_OCTANT_RADIUS) <-- wrong
+			if (points_.size() >= MAX_POINTS && radius_ >= MIN_OCTANT_RADIUS)
 			{
 				createOctants(); // Creation of children octree
 				fillOctants();   // Move points from current Octree to its corresponding children.
@@ -326,7 +328,7 @@ void Octree::writeOctree(std::ofstream& f, size_t index) const
 	{
 		for (const auto& p : points_)
 		{
-			f << "\t " << p << " " << p->getClass() << "\n";
+			f << "\t " << *p << " " << p->getClass() << " at: " << p << "\n";
 		}
 	}
 	else
