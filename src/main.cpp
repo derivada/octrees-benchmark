@@ -31,12 +31,12 @@ int main(int argc, char *argv[]) {
 
   TimeWatcher tw;
 
-  // tw.start();
+  tw.start();
   std::vector<Lpoint> points = readPointCloud(mainOptions.inputFile);
-  // tw.stop();
-  // std::cout << "Number of read points: " << points.size() << "\n";
-  // std::cout << "Time to read points: " << tw.getElapsedDecimalSeconds()
-  //           << " seconds\n";
+  tw.stop();
+  std::cout << "Number of read points: " << points.size() << "\n";
+  std::cout << "Time to read points: " << tw.getElapsedDecimalSeconds()
+            << " seconds\n";
 
   // // Global Octree Creation
   // std::cout << "Building global octree..." << std::endl;
@@ -65,6 +65,8 @@ int main(int argc, char *argv[]) {
   tw.stop();
   std::cout << "Time to build global (linear) octree: " << tw.getElapsedDecimalSeconds()
             << " seconds\n";
+
+  lOctree.testOctree(points);
 
   return EXIT_SUCCESS;
 }

@@ -87,9 +87,9 @@ private:
         float z_transf = ((p.getZ() - center.getZ())  + radii.getZ()) / (2 * radii.getZ());
 
         // Get the integer coordinates by multiplying by 2^(depth-1) and then taking floor
-        x = (coords_t) (x_transf * (1 << (depth)));
-        y = (coords_t) (y_transf * (1 << (depth)));
-        z = (coords_t) (z_transf * (1 << (depth)));
+        x = (coords_t) (x_transf * (1 << (depth-1)));
+        y = (coords_t) (y_transf * (1 << (depth-1)));
+        z = (coords_t) (z_transf * (1 << (depth-1)));
     }
 
     /**
@@ -183,15 +183,16 @@ private:
      * 
      * (We have both methods because of the case where code is not on the map, both return false)
      */
-    [[nodiscard]] inline bool isLeaf(morton_t code) const { 
+    [[nodiscard]] bool isLeaf(morton_t code) const { 
         auto it = nodes.find(code);
         if(it == nodes.end()) {
+            std::cout << code << " not found" << std::endl;
             return false;
         }
         return it->second->isLeaf();
     }
 
-    [[nodiscard]] inline bool isInner(morton_t code) const {
+    [[nodiscard]] bool isInner(morton_t code) const {
         auto it = nodes.find(code);
         if(it == nodes.end()) {
             return false;
@@ -253,8 +254,6 @@ private:
         for(int i = 0; i<points.size(); i++) {
             // Shift and scale coordinates into [0, 1]^3
             // x' = ((x - c_x) + r_x) / (2*r_x)
-            if(i % 1000 == 0)
-                std::cout << *points[i] << std::endl;
             morton_t code = encodeMortonPoint(*points[i], depth);
             bins[code].push_back(points[i]);
         } 
@@ -262,7 +261,6 @@ private:
         // Add good nodes to the octree, reject and put into subdivision stack the others
         for (auto& [code, binPoints] : bins) {
             auto node = new LinearOctreeNode(binPoints, code, depth);
-
             // Insert into octree map (we also keep internal nodes, 
             // though their vectors of points will be cleared in case we subdivide)
             nodes[code] = node;
@@ -270,11 +268,6 @@ private:
             // TODO: also add min physical size condition
             if(binPoints.size() > MAX_POINTS && depth < MAX_DEPTH) {
                 // Push into queue for future subdivision until we have small amount of points
-                if(nodes.size() < 32) {
-                    std::cout << "to queue with " << binPoints.size() << " points:\n";
-                    printNodeGeometry(code);
-                    // printMortonCode(code, true);
-                }
                 subdivision_stack.push(node);
             }
         }
@@ -290,10 +283,7 @@ public:
         for (auto& point : points) {
             points_p.push_back(&point);
         }
-
         buildOctree(points_p);
-
-        testOctree(points);
     }
 
 	explicit LinearOctree(std::vector<Lpoint*>& points);
@@ -311,15 +301,14 @@ public:
         std::stack<LinearOctreeNode*> subdivision_stack;
         auto node = new LinearOctreeNode(points, 0, 0);
         nodes[0] = node;
-        std::cout << "to queue with " << points.size() << " points:\n";
-        printMortonCode(0, true);
 
-        if(points.size() > MAX_POINTS)
+        if(points.size() > MAX_POINTS){
             subdivision_stack.push(node);
+        }
 
         // Process nodes that we still need to subdivide
         while(!subdivision_stack.empty()) {
-            auto node = subdivision_stack.top();
+            node = subdivision_stack.top();
             subdivision_stack.pop();
 
             // Reprocess the points in the node
@@ -338,7 +327,7 @@ public:
         }
         std::cout << "Total inserted " << total << " out of " << points.size() << " points\n";
 
-        // Little test for seeing morton codes 
+/*         // Little test for seeing morton codes 
         for(int i = 0; i<2; i++){
             for(int j = 0; j<2; j++) {
                 for(int k = 0; k<2; k++) {
@@ -379,7 +368,7 @@ public:
         std::cout << "parent ";
         printMortonCode(parentCode, true);
         Point coords = getNodeCenter(parentCode);
-        std::cout << "center: " << coords.getX() << " " << coords.getY() << " " << coords.getZ() << " " << std::endl;
+        std::cout << "center: " << coords.getX() << " " << coords.getY() << " " << coords.getZ() << " " << std::endl; */
 
         // Search for all points in the octree
         TimeWatcher tw;
@@ -388,29 +377,14 @@ public:
         tw.start();
         for(int i = 0; i<points.size(); i++) {
             Point p = points[i];
-            code = 0;
-            int j = 0, k = 0;
-            if(i % 1000 == 0) {
-                std::cout << "Progress: " << ((float) i / (float) points.size()) * 100.0f << "%" << std::endl;
-            }
-
+            morton_t code = 0;
             bool not_found_flag;
             while(!isLeaf(code) && getDepth(code) <= MAX_DEPTH) {
                 not_found_flag = true;
                 for(uint8_t index = 0; index < 8; index++) {
                     morton_t childCode = getChildrenCode(code, index);
                     // If the node point is inside, go into the leaf
-                    k++;
-                    if(k > 1000) {
-                        printNodeGeometry(childCode);
-                        std::cout << "POINT = " << p << " INDEX = " << i << std::endl;
-                    }
                     if(isInside(p, childCode)) {
-                        if(j > 20) {
-                            printNodeGeometry(childCode);
-                            std::cout << "POINT = " << p << " INDEX = " << i << std::endl;
-                        }
-                        j++;
                         code = childCode;
                         not_found_flag = false;
                     }
@@ -421,14 +395,13 @@ public:
             
             if(not_found_flag || !isInside(p, code)) {    
                 not_found++;
-                if(not_found < 1000) {
-                    std::cout << "Could not find the point " << p << std::endl;
-                    printNodeGeometry(code);
-                } 
+                //std::cout << "Could not find the point " << p << std::endl;
+                //printNodeGeometry(code);
             } 
         }
         tw.stop();
         std::cout   << "Found " << (points.size() - not_found) << "/" << points.size() 
-                    << " points in the octree in " << tw.getElapsedMicros() << "ms" << std::endl; 
+                    << " points in the octree in " << tw.getElapsedDecimalSeconds() << " seconds (" 
+                    << ((float) tw.getElapsedMicros() / (float) points.size()) << " microseconds per point)" << std::endl; 
     }
 };
