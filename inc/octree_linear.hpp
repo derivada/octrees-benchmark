@@ -22,6 +22,7 @@ private:
 	static constexpr float        MIN_OCTANT_RADIUS = 0.1;
     static constexpr unsigned int MAX_DEPTH         = 19;
 	static constexpr size_t       DEFAULT_KNN       = 100;
+	static constexpr short        OCTANTS_PER_NODE  = 8;
 
     /* 
      * Linear Octree
@@ -244,7 +245,7 @@ private:
         return isNode(code) && (encodeMortonPoint(p, getDepth(code)) == code);
     } 
 
-    inline bool isNode(morton_t code) {
+    inline bool isNode(morton_t code) const {
         return nodes.find(code) != nodes.end();
     }
 
@@ -318,6 +319,47 @@ public:
             node->points.clear();
         }
     }
+
+	template<typename Kernel, typename Function>
+    [[nodiscard]] std::vector<Lpoint*> neighbors(const Kernel& k, Function&& condition, morton_t root = 0) const
+    /**
+     * @brief Search neighbors function. Given kernel that already contains a point and a radius, return the points inside the region.
+     * @param k specific kernel that contains the data of the region (center and radius)
+     * @param condition function that takes a candidate neighbor point and imposes an additional condition (should return a boolean).
+     * The signature of the function should be equivalent to `bool cnd(const Lpoint &p);`
+     * @param root The morton code for the node to start (usually the tree root which is 0)
+     * @return Points inside the given kernel type. Actually the same as ptsInside.
+     */
+	{
+		std::vector<Lpoint*> ptsInside;
+		std::stack<morton_t> toVisit;
+
+        if(!isNode(root)) // Checks if the root is an actual node in the tree
+            return ptsInside;
+		toVisit.push(root); // Root of the tree
+
+		while (!toVisit.empty()) {
+            const morton_t code = toVisit.top();
+			toVisit.pop();
+
+			if (isLeaf(code)) {
+                auto node = nodes.find(code)->second;
+				for (Lpoint* point_ptr : node->points) {
+                    // Check the point
+					if (k.isInside(*point_ptr) && k.center().id() != point_ptr->id() && condition(*point_ptr))
+						ptsInside.emplace_back(point_ptr); // add the point to the result list
+				}
+			} else {
+                // If we are in an inner node, add all the child octants to the search list
+                for(int index = 0; index<8; index++) {
+                    morton_t childCode = getChildrenCode(code, index);
+                    if(isNode(childCode))
+                        toVisit.push(childCode);
+                }
+			}
+		}
+		return ptsInside;
+	}
 
     void testOctree(std::vector<Lpoint>& points) {
         // Check all points were inserted correctly
