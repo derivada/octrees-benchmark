@@ -9,12 +9,15 @@
 #pragma once
 
 #include "Lpoint.hpp"
-#include "octree_linear_node.hpp"
 #include "Box.hpp"
 #include <stack>
 #include <bitset>
 #include <unordered_map>
+#include <filesystem>
 #include "libmorton/morton.h"
+#include "octree_linear_node.hpp"
+#include "NeighborKernels/KernelFactory.hpp"
+#include "TimeWatcher.hpp"
 
 class LinearOctree {
 private:
@@ -146,7 +149,7 @@ private:
         // To get a child morton code, up the level, shift 3 bits to the right and then or the last 3 bits before
         // trailing to the sibling index
         uint8_t depth = getDepth(code);
-        assert(depth < MAX_DEPTH && index >= 0b000 && index <= 0b111);
+        assert(depth <= MAX_DEPTH && index >= 0b000 && index <= 0b111);
         // Shift code one layer to the right, by masking first we make sure the 3 bits where we are going
         // to put the children are already empty
         morton_t children = (code & NOT_DEPTH_MASK) << 3;
@@ -177,30 +180,6 @@ private:
         }
     }
 
-
-
-    /**
-     * Method for checking whether node is a leaf or an inner node
-     * 
-     * (We have both methods because of the case where code is not on the map, both return false)
-     */
-    [[nodiscard]] bool isLeaf(morton_t code) const { 
-        auto it = nodes.find(code);
-        if(it == nodes.end()) {
-            std::cout << code << " not found" << std::endl;
-            return false;
-        }
-        return it->second->isLeaf();
-    }
-
-    [[nodiscard]] bool isInner(morton_t code) const {
-        auto it = nodes.find(code);
-        if(it == nodes.end()) {
-            return false;
-        }
-        return !(it->second->isLeaf());
-    }
-    
     /**
      * Utility methods for getting geometric information (center, radius, inside check) from a morton code
      */
@@ -245,9 +224,7 @@ private:
         return isNode(code) && (encodeMortonPoint(p, getDepth(code)) == code);
     } 
 
-    inline bool isNode(morton_t code) const {
-        return nodes.find(code) != nodes.end();
-    }
+
 
     // Insert points into the octree by computing their bins, and adds nodes to keep processing to the queue
     void insertPoints(std::vector<Lpoint*>& points, uint8_t depth, std::stack<LinearOctreeNode*>& subdivision_stack) {
@@ -275,7 +252,7 @@ private:
     }
 
 public:
-    LinearOctree();
+    LinearOctree() = default;
 
     explicit LinearOctree(std::vector<Lpoint>& points) {
         center = mbb(points, radii);
@@ -287,11 +264,61 @@ public:
         buildOctree(points_p);
     }
 
-	explicit LinearOctree(std::vector<Lpoint*>& points);
+    explicit LinearOctree(std::vector<Lpoint*>& points) {
+        buildOctree(points);
+    }
 
-	LinearOctree(const Point& center, float radius);
-	LinearOctree(Point center, float radius, std::vector<Lpoint*>& points);
-	LinearOctree(Point center, float radius, std::vector<Lpoint>& points);
+    // TODO: getters of center, radii, bbox, etc.
+
+    [[nodiscard]] inline double getDensity() const
+	/*
+    * @brief Computes the point density of the given Octree as nPoints / Volume
+    */
+	{
+		// TODO
+        return 0.0f;
+	}
+
+    void writeDensities(const std::filesystem::path& path) const;
+	void writeNumPoints(const std::filesystem::path& path) const;
+
+    // Called this findNode instead of findOctant but they do the same
+    [[nodiscard]] const LinearOctreeNode* findNode(const Lpoint* p) const;
+
+    // TODO implement at cpp the ones that make sense for linear octrees
+    [[nodiscard]] std::vector<std::pair<Point, double>> computeDensities() const;
+	[[nodiscard]] std::vector<std::pair<Point, size_t>> computeNumPoints() const;
+    [[nodiscard]] bool isInside2D(const Point& p) const;
+    void   insertPoints(std::vector<Lpoint>& points);
+	void   insertPoints(std::vector<Lpoint*>& points);
+	void   insertPoint(Lpoint* p);
+	void   createOctants();
+	void   fillOctants();
+	size_t octantIdx(const Lpoint* p) const;
+
+    /**
+     * Methods for checking if the node is in the tree, is a leaf or is an inner node
+     * 
+     * "isEmpty()" doesnt make much sense in a Linear Octree
+     */
+    [[nodiscard]] inline bool isNode(morton_t code) const {
+        return nodes.find(code) != nodes.end();
+    }
+    [[nodiscard]] inline bool isLeaf(morton_t code) const { 
+        auto it = nodes.find(code);
+        if(it == nodes.end()) {
+            std::cout << code << " not found" << std::endl;
+            return false;
+        }
+        return it->second->isLeaf();
+    }
+    [[nodiscard]] inline bool isInner(morton_t code) const {
+        auto it = nodes.find(code);
+        if(it == nodes.end()) {
+            return false;
+        }
+        return !(it->second->isLeaf());
+    }
 
     void buildOctree(std::vector<Lpoint*>& points) {
         // TODO: usually build process its different, points are sorted globally and then put into bins
@@ -311,7 +338,6 @@ public:
         while(!subdivision_stack.empty()) {
             node = subdivision_stack.top();
             subdivision_stack.pop();
-
             // Reprocess the points in the node
             insertPoints(node->points, LinearOctree::getDepth(node->code) + 1, subdivision_stack);
 
@@ -319,6 +345,74 @@ public:
             node->points.clear();
         }
     }
+
+
+	template<Kernel_t kernel_type = Kernel_t::square>
+	[[nodiscard]] inline std::vector<Lpoint*> searchNeighbors(const Point& p, double radius) const
+	/**
+   * @brief Search neighbors function. Given a point and a radius, return the points inside a given kernel type
+   * @param p Center of the kernel to be used
+   * @param radius Radius of the kernel to be used
+   * @return Points inside the given kernel type
+   */
+	{
+		const auto kernel = kernelFactory<kernel_type>(p, radius);
+		// Dummy condition that always returns true, so we can use the same function for all cases
+		// The compiler should optimize this away
+		constexpr auto dummyCondition = [](const Lpoint&) { return true; };
+
+		return neighbors(kernel, dummyCondition);
+	}
+
+	template<Kernel_t kernel_type = Kernel_t::cube>
+	[[nodiscard]] inline std::vector<Lpoint*> searchNeighbors(const Point& p, const Vector& radii) const
+	/**
+   * @brief Search neighbors function. Given a point and a radius, return the points inside a given kernel type
+   * @param p Center of the kernel to be used
+   * @param radii Radii of the kernel to be used
+   * @return Points inside the given kernel type
+   */
+	{
+		const auto kernel = kernelFactory<kernel_type>(p, radii);
+		// Dummy condition that always returns true, so we can use the same function for all cases
+		// The compiler should optimize this away
+		constexpr auto dummyCondition = [](const Lpoint&) { return true; };
+
+		return neighbors(kernel, dummyCondition);
+	}
+
+	template<Kernel_t kernel_type = Kernel_t::square, class Function>
+	[[nodiscard]] inline std::vector<Lpoint*> searchNeighbors(const Point& p, double radius, Function&& condition) const
+	/**
+   * @brief Search neighbors function. Given a point and a radius, return the points inside a given kernel type
+   * @param p Center of the kernel to be used
+   * @param radius Radius of the kernel to be used
+   * @param condition function that takes a candidate neighbor point and imposes an additional condition (should return a boolean).
+   * The signature of the function should be equivalent to `bool cnd(const Lpoint &p);`
+   * @return Points inside the given kernel type
+   */
+	{
+		const auto kernel = kernelFactory<kernel_type>(p, radius);
+		return neighbors(kernel, std::forward<Function&&>(condition));
+	}
+
+	template<Kernel_t kernel_type = Kernel_t::square, class Function>
+	[[nodiscard]] inline std::vector<Lpoint*> searchNeighbors(const Point& p, const Vector& radii,
+	                                                          Function&& condition) const
+	/**
+   * @brief Search neighbors function. Given a point and a radius, return the points inside a given kernel type
+   * @param p Center of the kernel to be used
+   * @param radii Radii of the kernel to be used
+   * @param condition function that takes a candidate neighbor point and imposes an additional condition (should return a boolean).
+   * The signature of the function should be equivalent to `bool cnd(const Lpoint &p);`
+   * @return Points inside the given kernel type
+   */
+	{
+		const auto kernel = kernelFactory<kernel_type>(p, radii);
+		return neighbors(kernel, std::forward<Function&&>(condition));
+	}
+
+	[[nodiscard]] std::vector<Lpoint*> KNN(const Point& p, size_t k, size_t maxNeighs = DEFAULT_KNN) const;
 
 	template<typename Kernel, typename Function>
     [[nodiscard]] std::vector<Lpoint*> neighbors(const Kernel& k, Function&& condition, morton_t root = 0) const
@@ -361,6 +455,194 @@ public:
 		return ptsInside;
 	}
 
+    // Search neighbors overloads
+    [[nodiscard]] inline std::vector<Lpoint*> searchNeighbors2D(const Point& p, const double radius) const
+	{
+		return searchNeighbors<Kernel_t::square>(p, radius);
+	}
+
+	[[nodiscard]] inline std::vector<Lpoint*> searchCylinderNeighbors(const Lpoint& p, const double radius,
+	                                                                  const double zMin, const double zMax) const
+	{
+		return searchNeighbors<Kernel_t::circle>(p, radius,
+		                                         [&](const Lpoint& p) { return p.getZ() >= zMin && p.getZ() <= zMax; });
+	}
+
+	[[nodiscard]] inline std::vector<Lpoint*> searchCircleNeighbors(const Lpoint& p, const double radius) const
+	{
+		return searchNeighbors<Kernel_t::circle>(p, radius);
+	}
+
+	[[nodiscard]] inline std::vector<Lpoint*> searchCircleNeighbors(const Lpoint* p, const double radius) const
+	{
+		return searchCircleNeighbors(*p, radius);
+	}
+
+	[[nodiscard]] inline std::vector<Lpoint*> searchNeighbors3D(const Point& p, const Vector& radii) const
+	{
+		return searchNeighbors<Kernel_t::cube>(p, radii);
+	}
+
+	[[nodiscard]] inline std::vector<Lpoint*> searchNeighbors3D(const Point& p, double radius) const
+	{
+		return searchNeighbors<Kernel_t::cube>(p, radius);
+	}
+
+	[[nodiscard]] inline std::vector<Lpoint*> searchNeighbors3D(const Point& p, const double radius,
+	                                                            const std::vector<bool>& flags) const
+	/**
+     * Searching neighbors in 3D using a different radius for each direction
+     * @param p Point around the neighbors will be search
+     * @param radius Vector of radiuses: one per spatial direction
+     * @param flags Vector of flags: return only points which flags[pointId] == false
+     * @return Points inside the given kernel
+     */
+	{
+		const auto condition = [&](const Point& point) { return !flags[point.id()]; };
+		return searchNeighbors<Kernel_t::cube>(p, radius, condition);
+	}
+
+    // Simpler functions for counting number of neighbors
+	template<Kernel_t kernel_type = Kernel_t::square>
+	[[nodiscard]] inline size_t numNeighbors(const Point& p, const double radius) const
+	/**
+   * @brief Search neighbors function. Given a point and a radius, return the number of points inside a given kernel type
+   * @param p Center of the kernel to be used
+   * @param radius Radius of the kernel to be used
+   * @param condition function that takes a candidate neighbor point and imposes an additional condition (should return a boolean).
+   * The signature of the function should be equivalent to `bool cnd(const Lpoint &p);`
+   * @return Points inside the given kernel
+   */
+	{
+		const auto kernel = kernelFactory<kernel_type>(p, radius);
+		return numNeighbors(kernel);
+	}
+    
+    template<typename Kernel, typename Function>
+	[[nodiscard]] size_t numNeighbors(const Kernel& k, morton_t root = 0) const
+	{
+		size_t ptsInside = 0;
+		std::stack<morton_t> toVisit;
+
+        if(!isNode(root)) // Checks if the root is an actual node in the tree
+            return ptsInside;
+		toVisit.push(root); // Root of the tree
+
+		while (!toVisit.empty()) {
+            const morton_t code = toVisit.top();
+			toVisit.pop();
+
+			if (isLeaf(code)) {
+                auto node = nodes.find(code)->second;
+				for (Lpoint* point_ptr : node->points) {
+                    // Check the point
+					if (k.isInside(*point_ptr) && k.center().id() != point_ptr->id())
+						ptsInside++;
+				}
+			} else {
+                // If we are in an inner node, add all the child octants to the search list
+                for(int index = 0; index<8; index++) {
+                    morton_t childCode = getChildrenCode(code, index);
+                    if(isNode(childCode))
+                        toVisit.push(childCode);
+                }
+			}
+		}
+		return ptsInside;
+	}
+
+    template<typename Kernel, typename Function>
+	[[nodiscard]] size_t numNeighbors(const Kernel& k, Function&& condition, morton_t root = 0) const
+	{
+		size_t ptsInside = 0;
+		std::stack<morton_t> toVisit;
+
+        if(!isNode(root)) // Checks if the root is an actual node in the tree
+            return ptsInside;
+		toVisit.push(root); // Root of the tree
+
+		while (!toVisit.empty()) {
+            const morton_t code = toVisit.top();
+			toVisit.pop();
+
+			if (isLeaf(code)) {
+                auto node = nodes.find(code)->second;
+				for (Lpoint* point_ptr : node->points) {
+                    // Check the point
+					if (k.isInside(*point_ptr) && k.center().id() != point_ptr->id() && condition(*point_ptr))
+						ptsInside++;
+				}
+			} else {
+                // If we are in an inner node, add all the child octants to the search list
+                for(int index = 0; index<8; index++) {
+                    morton_t childCode = getChildrenCode(code, index);
+                    if(isNode(childCode))
+                        toVisit.push(childCode);
+                }
+			}
+		}
+		return ptsInside;
+	}
+
+    // Other neighbourhood search methods
+    [[nodiscard]] inline std::vector<Lpoint*> searchSphereNeighbors(const Point& point, const float radius) const
+	{
+		return searchNeighbors<Kernel_t::sphere>(point, radius);
+	}
+
+	[[nodiscard]] std::vector<Lpoint*> searchNeighborsRing(const Lpoint& p, const Vector& innerRingRadii,
+	                                                       const Vector& outerRingRadii) const
+	/**
+	 * A point is considered to be inside a Ring around a point if its outside the innerRing and inside the outerRing
+	 * @param p Center of the kernel to be used
+	 * @param innerRingRadii Radii of the inner part of the ring. Points within this part will be excluded
+	 * @param outerRingRadii Radii of the outer part of the ring
+	 * @return The points located between the inner ring and the outer ring
+	 */
+	{
+		// Search points within "outerRingRadii"
+		const auto outerKernel = kernelFactory<Kernel_t::cube>(p, outerRingRadii);
+		// But not too close (within "innerRingRadii")
+		const auto innerKernel = kernelFactory<Kernel_t::cube>(p, innerRingRadii);
+		const auto condition   = [&](const Point& point) { return !innerKernel.isInside(point); };
+
+		return neighbors(outerKernel, condition);
+	}
+
+	void writeOctree(std::ofstream& f, size_t index) const;
+
+	void    extractPoint(const Lpoint* p);
+	Lpoint* extractPoint();
+	void    extractPoints(std::vector<Lpoint>& points);
+	void    extractPoints(std::vector<Lpoint*>& points);
+
+	std::vector<Lpoint*> searchEraseCircleNeighbors(const std::vector<Lpoint*>& points, double radius);
+
+	/** Inside a sphere */
+	std::vector<Lpoint*> searchEraseSphereNeighbors(const std::vector<Lpoint*>& points, float radius);
+
+	/** Connected inside a spherical shell*/
+	[[nodiscard]] std::vector<Lpoint*> searchConnectedShellNeighbors(const Point& point, float nextDoorDistance,
+	                                                                 float minRadius, float maxRadius) const;
+
+	/** Connected circle neighbors*/
+	std::vector<Lpoint*> searchEraseConnectedCircleNeighbors(float nextDoorDistance);
+
+	static std::vector<Lpoint*> connectedNeighbors(const Point* point, std::vector<Lpoint*>& neighbors,
+	                                               float nextDoorDistance);
+
+	static std::vector<Lpoint*> extractCloseNeighbors(const Point* p, std::vector<Lpoint*>& neighbors, float radius);
+
+	std::vector<Lpoint*> kClosestCircleNeighbors(const Lpoint* p, size_t k) const;
+	std::vector<Lpoint*> nCircleNeighbors(const Lpoint* p, size_t n, float& radius, float minRadius, float maxRadius,
+	                                      float maxIncrement = 0.25, float maxDecrement = 0.25) const;
+
+	std::vector<Lpoint*> nSphereNeighbors(const Lpoint& p, size_t n, float& radius, float minRadius, float maxRadius,
+	                                      float maxStep = 0.25) const;
+
+    /**
+     * Debug function for testing linear octree functionality
+     */
     void testOctree(std::vector<Lpoint>& points) {
         // Check all points were inserted correctly
         int total = 0;
