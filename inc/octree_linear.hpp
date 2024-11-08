@@ -343,7 +343,7 @@ public:
             node = subdivision_stack.top();
             subdivision_stack.pop();
             // Reprocess the points in the node
-            insertPoints(node->points, LinearOctree::getDepth(node->code) + 1, subdivision_stack);
+            insertPoints(node->points, getDepth(node->code) + 1, subdivision_stack);
 
             // Clear the old node points array
             node->points.clear();
@@ -415,6 +415,9 @@ public:
 		const auto kernel = kernelFactory<kernel_type>(p, radii);
 		return neighbors(kernel, std::forward<Function&&>(condition));
 	}
+
+    // Finds the octant ID (child index) where a point inside a node resides
+    inline uint8_t octantIdx(const Lpoint* p, morton_t code) const;
 
 	[[nodiscard]] std::vector<Lpoint*> KNN(const Point& p, size_t k, size_t maxNeighs = DEFAULT_KNN) const;
 
@@ -615,8 +618,8 @@ public:
 
 	void writeOctree(std::ofstream& f, size_t index) const;
 
-	void    extractPoint(const Lpoint* p);
-	Lpoint* extractPoint();
+    void    extractPoint(const Lpoint* p, morton_t code);
+	Lpoint* extractPoint(morton_t code);
 	void    extractPoints(std::vector<Lpoint>& points);
 	void    extractPoints(std::vector<Lpoint*>& points);
 

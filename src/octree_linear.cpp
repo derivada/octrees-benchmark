@@ -86,6 +86,7 @@ const LinearOctreeNode* LinearOctree::findNode(const Lpoint* p) const
 	bool not_found_flag;
 	while(!isLeaf(code) && getDepth(code) <= MAX_DEPTH) {
 		not_found_flag = true;
+		// TODO: use octantIdx
 		for(uint8_t index = 0; index < 8; index++) {
 			morton_t childCode = getChildrenCode(code, index);
 			// If the node point is inside, go into the leaf
@@ -105,6 +106,16 @@ const LinearOctreeNode* LinearOctree::findNode(const Lpoint* p) const
 	}
 }
 
+inline uint8_t LinearOctree::octantIdx(const Lpoint* p, morton_t code) const
+{
+	uint8_t index = 0;
+	Point center = getNodeCenter(code);
+	if (p->getX() >= center.getX()) { index |= 4U; }
+	if (p->getY() >= center.getY()) { index |= 2U; }
+	if (p->getZ() >= center.getZ()) { index |= 1U; }
+
+	return index;
+}
 
 std::vector<Lpoint*> LinearOctree::KNN(const Point& p, const size_t k, const size_t maxNeighs) const
 /**
@@ -146,28 +157,93 @@ std::vector<Lpoint*> LinearOctree::KNN(const Point& p, const size_t k, const siz
 	return knn;
 }
 
-void LinearOctree::writeOctree(std::ofstream& f, size_t index) const
+void LinearOctree::writeOctree(std::ofstream& f, morton_t code = 0) const
 {
-	
+	if(!isNode(code)) return;
+	LinearOctreeNode* node = nodes.at(code);
+
+	f << "Depth: " << getDepth(code) << " "
+	  << "numPoints: " << node->points.size() << "\n";
+	f << "Center: " << getNodeCenter(code) << " Radius: " << getNodeRadii(code) << "\n";
+
+	if (isLeaf(code))
+	{
+		for (const auto& p : node->points)
+		{
+			f << "\t " << *p << " " << p->getClass() << " at: " << p << "\n";
+		}
+	}
+	else
+	{
+		for(int index = 0; index < OCTANTS_PER_NODE; index++) {
+			morton_t childCode = getChildrenCode(code, index);
+			if(isNode(childCode))
+				writeOctree(f, childCode);
+		}
+	}
 }
 
-void LinearOctree::extractPoint(const Lpoint* p)
+void LinearOctree::extractPoint(const Lpoint* p, morton_t code)
 /**
  * Searches for p and (if found) removes it from the octree.
  *
  * @param p
  */
 {
-	
+	// TODO: make this algorithm non-recursive
+	if(!isNode(code)) return;
+	LinearOctreeNode* node = nodes.at(code);
+	if (isLeaf(code))
+	{
+		auto index = std::find(node->points.begin(), node->points.end(), p);
+		if (index != node->points.end()) { node->points.erase(index); }
+		// Delete the node if all of its points were erased
+		if(node->points.empty()) {
+			delete node;
+			nodes.erase(code);
+		}
+	}
+	else
+	{
+		uint8_t index = octantIdx(p, code);
+		morton_t childCode = getChildrenCode(code, index);
+		extractPoint(p, childCode);
+	}
 }
 
-Lpoint* LinearOctree::extractPoint()
+Lpoint* LinearOctree::extractPoint(morton_t code)
 /**
  * Searches for a point and, if it founds one, removes it from the octree.
  *
  * @return pointer to one of the octree's points, or nullptr if the octree is empty
  */
 {
+	// TODO: make this algorithm non-recursive
+	if(!isNode(code)) return nullptr;
+	LinearOctreeNode* node = nodes.at(code);
+	
+	if (isLeaf(code))
+	{
+		auto* p = node->points.back();
+		node->points.pop_back();
+		// Delete the node if all of its points were erased
+		if(node->points.empty()) {
+			delete node;
+			nodes.erase(code);
+		}
+		return p;
+	}
+
+	for (uint8_t index = 0; index < OCTANTS_PER_NODE; index++)
+	{
+		morton_t childCode = getChildrenCode(code, index);
+		if(isNode(childCode)) {
+			auto* p = extractPoint(childCode);
+			return p;
+		}
+	}
+
+	std::cerr << "Warning: Found octree with 8 empty octants\n";
 	return nullptr;
 }
 
@@ -175,7 +251,7 @@ void LinearOctree::extractPoints(std::vector<Lpoint>& points)
 {
 	for (Lpoint& p : points)
 	{
-		extractPoint(&p);
+		extractPoint(&p, 0);
 	}
 }
 
@@ -183,7 +259,7 @@ void LinearOctree::extractPoints(std::vector<Lpoint*>& points)
 {
 	for (Lpoint* p : points)
 	{
-		extractPoint(p);
+		extractPoint(p, 0);
 	}
 }
 
@@ -247,7 +323,7 @@ std::vector<Lpoint*> LinearOctree::searchEraseConnectedCircleNeighbors(const flo
 {
 	std::vector<Lpoint*> connectedCircleNeighbors;
 
-	auto* p = extractPoint();
+	auto* p = extractPoint(0);
 	if (p == nullptr) { return connectedCircleNeighbors; }
 	connectedCircleNeighbors.push_back(p);
 
