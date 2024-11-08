@@ -29,6 +29,24 @@ class Kernel3D : public KernelAbstract
 
 		return true;
 	}
+
+	[[nodiscard]] bool boxOverlap(const Point& center, const Vector& radii) const override
+	{
+		if (center.getX() + radii.getX() < boxMin().getX() || center.getY() + radii.getY() < boxMin().getY() ||
+		    center.getZ() + radii.getZ() < boxMin().getZ())
+		{
+			return false;
+		}
+
+		if (center.getX() - radii.getX() > boxMax().getX() || center.getY() - radii.getY() > boxMax().getY() ||
+		    center.getZ() - radii.getZ() > boxMax().getZ())
+		{
+			return false;
+		}
+
+		return true;
+	}
+
 };
 
 #endif /* end of include guard: KERNEL3D_HPP */

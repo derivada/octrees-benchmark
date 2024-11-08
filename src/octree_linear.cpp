@@ -108,13 +108,12 @@ const LinearOctreeNode* LinearOctree::findNode(const Lpoint* p) const
 
 inline uint8_t LinearOctree::octantIdx(const Lpoint* p, morton_t code) const
 {
-	uint8_t index = 0;
-	Point center = getNodeCenter(code);
-	if (p->getX() >= center.getX()) { index |= 4U; }
-	if (p->getY() >= center.getY()) { index |= 2U; }
-	if (p->getZ() >= center.getZ()) { index |= 1U; }
-
-	return index;
+	for(int index = 0; index<OCTANTS_PER_NODE; index++) {
+		if(isInside(*p, getChildrenCode(code, index))) {
+			return index;
+		}
+	}
+	return 0;
 }
 
 std::vector<Lpoint*> LinearOctree::KNN(const Point& p, const size_t k, const size_t maxNeighs) const
@@ -162,7 +161,7 @@ void LinearOctree::writeOctree(std::ofstream& f, morton_t code = 0) const
 	if(!isNode(code)) return;
 	LinearOctreeNode* node = nodes.at(code);
 
-	f << "Depth: " << getDepth(code) << " "
+	f << "Depth: " << static_cast<int>(getDepth(code)) << " "
 	  << "numPoints: " << node->points.size() << "\n";
 	f << "Center: " << getNodeCenter(code) << " Radius: " << getNodeRadii(code) << "\n";
 
@@ -195,8 +194,16 @@ void LinearOctree::extractPoint(const Lpoint* p, morton_t code)
 	LinearOctreeNode* node = nodes.at(code);
 	if (isLeaf(code))
 	{
-		auto index = std::find(node->points.begin(), node->points.end(), p);
-		if (index != node->points.end()) { node->points.erase(index); }
+		// Find point with the same ID inside points node and remove it
+		// TODO: could sort points inside a leaf by ID and use binary search, locality shouldn't be affected too much since
+		// we would be at the finest level of the space filling curve
+		std::cout << "leaf size before: " << node->points.size() << std::endl;
+		auto new_end = std::remove_if(node->points.begin(), node->points.end(), [&](const Lpoint* point_ptr) {
+			return point_ptr->id() == p->id();
+		});
+		node->points.erase(new_end, node->points.end());
+
+		std::cout << "leaf size after: " << node->points.size() << std::endl;
 		// Delete the node if all of its points were erased
 		if(node->points.empty()) {
 			delete node;
@@ -206,6 +213,7 @@ void LinearOctree::extractPoint(const Lpoint* p, morton_t code)
 	else
 	{
 		uint8_t index = octantIdx(p, code);
+		std::cout << index << std::endl;
 		morton_t childCode = getChildrenCode(code, index);
 		extractPoint(p, childCode);
 	}
@@ -402,7 +410,7 @@ std::vector<Lpoint*> LinearOctree::kClosestCircleNeighbors(const Lpoint* p, cons
 	 */
 {
 	double               rMin = SENSEPSILON * static_cast<double>(k);
-	const double         rMax = radii.getMaxCoordinate(); // Use maximum radius as upper bound
+	const double         rMax = 2.0 * M_SQRT2 * std::max(radii.getX(), std::max(radii.getY(), radii.getZ()));
 	std::vector<Lpoint*> closeNeighbors;
 	for (closeNeighbors = searchCircleNeighbors(p, rMin); closeNeighbors.size() < k && rMin < 2 * rMax; rMin *= 2)
 	{

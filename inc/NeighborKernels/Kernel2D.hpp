@@ -26,6 +26,20 @@ class Kernel2D : public KernelAbstract
 
 		return true;
 	}
+	[[nodiscard]] bool boxOverlap(const Point& center, const Vector& radii) const override
+	/**
+ * @brief Checks if a given octant overlaps with the given kernel in 2 dimensions
+ * @param octant
+ * @return
+ */
+	{
+		if (center.getX() + radii.getX() < boxMin().getX() || center.getY() + radii.getY() < boxMin().getY()) { return false; }
+
+		if (center.getX() - radii.getX() > boxMax().getX() || center.getY() - radii.getY() > boxMax().getY()) { return false; }
+
+		return true;
+	}
+
 };
 
 #endif /* end of include guard: KERNEL2D_HPP */

@@ -13,6 +13,7 @@
 #include <stack>
 #include <bitset>
 #include <unordered_map>
+#include <unordered_set>
 #include <filesystem>
 #include "libmorton/morton.h"
 #include "octree_linear_node.hpp"
@@ -76,7 +77,8 @@ private:
     static constexpr morton_t XY_MASK = X_MASK | Y_MASK;
     static constexpr morton_t YZ_MASK = Y_MASK | Z_MASK;
     static constexpr morton_t XZ_MASK = X_MASK | Z_MASK;
-    
+    static constexpr float EPS = 1.0f / (1 << (MAX_DEPTH+1));
+
     /*
      * Method to convert a point to its anchor, this operation approximates its coordinates and so it is not reversible
      */
@@ -89,11 +91,14 @@ private:
         float x_transf = ((p.getX() - center.getX())  + radii.getX()) / (2 * radii.getX());
         float y_transf = ((p.getY() - center.getY())  + radii.getY()) / (2 * radii.getY());
         float z_transf = ((p.getZ() - center.getZ())  + radii.getZ()) / (2 * radii.getZ());
+        if(x_transf + EPS >= 1.0f) x_transf = 1.0f - EPS;
+        if(y_transf + EPS >= 1.0f) y_transf = 1.0f - EPS;
+        if(z_transf + EPS >= 1.0f) z_transf = 1.0f - EPS;
 
         // Get the integer coordinates by multiplying by 2^(depth-1) and then taking floor
-        x = (coords_t) (x_transf * (1 << (depth-1)));
-        y = (coords_t) (y_transf * (1 << (depth-1)));
-        z = (coords_t) (z_transf * (1 << (depth-1)));
+        x = (coords_t) (x_transf * (1 << (depth)));
+        y = (coords_t) (y_transf * (1 << (depth)));
+        z = (coords_t) (z_transf * (1 << (depth)));
     }
 
     /**
@@ -190,10 +195,10 @@ private:
         decodeMorton(code, x, y, z);
         double x_d, y_d, z_d;
         Vector nodeRadii = getNodeRadii(code);
-        Point lowCorner = center - radii;
-        x_d = (x + 0.5) * nodeRadii.getX() + lowCorner.getX();
-        y_d = (y + 0.5) * nodeRadii.getY() + lowCorner.getY();
-        z_d = (z + 0.5) * nodeRadii.getZ() + lowCorner.getZ();
+        Point lowCorner = (center - radii) + nodeRadii;
+        x_d = x * nodeRadii.getX() * 2 + lowCorner.getX();
+        y_d = y * nodeRadii.getY() * 2 + lowCorner.getY();
+        z_d = z * nodeRadii.getZ() * 2 + lowCorner.getZ();
         return Point(x_d, y_d, z_d);
     }
 
@@ -434,7 +439,6 @@ public:
 	{
 		std::vector<Lpoint*> ptsInside;
 		std::stack<morton_t> toVisit;
-
         if(!isNode(root)) // Checks if the root is an actual node in the tree
             return ptsInside;
 		toVisit.push(root); // Root of the tree
@@ -442,20 +446,19 @@ public:
 		while (!toVisit.empty()) {
             const morton_t code = toVisit.top();
 			toVisit.pop();
-
 			if (isLeaf(code)) {
-                auto node = nodes.find(code)->second;
-				for (Lpoint* point_ptr : node->points) {
+				for (Lpoint* point_ptr : nodes.at(code)->points) {
                     // Check the point
-					if (k.isInside(*point_ptr) && k.center().id() != point_ptr->id() && condition(*point_ptr))
+					if (k.isInside(*point_ptr) && k.center().id() != point_ptr->id() && condition(*point_ptr)) {
 						ptsInside.emplace_back(point_ptr); // add the point to the result list
+                    }
 				}
 			} else {
-                // If we are in an inner node, add all the child octants to the search list
-                for(int index = 0; index<8; index++) {
+                for(size_t index = 0; index < OCTANTS_PER_NODE; index++) {
                     morton_t childCode = getChildrenCode(code, index);
-                    if(isNode(childCode))
+                    if(isNode(childCode) && k.boxOverlap(getNodeCenter(childCode), getNodeRadii(childCode))){
                         toVisit.push(childCode);
+                    }
                 }
 			}
 		}
@@ -543,15 +546,15 @@ public:
                 auto node = nodes.find(code)->second;
 				for (Lpoint* point_ptr : node->points) {
                     // Check the point
-					if (k.isInside(*point_ptr) && k.center().id() != point_ptr->id())
+					if (k.isInside(*point_ptr) && k.center().id() != point_ptr->id()) {
 						ptsInside++;
+                    }
 				}
 			} else {
                 // If we are in an inner node, add all the child octants to the search list
                 for(int index = 0; index<8; index++) {
                     morton_t childCode = getChildrenCode(code, index);
-                    if(isNode(childCode))
-                        toVisit.push(childCode);
+                    // TODO
                 }
 			}
 		}
@@ -733,6 +736,30 @@ public:
         tw.stop();
         std::cout   << "Found " << (points.size() - not_found) << "/" << points.size() 
                     << " points in the octree in " << tw.getElapsedDecimalSeconds() << " seconds (" 
-                    << ((float) tw.getElapsedMicros() / (float) points.size()) << " microseconds per point)" << std::endl; 
+                    << ((float) tw.getElapsedMicros() / (float) points.size()) << " microseconds per point)" << std::endl;
+
+
+
+        // Neighbourhood search test
+
+        // Lpoint p = points[5000];
+        // std::cout << "Sphere neighbourhood search for point " << p << std::endl;
+        // float radius = 1.0;
+        // auto neighPoints = nSphereNeighbors(p, 10, radius, 0.0001, 1000.0);
+        // std::cout << "Found " << neighPoints.size() << " points in a sphere of radius " << radius << std::endl;
+        // for(Lpoint* neighPoint : neighPoints) {
+        //     std::cout << *neighPoint << " with distance to center " << neighPoint->distance3D(p) << std::endl;
+        // }
+
+        // // Point extraction test
+
+        // Lpoint extract = points[1234];
+        // std::cout << "Extracting point " << extract << std::endl;
+        // extractPoint(&extract, 0);
+        // total = 0;
+        // for (auto& [code, node] : nodes) {
+        //     total += node->points.size();
+        // }
+        // std::cout << "Points after: " << total << " out of " << points.size() << " points\n";
     }
 };

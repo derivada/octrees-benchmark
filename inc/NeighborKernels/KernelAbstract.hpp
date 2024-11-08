@@ -46,4 +46,6 @@ class KernelAbstract
 	// These functions must be implemented in each concrete Kernel
 	[[nodiscard]] virtual bool isInside(const Point& p) const                       = 0;
 	[[nodiscard]] virtual bool boxOverlap(const Point& center, double radius) const = 0;
+	[[nodiscard]] virtual bool boxOverlap(const Point& center, const Vector& radii) const = 0;
+
 };

@@ -8,6 +8,7 @@
 #include "TimeWatcher.hpp"
 #include <algorithm>
 #include <numeric>
+#include <functional>
 
 namespace benchmarking
 {
@@ -60,7 +61,7 @@ class Stats
 		if (!computed_stdev_)
 		{
 			std::vector<T> diff(values_.size());
-			std::transform(values_.begin(), values_.end(), diff.begin(), std::bind2nd(std::minus<T>(), mean_));
+			std::transform(values_.begin(), values_.end(), diff.begin(), std::bind(std::minus<T>(), std::placeholders::_1, mean_));
 
 			stdev_ = std::inner_product(diff.begin(), diff.end(), diff.begin(), 0.0);
 			stdev_ = std::sqrt(stdev_ / values_.size());
