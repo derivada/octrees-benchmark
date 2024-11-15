@@ -26,7 +26,7 @@ using coords_t = uint_fast32_t;
 
 class LinearOctreeSort {
 private:
-    static constexpr unsigned int MAX_POINTS        = 100;
+    static constexpr unsigned int MAX_POINTS        = 64;
 	static constexpr float        MIN_OCTANT_RADIUS = 0.1;
 	static constexpr size_t       DEFAULT_KNN       = 100;
 	static constexpr short        OCTANTS_PER_NODE  = 8;
@@ -51,7 +51,8 @@ private:
 
     // Leaves of the octree in cornerstone format and counts of particles in each leaf
     std::vector<morton_t> leaves; 
-    std::vector<size_t> counts;
+    std::vector<uint32_t> counts;
+    std::vector<uint32_t> layout; // exclusive scan of counts, marks the first index on the points position for the leaf
 
     // SFC key and level of each node (Waren-Salmon placeholder bit format)
     std::vector<morton_t> prefixes;
@@ -66,17 +67,23 @@ private:
     std::vector<uint32_t> levelRange = std::vector<uint32_t>(MortonEncoder::MAX_DEPTH + 2);
 
     // Maps between the level-key sorted layout and the intermedaite binary layout
-    std::vector<uint32_t> internalToLeaf;
-    std::vector<uint32_t> leafToInternal;
+    std::vector<int32_t> internalToLeaf;
+    std::vector<int32_t> leafToInternal;
 
     // References to sorted morton codes of the points and the morton-code-sorted array of points
-    const std::vector<morton_t> &codes;
-    MortonEncoder &morton;
+    std::vector<Lpoint> &points;
+    std::vector<morton_t> codes;
 
     // The geometric information of the points bounding box
     std::vector<Point> centers;
     std::vector<Vector> radii;
 
+    // Bounding box of the tree
+    Box bbox = Box(Point(), Vector());
+
+    Vector precomputedRadii[MortonEncoder::MAX_DEPTH + 1];
+    float halfLengths[3];
+    
     // Comput the array of rebalancing decisions (g1)
     bool rebalanceDecision(std::vector<uint32_t> &nodeOps) {
         bool converged = true;
@@ -105,13 +112,13 @@ private:
         
         uint32_t nodeCount = counts[index];
         // Decide if we split or not
-        // TODO: higher order splits
-        // if (nodeCount] > MAX_POINTS * 512 && level + 3 < MortonEncoder::MAX_DEPTH) { return 4096; } // split into 4 layers
-        // if (nodeCount > MAX_POINTS * 64 && level + 2 < MortonEncoder::MAX_DEPTH) { return 512; }   // split into 3 layers
-        // if (nodeCount > MAX_POINTS * 8 && level + 1 < MortonEncoder::MAX_DEPTH) { return 64; }     // split into 2 layers
-        if (nodeCount > MAX_POINTS && level < MortonEncoder::MAX_DEPTH) { return 8; } // split into 1 layer
+        // TODO: check MIN_OCTANT_RADIUS
+        if (nodeCount > MAX_POINTS * 512 && level + 3 < MortonEncoder::MAX_DEPTH) { return 4096; } // split into 4 layers
+        if (nodeCount > MAX_POINTS * 64 && level + 2 < MortonEncoder::MAX_DEPTH) { return 512; }   // split into 3 layers
+        if (nodeCount > MAX_POINTS * 8 && level + 1 < MortonEncoder::MAX_DEPTH) { return 64; }     // split into 2 layers
+        if (nodeCount > MAX_POINTS && level < MortonEncoder::MAX_DEPTH ) { return 8; } // split into 1 layer
         
-        return 1; // dont do nothing
+        return 1; // dont do anything
     }
 
     // Get the sibling ID and level of the node in the octree
@@ -179,6 +186,10 @@ private:
             // assert(MortonEncoder::isPowerOf8(newTree[newNodeIndex + 8] - newTree[newNodeIndex + 7]));
         } else {
             // TODO: higher order splits
+            uint32_t levelDiff = MortonEncoder::log8ceil(opCode);
+            for (int sibling = 0; sibling < opCode; ++sibling) {
+                newTree[newNodeIndex + sibling] = node + sibling * MortonEncoder::nodeRange(level + levelDiff);
+            }
         }
     }
 
@@ -255,6 +266,7 @@ private:
     }
 
     void createUnsortedLayout() {
+        // Create the prefixesand internaltoleaf arrays for the leafs
         for(int i = 0; i<nLeaf; i++) {
             morton_t key = leaves[i];
             uint32_t level = MortonEncoder::getLevel(leaves[i+1] - key);
@@ -309,10 +321,23 @@ private:
 public:
     LinearOctreeSort() = default;
     
-    explicit LinearOctreeSort(std::vector<morton_t> &codes, MortonEncoder &morton): codes(codes), morton(morton) {
+    explicit LinearOctreeSort(std::vector<Lpoint> &points): points(points) {
         std::cout << "Linear octree build summary:\n";
         double total_time;
         TimeWatcher tw;
+
+        tw.start();
+        setupBbox();
+        tw.stop();
+        total_time += tw.getElapsedDecimalSeconds();
+        std::cout << "  Time to find bounding box: " << tw.getElapsedDecimalSeconds() << " seconds\n";
+
+        tw.start();
+        sortPoints();
+        tw.stop();
+        total_time += tw.getElapsedDecimalSeconds();
+        std::cout << "  Time to sort the points by their morton codes: " << tw.getElapsedDecimalSeconds() << " seconds\n";
+
         tw.start();
         buildOctreeLeaves();
         tw.stop();
@@ -336,8 +361,48 @@ public:
         tw.stop();
         total_time += tw.getElapsedDecimalSeconds();
         std::cout << "  Time to compute octree geometry (centers and radii): " << tw.getElapsedDecimalSeconds() << " seconds\n";
-        
+
         std::cout << "Total time to build linear octree: " << total_time << " seconds\n";
+    }
+
+    void setupBbox() {
+        Vector radii;
+        Point center = mbb(points, radii);
+        bbox = Box(center, radii);
+
+        // Compute the physical half lengths for multiplying with the encoded coordinates
+        halfLengths[0] = 0.5f * MortonEncoder::EPS * (bbox.maxX() - bbox.minX());
+        halfLengths[1] = 0.5f * MortonEncoder::EPS * (bbox.maxY() - bbox.minY());
+        halfLengths[2] = 0.5f * MortonEncoder::EPS * (bbox.maxZ() - bbox.minZ());
+
+        for(int i = 0; i<= MortonEncoder::MAX_DEPTH; i++) {
+            coords_t sideLength = (1u << (MortonEncoder::MAX_DEPTH - i));
+            precomputedRadii[i] = Vector(
+                sideLength * halfLengths[0],
+                sideLength * halfLengths[1],
+                sideLength * halfLengths[2]
+            );
+        }
+    }
+
+    void sortPoints() {
+        std::vector<std::pair<morton_t, Lpoint>> encoded_points;
+        encoded_points.reserve(points.size());
+        for(size_t i = 0; i < points.size(); i++) {
+            encoded_points.emplace_back(MortonEncoder::encodeMortonPoint(points[i], bbox), points[i]);
+        }
+
+        std::sort(encoded_points.begin(), encoded_points.end(),
+            [](const auto& a, const auto& b) {
+                return a.first < b.first;  // Compare only the morton codes
+        });
+        
+        // Copy back sorted codes and points
+        codes.resize(points.size());
+        for(size_t i = 0; i < points.size(); i++) {
+            codes[i] = encoded_points[i].first;
+            points[i] = encoded_points[i].second;
+        }
     }
 
     void buildOctreeLeaves() {
@@ -355,6 +420,10 @@ public:
         nLeaf = leaves.size() - 1; // TODO: shouldnt this be -1?
         nInternal = (nLeaf - 1) / 7;
         nTotal = nLeaf + nInternal;
+
+        // Perform the exclusive scan to get the layout indices
+        layout.resize(leaves.size());
+        std::exclusive_scan(counts.begin(), counts.end() + 1, layout.begin(), 0);
     }
 
     bool updateOctreeLeaves() {
@@ -392,6 +461,11 @@ public:
             return t1.first < t2.first;
         });
 
+        for(int i = 0; i<nTotal; i++) {
+            prefixes[i] = prefixes_internalToLeaf[i].first;
+            internalToLeaf[i] = prefixes_internalToLeaf[i].second;
+        }
+
         // Compute the reverse mapping leafToInternal
         for (uint32_t i = 0; i < nTotal; ++i) {
             leafToInternal[internalToLeaf[i]] = i;
@@ -418,7 +492,7 @@ public:
             morton_t prefix = prefixes[i];
             morton_t startKey = MortonEncoder::decodePlaceholderBit(prefix);
             uint32_t level = MortonEncoder::decodePrefixLength(prefix) / 3;
-            std::tie(centers[i], radii[i]) = morton.getCenterAndRadii(startKey, level);
+            std::tie(centers[i], radii[i]) = MortonEncoder::getCenterAndRadii(startKey, level, bbox, halfLengths, precomputedRadii);
         }
     }
 
@@ -435,7 +509,7 @@ public:
 
     // A generic traversal along the tree
     template<class C, class A>
-    void singleTraversal(C&& continuationCriterion, A&& endpointAction) {
+    void singleTraversal(C&& continuationCriterion, A&& endpointAction) const {
         bool descend = continuationCriterion(0);
         if (!descend) return;
 
@@ -482,20 +556,45 @@ public:
      */
 	{
         std::vector<Lpoint*> ptsInside;
-
-        // continuation criteria
-        auto intersectsBox = [k](uint32_t nodeIndex) {
-            
+        Point center = k.center();
+        
+        auto intersectsKernel = [this, k](uint32_t nodeIndex) {
+            return k.boxOverlap(this->centers[nodeIndex], this->radii[nodeIndex]);
         };
-
-        // endpoint action
-        auto findAndInsertPoints = [k, condition, ptsInside](uint32_t nodeIndex) {
-
+        
+        auto findAndInsertPoints = [this, k, condition, &ptsInside](uint32_t nodeIndex) {
+            uint32_t leafIdx = this->internalToLeaf[nodeIndex];
+            for (int32_t j = this->layout[leafIdx]; j < this->layout[leafIdx+1]; j++) {
+                Lpoint& p = this->points[j];  // Now we can get a non-const reference
+                if (k.isInside(p) && k.center().id() != p.id() && condition(p)) {
+                    ptsInside.push_back(&p);
+                }
+            }
         };
-
-        singleTraversal(intersectsBox, findAndInsertPoints);
-
-		return ptsInside;
+        
+        singleTraversal(intersectsKernel, findAndInsertPoints);
+        return ptsInside;
 	}
 
+    template<Kernel_t kernel_type = Kernel_t::square>
+	[[nodiscard]] inline std::vector<Lpoint*> searchNeighbors(const Point& p, double radius) const
+	/**
+     * @brief Search neighbors function. Given a point and a radius, return the points inside a given kernel type
+     * @param p Center of the kernel to be used
+     * @param radius Radius of the kernel to be used
+     * @return Points inside the given kernel type
+     */
+	{
+		const auto kernel = kernelFactory<kernel_type>(p, radius);
+		// Dummy condition that always returns true, so we can use the same function for all cases
+		// The compiler should optimize this away
+		constexpr auto dummyCondition = [](const Lpoint&) { return true; };
+
+		return neighbors(kernel, dummyCondition);
+	}
+
+    [[nodiscard]] inline std::vector<Lpoint*> searchSphereNeighbors(const Point& point, const float radius) const
+	{
+		return searchNeighbors<Kernel_t::sphere>(point, radius);
+	}
 };
