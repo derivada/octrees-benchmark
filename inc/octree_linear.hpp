@@ -1,11 +1,3 @@
-/**
- * A linear (map-based) implementation of the Octree using Morton codes for quick access with good spacial locality
- * 
- * Pablo Díaz Viñambres 22/10/24
- * 
- */
-
-
 #pragma once
 
 #include "Lpoint.hpp"
@@ -16,415 +8,587 @@
 #include <unordered_set>
 #include <filesystem>
 #include "libmorton/morton.h"
-#include "octree_linear_node.hpp"
 #include "NeighborKernels/KernelFactory.hpp"
 #include "TimeWatcher.hpp"
+#include "morton_encoder.hpp"
+#include "Box.hpp"
 
+/**
+* @class LinearOctree
+* 
+* @brief Another (more correct) linear octree implementation based on the excellent implementation done 
+* for the cornerstone octree project: https://github.com/sekelle/cornerstone-octree/tree/master
+* 
+* @details This linear octree is built by storing offsets to the positions of an array of points sorted by their morton codes. 
+* For each leaf of the octree, there is an element in this array listthat points to the index of the first point in that leaf.
+* Since the points are sorted, the next element on the array - 1 contains the index of the last point in that leaf.
+* 
+* @cite Keller et al. Cornerstone: Octree Construction Algorithms for Scalable Particle Simulations. https://arxiv.org/pdf/2307.06345
+* 
+* @authors Pablo Díaz Viñambres 
+* 
+* @date 16/11/2024
+* 
+*/
 class LinearOctree {
 private:
-    static constexpr unsigned int MAX_POINTS        = 100;
+    /// @brief The maximum number of points in a leaf
+    static constexpr unsigned int MAX_POINTS        = 128;
+
+    /// @brief The minimum octant radius to have in a leaf (TODO: this is still not implemented, and may not be needed)
 	static constexpr float        MIN_OCTANT_RADIUS = 0.1;
-    static constexpr unsigned int MAX_DEPTH         = 19;
+
+	/// @brief The default size of the search set in KNN
 	static constexpr size_t       DEFAULT_KNN       = 100;
+
+	/// @brief The number of octants per internal node
 	static constexpr short        OCTANTS_PER_NODE  = 8;
 
-    /* 
-     * Linear Octree
-     * 
-     * To construct the Morton encodings for a point (p1,p2,p3) on a depth d, we first find its anchor (its scaled integer coordinates that
-     * indicate the node center it belongs to) by scaling the point into the cube [0,1]^3, multiplying each coordinate by 2^d and flooring.
-     * 
-     * Once we have the anchor (x,y,z) at depth d, we Morton encode it by interleaving its most significant 21 bits on each coordinate
-     * For this purpose we use libmorton, https://github.com/Forceflow/libmorton/tree/main/include/libmorton
-     * 
-     * The encoding produces a 64 bit number, however the maximum depth is only 19 instead of 21. This is because we also need to store the depth
-     * of the node to form the octree. To do this, we need at least 5 bits, but since another two are unused, we shift a total of 7 bits and put
-     * the current depth at those last 7 bits.   
-     * 
-     * In summary, the format of the codes is:
-     * x18y18z18x17y17z17...x1y1z1x0y0z0d6...d0
-     * 
-     * This implementation is also different from octree.h in the fact that we use a vector of radii instead of a single radius. 
-     * 
-     * A reference implementation was followed: https://github.com/Excalibur-SLE/AdaptOctree/blob/master/adaptoctree/tree.py
-     * 
-     * Although many adaptations were done (conversion to C++, 7 depth bits instead of 15, etc.)
-     * 
-     */
+    /// @brief Number of leaves and internal nodes in the octree. Equal to size of the leaves vector - 1.
+    uint32_t nLeaf;
 
-    // The map storing the nodes by their morton codes
-    // It contains both internal and leaf nodes, internal nodes don't have any points on them
-    // TODO: there are probably better ways to do this
-    std::unordered_map<morton_t, LinearOctreeNode*> nodes; 
+    /// @brief Number of internal nodes in the octree. Equal to (nLeaf-1) / 7.
+    uint32_t nInternal;
+
+    /// @brief Total number of nodes in the octree. Equal to nLeaf + nInternal.
+    uint32_t nTotal;
+
+    /**
+     * @brief The leaves of the octree in cornerstone array format.
+     * @details This array contains morton codes (interpreted here as octal digit numbers) satisfying certain constraints:
+     * 1. The length of the array is nLeaf + 1
+     * 2. The first element is 0 and the last element 8^MAX_DEPTH, where MAX_DEPTH is the maximum depth of the encoding system 
+     * (i.e. an upper bound for every possible encoding of a point)
+     * 3. The array is sorted in increasing order and the distance between two consecutive elements is 8^l, where l is less or equal
+     * to MAX_DEPTH
+     * 
+     * The array is initialized to {0, 8^MAX_DEPTH} and then subdivided into 8 equally sized bins if the number of points with encoding
+     * between two leaves is greater than MAX_POINTS.
+     * 
+     * For more details about the construction, check the cornerstone paper, section 4.
+     */
+    std::vector<morton_t> leaves; 
+
+    /// @brief  This array contains how many points have an encoding with a value between two of the leaves
+    std::vector<uint32_t> counts;
+
+    /// @brief This array is simply an exclusive scan of counts, and marks the index of the first point for a leaf
+    std::vector<uint32_t> layout;
+
+    /**
+     * @brief The Warren-Salmon encoding of each node in the octree
+     * @details For a given (internal or leaf) node, we store its position on the octree using this array, the position for a node at depth
+     * n will be given by 0 000 000 ... 1 x1y1z1 ... xnynzn. This allows for traversals needed in neighbourhood search.
+     * 
+     * The process to obtain this array and link it with the leaves array is detailed in the cornerstone paper, section 5.
+     */
+    std::vector<morton_t> prefixes;
+
+    /// @brief Index of the first child of each node (if 0 we have a leaf)
+    std::vector<uint32_t> offsets;
+
+    /// @brief The parent index of every group of 8 sibling nodes
+    std::vector<uint32_t> parents; // TODO: this may not be needed
+
+    /// @brief First node index of every tree level (L+2 elements where L is MAX_DEPTH)
+    std::vector<uint32_t> levelRange = std::vector<uint32_t>(MortonEncoder::MAX_DEPTH + 2);
+
+    /// @brief A map between the internal representation at offsets and the one in cornerstone format in leaves
+    std::vector<int32_t> internalToLeaf;
+
+    /// @brief The reverse mapping of internalToLeaf
+    std::vector<int32_t> leafToInternal;
+
+    /**
+     * @brief A reference to the array of points that we sort
+     * @details At the beginning of the octree construction, this points are encoded and then sorted in-place in the order given by their
+     * encodings. Therefore, this array is altered inside this class. This is done to  locality that Morton/Hilbert
+     */
+    std::vector<Lpoint> &points;
+
+    /// @brief The encodings of the points in the octree
+    std::vector<morton_t> codes;
+
+    /// @brief The center points of each node in the octree
+    std::vector<Point> centers;
+
+    /// @brief The vector of radii of each node in the octree
+    std::vector<Vector> radii;
+
+    /// @brief The global bounding box of the octree
+    Box bbox = Box(Point(), Vector());
+
+    /// @brief A simple vector containinf the radii of each level in the octree to speed up computations.
+    Vector precomputedRadii[MortonEncoder::MAX_DEPTH + 1];
+
+    /// @brief A vector containing the half-lengths of the minimum measure of the encoding.
+    float halfLengths[3];
     
-    // Center of the point cloud at depth level 0
-    Point center;
-
-    // Vector of radii of the point cloud at depth level 0
-    Vector radii; 
-    
-    /**
-     * Some constants and bitmasks useful for working with Morton codes
-     */
-    static constexpr uint8_t DEPTH_BITS = 7;
-    static constexpr uint8_t DEPTH_MASK = 0x7f;
-    static constexpr morton_t NOT_DEPTH_MASK = 0xffffffffffffffff ^ DEPTH_MASK;
-    static constexpr morton_t LAST_DEPTH_BITS_MASK = 0x0000000000000380;
-    static constexpr morton_t NOT_LAST_DEPTH_BITS_MASK = 0xffffffffffffffff ^ LAST_DEPTH_BITS_MASK;
-    static constexpr morton_t X_MASK = 0x9249249249249200;
-    static constexpr morton_t Y_MASK = 0x4924924924924900;
-    static constexpr morton_t Z_MASK = 0x2492492492492480;
-    static constexpr morton_t XY_MASK = X_MASK | Y_MASK;
-    static constexpr morton_t YZ_MASK = Y_MASK | Z_MASK;
-    static constexpr morton_t XZ_MASK = X_MASK | Z_MASK;
-    static constexpr float EPS = 1.0f / (1 << (MAX_DEPTH+1));
-
-    /*
-     * Method to convert a point to its anchor, this operation approximates its coordinates and so it is not reversible
-     */
-    inline void getAnchorCoords(const Point& p, uint8_t depth, coords_t &x, coords_t &y, coords_t &z) const {
-        // TODO: it should be 2^depth and not have to add this case, investigate why it wasn't working
-        if(depth == 0) {
-            x = 0, y = 0, z = 0;
-            return;
+    // Compute the array of rebalancing decisions (g1)
+    bool rebalanceDecision(std::vector<uint32_t> &nodeOps) {
+        bool converged = true;
+        for(int i = 0; i<leaves.size()-1; i++) {
+            nodeOps[i] = calculateNodeOp(i);
+            if(nodeOps[i] != 1) converged = false;
         }
-        float x_transf = ((p.getX() - center.getX())  + radii.getX()) / (2 * radii.getX());
-        float y_transf = ((p.getY() - center.getY())  + radii.getY()) / (2 * radii.getY());
-        float z_transf = ((p.getZ() - center.getZ())  + radii.getZ()) / (2 * radii.getZ());
-        if(x_transf + EPS >= 1.0f) x_transf = 1.0f - EPS;
-        if(y_transf + EPS >= 1.0f) y_transf = 1.0f - EPS;
-        if(z_transf + EPS >= 1.0f) z_transf = 1.0f - EPS;
-
-        // Get the integer coordinates by multiplying by 2^(depth-1) and then taking floor
-        x = (coords_t) (x_transf * (1 << (depth)));
-        y = (coords_t) (y_transf * (1 << (depth)));
-        z = (coords_t) (z_transf * (1 << (depth)));
-    }
-
-    /**
-     * Methods for encoding and decoding of points into morton codes
-     */
-    static inline morton_t encodeMorton(uint8_t depth, coords_t x, coords_t y, coords_t z) {
-        // Compute the morton code and push point into corresponding bin
-        morton_t code = libmorton::morton3D_64_encode(x, y, z);
-
-        // Pack depth into the key by shifting and then putting key into the tail bits
-        // In an octree, it is needed to distinguish nodes in different depths to allow traversals and so on
-        return (code << DEPTH_BITS) | depth;
-    }
-
-    inline morton_t encodeMortonPoint(const Point& p, uint8_t depth) const {
-        // Utility method combining the two above
-        coords_t x, y, z;
-        getAnchorCoords(p, depth, x, y, z);
-        return encodeMorton(depth, x, y, z);
-    }
-
-    static inline void decodeMorton(morton_t code, coords_t &x, coords_t &y, coords_t &z) {
-        // First we unshift to remove the depth bits and get the original code we passed to libmorton
-        code = code >> DEPTH_BITS;
-
-        // Now we can recover the anchor coordinates
-        libmorton::morton3D_64_decode(code, x, y, z);
-    }
-
-    /**
-     * Utility methods for working with Morton codes
-     * TODO: maybe remove the assertions here and do some better error handling
-     */
-    static inline uint8_t getDepth(morton_t code) {
-        return (uint8_t) (code & DEPTH_MASK);
-    }
-
-    static inline morton_t getParentCode(morton_t code) {
-        // To get parent morton code, shift 3 bits to the right and put level-1 in the trailing bits
-        uint8_t depth = getDepth(code);
-        assert(depth > 0);
-        morton_t parent = (code >> 3) & NOT_DEPTH_MASK;
-        return parent | (depth - 1);
-    }
-
-    static inline morton_t getSiblingCode(morton_t code, uint8_t index) {
-        // To get a sibling morton code, just return the code with the last 3 bits before depth bits set to sibling index
-        assert(index >= 0b000 && index <= 0b111);
-        return (code & NOT_LAST_DEPTH_BITS_MASK) | (((morton_t) index) << DEPTH_BITS);
-    }
-
-    static inline morton_t getChildrenCode(morton_t code, uint8_t index) {
-        // To get a child morton code, up the level, shift 3 bits to the right and then or the last 3 bits before
-        // trailing to the sibling index
-        uint8_t depth = getDepth(code);
-        assert(depth <= MAX_DEPTH && index >= 0b000 && index <= 0b111);
-        // Shift code one layer to the right, by masking first we make sure the 3 bits where we are going
-        // to put the children are already empty
-        morton_t children = (code & NOT_DEPTH_MASK) << 3;
-        // Put children bits and new level
-        return children | (((morton_t) index) << DEPTH_BITS) | (depth + 1);
-    }
-    
-    static void printMortonCode(coords_t x, coords_t y, coords_t z, morton_t code, bool formatted = false) {
-        std::cout << "Anchor center " << x << ", " << y << ", " << z << "\n";
-        printMortonCode(code, formatted);
-    }
-
-    static void printMortonCode(Point &p, morton_t code, bool formatted = false) {
-        std::cout << "Physical center " << p.getX() << ", " << p.getY() << ", " << p.getZ() << "\n";
-        printMortonCode(code, formatted);
-    }
-
-    static void printMortonCode(morton_t code, bool formatted = false) {
-        // Print the bits in groups of 3 to represent each level
-        if(formatted) {
-            for (int i = 63; i >= 7; i -= 3) {
-                std::cout << std::bitset<3>((code >> (i - 2)) & 0b111) << " ";
-            }
-            // Print the last 7 bits together
-            std::cout << "| " << std::bitset<7>(code & 0b1111111) << "\n";
-        } else {
-            std::cout << std::bitset<64>(code) << "\n";
-        }
-    }
-
-    /**
-     * Utility methods for getting geometric information (center, radius, inside check) from a morton code
-     */
-    inline Point getNodeCenter(morton_t code) const {
-        // Returns the physical (approximate) physical center of the node
-        auto it = nodes.find(code);
-        if(it == nodes.end()) {
-            return Point(0.0, 0.0, 0.0);
-        }
-        return it->second->getCenter();
-    }
-
-    inline Vector getNodeRadii(morton_t code) const {
-        // Returns the physical (approximate) physical center of the node
-        auto it = nodes.find(code);
-        if(it == nodes.end()) {
-            return Point(0.0, 0.0, 0.0);
-        }
-        return it->second->getRadii();
-    }
-
-
-    void printNodeGeometry(morton_t code) const {
-        Box bbox = Box(getNodeCenter(code), getNodeRadii(code));
-        std::cout << "Node: ";
-        printMortonCode(code, true);
-        std::cout << "Center: " << bbox.center() << "\n";
-        std::cout << "Radii: " << bbox.radii() << "\n";
-        std::cout << "Lower corner: " << bbox.min() << "\nUpper corner: " << bbox.max() << "\n"; 
-    }
-
-
-    inline bool isInside(const Lpoint &p, morton_t code) const {
-        // To check if a node is inside a given code, we compute its morton code at the depth of the node
-        // and check whether it is the same
-        // The "physical" approach of getting the node center and radii and computing the box would not be
-        // accurate since we are only approximating those
-        return isNode(code) && (encodeMortonPoint(p, getDepth(code)) == code);
+        return converged;
     } 
 
+    // Calculate the operation to be done in this node
+    uint32_t calculateNodeOp(uint32_t index) {
+        auto [sibling, level] = siblingAndLevel(index);
 
-
-    // Insert points into the octree by computing their bins, and adds nodes to keep processing to the queue
-    void insertPoints(std::vector<Lpoint*>& points, uint8_t depth, std::stack<LinearOctreeNode*>& subdivision_stack) {
-        std::unordered_map<morton_t, std::vector<Lpoint*>> bins;
-        for(int i = 0; i<points.size(); i++) {
-            // Shift and scale coordinates into [0, 1]^3
-            // x' = ((x - c_x) + r_x) / (2*r_x)
-            morton_t code = encodeMortonPoint(*points[i], depth);
-            bins[code].push_back(points[i]);
-        } 
+        if(sibling > 0) {
+            // We have 8 siblings next to each other, could merge this node if the count of all siblings is less MAX_COUNT
+            uint32_t parentIndex = index - sibling;
+            // Should not be bigger than 2^32
+            size_t parentCount =    counts[parentIndex]   + counts[parentIndex+1]+ 
+                                    counts[parentIndex+2] + counts[parentIndex+3]+ 
+                                    counts[parentIndex+4] + counts[parentIndex+5]+
+                                    counts[parentIndex+6] + counts[parentIndex+7];
+            if(parentCount <= MAX_POINTS)
+                return 0; // merge
+        }
         
-        // Add good nodes to the octree, reject and put into subdivision stack the others
-        for (auto& [code, binPoints] : bins) {
-            coords_t x, y, z;
-            decodeMorton(code, x, y, z);
-            auto node = new LinearOctreeNode(binPoints, code, depth, x, y, z, center, radii);
-            // Insert into octree map (we also keep internal nodes, 
-            // though their vectors of points will be cleared in case we subdivide)
-            nodes[code] = node;
+        uint32_t nodeCount = counts[index];
+        // Decide if we split or not
+        // TODO: check MIN_OCTANT_RADIUS
+        if (nodeCount > MAX_POINTS * 512 && level + 3 < MortonEncoder::MAX_DEPTH) { return 4096; } // split into 4 layers
+        if (nodeCount > MAX_POINTS * 64 && level + 2 < MortonEncoder::MAX_DEPTH) { return 512; }   // split into 3 layers
+        if (nodeCount > MAX_POINTS * 8 && level + 1 < MortonEncoder::MAX_DEPTH) { return 64; }     // split into 2 layers
+        if (nodeCount > MAX_POINTS && level < MortonEncoder::MAX_DEPTH ) { return 8; } // split into 1 layer
+        
+        return 1; // dont do anything
+    }
 
-            // TODO: also add min physical size condition
-            if(binPoints.size() > MAX_POINTS && depth < MAX_DEPTH) {
-                // Push into queue for future subdivision until we have small amount of points
-                subdivision_stack.push(node);
+    // Get the sibling ID and level of the node in the octree
+    inline std::pair<int32_t, uint32_t> siblingAndLevel(uint32_t index) {
+        morton_t node = leaves[index];
+        morton_t range = leaves[index+1] - node;
+        uint32_t level = MortonEncoder::getLevel(range);
+        if(level == 0) {
+            return {-1, level};
+        }
+
+        uint32_t siblingId = MortonEncoder::getSiblingId(node, level);
+
+        // Checks if all siblings are on the tree, to do this, checks if the difference between the two parent nodes corresponding
+        // to the code parent and the next parent is the range spanned by two consecutive codes at that level
+        bool siblingsOnTree = leaves[index - siblingId + 8] == (leaves[index - siblingId] + MortonEncoder::nodeRange(level - 1));
+        if(!siblingsOnTree) siblingId = -1;
+
+        return {siblingId, level};
+    }
+
+    
+    static void printMortonCode(morton_t code) {
+        // Print the bits in groups of 3 to represent each level
+        std::cout << std::bitset<1>(code >> 63) << " ";
+        for (int i = 62; i >= 0; i -= 3) {
+            std::cout << std::bitset<3>((code >> (i - 2)) & 0b111) << " ";
+        }
+        std::cout << std::endl;
+    }
+
+    // Build the new tree using the rebalance decision array
+    void rebalanceTree(std::vector<morton_t> &newTree, std::vector<uint32_t> &nodeOps) {
+        uint32_t n = leaves.size() - 1;
+
+        // g2, exclusive scan
+        exclusiveScan(nodeOps.data(), n+1);
+
+        newTree.resize(nodeOps[n] + 1);
+        newTree.back() = leaves.back();
+        for (uint32_t i = 0; i < n; ++i) {
+            processNode(i, nodeOps, newTree);
+        }
+    }
+
+    // Construct new octree value for the given index
+    void processNode(uint32_t index, std::vector<uint32_t> &nodeOps, std::vector<morton_t> &newTree) {
+        morton_t node = leaves[index];
+        morton_t range = leaves[index+1] - node;
+
+        uint32_t level = MortonEncoder::getLevel(range);
+
+        uint32_t opCode       = nodeOps[index + 1] - nodeOps[index]; // The original value of the opCode (before exclusive scan)
+        uint32_t newNodeIndex = nodeOps[index]; // The new position to put the node into (nodeOps value after exclusive scan)
+
+        if(opCode == 1) {
+            // do nothing, just copy node into new position
+            newTree[newNodeIndex] = node;
+            // assert(MortonEncoder::isPowerOf8(newTree[newNodeIndex + 1] - newTree[newNodeIndex]));
+        } else if(opCode == 8) {
+            // Split the node into 8
+            for(int sibling = 0; sibling < OCTANTS_PER_NODE; sibling++) {
+                newTree[newNodeIndex + sibling] = node + sibling * MortonEncoder::nodeRange(level + 1);
+            }
+            // assert(MortonEncoder::isPowerOf8(newTree[newNodeIndex + 8] - newTree[newNodeIndex + 7]));
+        } else {
+            // TODO: higher order splits
+            uint32_t levelDiff = MortonEncoder::log8ceil(opCode);
+            for (int sibling = 0; sibling < opCode; ++sibling) {
+                newTree[newNodeIndex + sibling] = node + sibling * MortonEncoder::nodeRange(level + levelDiff);
             }
         }
+    }
+
+    // Count number of particles in each octree node
+    void computeNodeCounts() {
+        uint32_t n = leaves.size() - 1;
+        uint32_t codes_size = codes.size();
+        uint32_t firstNode = 0;
+        uint32_t lastNode = n;
+
+        if(codes.size() > 0) {
+            firstNode = std::upper_bound(leaves.begin(), leaves.end(), codes[0]) - leaves.begin() - 1;
+            lastNode = std::upper_bound(leaves.begin(), leaves.end(), codes[codes_size-1]) - leaves.begin();
+            assert(firstNode <= lastNode);
+        } else {
+            firstNode = n, lastNode = n;
+        }
+
+        // Fill non-populated parts of the octree with zeros
+        for(uint32_t i = 0; i<firstNode; i++)
+            counts[i] = 0;
+        for(uint32_t i = lastNode; i<lastNode; i++)
+            counts[i] = 0;
+
+        // TODO: count guessing, parallelizing
+        size_t nNonZeroNodes = lastNode - firstNode;
+        exclusiveScan(counts.data() + firstNode, nNonZeroNodes);
+
+        for(uint32_t i = 0; i<nNonZeroNodes; i++) {
+            counts[i + firstNode] = calculateNodeCount(leaves[i+firstNode], leaves[i+firstNode+1]);
+        }
+    }
+    unsigned calculateNodeCount(morton_t keyStart, morton_t keyEnd) {
+        auto rangeStart = std::lower_bound(codes.begin(), codes.end(), keyStart);
+        auto rangeEnd   = std::lower_bound(codes.begin(), codes.end(), keyEnd);
+        size_t count    = rangeEnd - rangeStart;
+        // TODO: should we use maxCount??
+        return count;
+    }
+
+    template<class T>
+    void exclusiveScan(T* out, size_t numElements) {
+        exclusiveScanSerialInplace(out, numElements, T(0));
+    }
+
+    template<class T>
+    T exclusiveScanSerialInplace(T* out, size_t num_elements, T init)
+    {
+        T a = init;
+        T b = init;
+        for (size_t i = 0; i < num_elements; ++i)
+        {
+            a += out[i];
+            out[i] = b;
+            b      = a;
+        }
+        return b;
+    }
+
+    constexpr uint32_t binaryKeyWeight(morton_t key, unsigned level)
+    {
+        uint32_t ret = 0;
+        for (uint32_t l = 1; l <= level + 1; ++l)
+        {
+            uint32_t digit = MortonEncoder::octalDigit(key, l);
+            ret += digitWeight(digit);
+        }
+        return ret;
+    }
+
+    constexpr int32_t digitWeight(uint32_t digit) {
+        int32_t fourGeqMask = -int32_t(digit >= 4);
+        return ((7 - digit) & fourGeqMask) - (digit & ~fourGeqMask);
+    }
+
+    void createUnsortedLayout() {
+        // Create the prefixesand internaltoleaf arrays for the leafs
+        for(int i = 0; i<nLeaf; i++) {
+            morton_t key = leaves[i];
+            uint32_t level = MortonEncoder::getLevel(leaves[i+1] - key);
+            prefixes[i + nInternal] = MortonEncoder::encodePlaceholderBit(key, 3*level);
+            internalToLeaf[i + nInternal] = i + nInternal;
+
+            uint32_t prefixLength = MortonEncoder::commonPrefix(key, leaves[i+1]);
+            if(prefixLength % 3 == 0 && i < nLeaf - 1) {
+                uint32_t octIndex = (i + binaryKeyWeight(key, prefixLength / 3)) / 7;
+                prefixes[octIndex] = MortonEncoder::encodePlaceholderBit(key, prefixLength);
+                internalToLeaf[octIndex] = octIndex;
+            }
+        }
+    }
+
+    // Determine octree subdivision level boundaries
+    void getLevelRange() {
+        for(uint32_t level = 0; level <= MortonEncoder::MAX_DEPTH; level++) {
+            auto it = std::lower_bound(prefixes.begin(), prefixes.end(), MortonEncoder::encodePlaceholderBit(0, 3 * level));
+            levelRange[level] = std::distance(prefixes.begin(), it);
+        }
+        levelRange[MortonEncoder::MAX_DEPTH + 1] = nTotal;
+    }
+
+    // Extract parent/child relationships from binary tree and translate to sorted order
+    void linkTree() {
+        for(int i = 0; i<nInternal; i++) {
+            uint32_t idxA = leafToInternal[i];
+            morton_t prefix = prefixes[idxA];
+            morton_t nodeKey = MortonEncoder::decodePlaceholderBit(prefix);
+            unsigned prefixLength = MortonEncoder::decodePrefixLength(prefix);
+            unsigned level = prefixLength / 3;
+            assert(level < MortonEncoder::MAX_DEPTH);
+
+            morton_t childPrefix = MortonEncoder::encodePlaceholderBit(nodeKey, prefixLength + 3);
+
+            uint32_t leafSearchStart = levelRange[level + 1];
+            uint32_t leafSearchEnd   = levelRange[level + 2];
+            uint32_t childIdx = std::distance(prefixes.begin(), 
+                std::lower_bound(prefixes.begin() + leafSearchStart, prefixes.begin() + leafSearchEnd, childPrefix));
+
+            if (childIdx != leafSearchEnd && childPrefix == prefixes[childIdx]) {
+                offsets[idxA] = childIdx;
+                // We only store the parent once for every group of 8 siblings.
+                // This works as long as each node always has 8 siblings.
+                // Subtract one because the root has no siblings.
+                parents[(childIdx - 1) / 8] = idxA;
+            }
+        } 
     }
 
 public:
     LinearOctree() = default;
-
-    explicit LinearOctree(std::vector<Lpoint>& points) {
-        center = mbb(points, radii);
-        std::vector<Lpoint*> points_p;
-        points_p.reserve(points.size());
-        for (auto& point : points) {
-            points_p.push_back(&point);
-        }
-        buildOctree(points_p);
-    }
-
-    explicit LinearOctree(std::vector<Lpoint*>& points) {
-        buildOctree(points);
-    }
-
-    // TODO: getters of center, radii, bbox, etc.
-
-    [[nodiscard]] inline double getDensity(morton_t code) const
-	/*
-    * @brief Computes the point density of the given Octree as nPoints / Volume
-    */
-	{
-        auto it = nodes.find(code);
-        if(it == nodes.end()) {
-            return 0.0f;
-        }
-		auto radii = getNodeRadii(code);
-        return it->second->points.size() / (radii.getX() * radii.getY() * radii.getZ());
-	}
-
-    void writeDensities(const std::filesystem::path& path) const;
-	void writeNumPoints(const std::filesystem::path& path) const;
-
-    // Called this findNode instead of findOctant but they do the same
-    [[nodiscard]] const LinearOctreeNode* findNode(const Lpoint* p) const;
-
-    // TODO implement at cpp the ones that make sense for linear octrees
-    [[nodiscard]] std::vector<std::pair<Point, double>> computeDensities() const;
-	[[nodiscard]] std::vector<std::pair<Point, size_t>> computeNumPoints() const;
-    [[nodiscard]] bool isInside2D(const Point& p) const;
-    void   insertPoints(std::vector<Lpoint>& points);
-	void   insertPoints(std::vector<Lpoint*>& points);
-	void   insertPoint(Lpoint* p);
-	void   createOctants();
-	void   fillOctants();
-	size_t octantIdx(const Lpoint* p) const;
-
+    
     /**
-     * Methods for checking if the node is in the tree, is a leaf or is an inner node
-     * 
-     * "isEmpty()" doesnt make much sense in a Linear Octree
+     * @brief Build 
+     * @
      */
-    [[nodiscard]] inline bool isNode(morton_t code) const {
-        return nodes.find(code) != nodes.end();
-    }
-    [[nodiscard]] inline bool isLeaf(morton_t code) const { 
-        auto it = nodes.find(code);
-        if(it == nodes.end()) {
-            std::cout << code << " not found" << std::endl;
-            return false;
-        }
-        return it->second->isLeaf();
-    }
-    [[nodiscard]] inline bool isInner(morton_t code) const {
-        auto it = nodes.find(code);
-        if(it == nodes.end()) {
-            return false;
-        }
-        return !(it->second->isLeaf());
-    }
+    explicit LinearOctree(std::vector<Lpoint> &points): points(points) {
+        std::cout << "Linear octree build summary:\n";
+        double total_time;
+        TimeWatcher tw;
 
-    void buildOctree(std::vector<Lpoint*>& points) {
-        // TODO: usually build process its different, points are sorted globally and then put into bins
-        // Maybe doing something similar but simpler than cornerstone paper https://dl.acm.org/doi/abs/10.1145/3592979.3593417
-        // this is faster and more parallelizable in the future
+        tw.start();
+        setupBbox();
+        tw.stop();
+        total_time += tw.getElapsedDecimalSeconds();
+        std::cout << "  Time to find bounding box: " << tw.getElapsedDecimalSeconds() << " seconds\n";
+
+        tw.start();
+        sortPoints();
+        tw.stop();
+        total_time += tw.getElapsedDecimalSeconds();
+        std::cout << "  Time to sort the points by their morton codes: " << tw.getElapsedDecimalSeconds() << " seconds\n";
+
+        tw.start();
+        buildOctreeLeaves();
+        tw.stop();
+        total_time += tw.getElapsedDecimalSeconds();
+        std::cout << "  Time to build the octree leaves: " << tw.getElapsedDecimalSeconds() << " seconds\n";
         
-        // Add all points to the root node and add to subdivision stack
-        std::stack<LinearOctreeNode*> subdivision_stack;
-        auto node = new LinearOctreeNode(points, 0, 0, 0, 0, 0, center, radii);
-        nodes[0] = node;
+        tw.start();
+        resize();
+        tw.stop();
+        total_time += tw.getElapsedDecimalSeconds();
+        std::cout << "  Time to allocate space for internal variables: " << tw.getElapsedDecimalSeconds() << " seconds\n";
 
-        if(points.size() > MAX_POINTS){
-            subdivision_stack.push(node);
-        }
+        tw.start();
+        buildOctreeInternal();
+        tw.stop();
+        total_time += tw.getElapsedDecimalSeconds();
+        std::cout << "  Time to build internal part of the octree and link it: " << tw.getElapsedDecimalSeconds() << " seconds\n";
 
-        // Process nodes that we still need to subdivide
-        while(!subdivision_stack.empty()) {
-            node = subdivision_stack.top();
-            subdivision_stack.pop();
-            // Reprocess the points in the node
-            insertPoints(node->points, getDepth(node->code) + 1, subdivision_stack);
+        tw.start();
+        computeGeometry();
+        tw.stop();
+        total_time += tw.getElapsedDecimalSeconds();
+        std::cout << "  Time to compute octree geometry (centers and radii): " << tw.getElapsedDecimalSeconds() << " seconds\n";
 
-            // Clear the old node points array
-            node->points.clear();
+        std::cout << "Total time to build linear octree: " << total_time << " seconds\n";
+    }
+
+    void setupBbox() {
+        Vector radii;
+        Point center = mbb(points, radii);
+        bbox = Box(center, radii);
+
+        // Compute the physical half lengths for multiplying with the encoded coordinates
+        halfLengths[0] = 0.5f * MortonEncoder::EPS * (bbox.maxX() - bbox.minX());
+        halfLengths[1] = 0.5f * MortonEncoder::EPS * (bbox.maxY() - bbox.minY());
+        halfLengths[2] = 0.5f * MortonEncoder::EPS * (bbox.maxZ() - bbox.minZ());
+
+        for(int i = 0; i<= MortonEncoder::MAX_DEPTH; i++) {
+            coords_t sideLength = (1u << (MortonEncoder::MAX_DEPTH - i));
+            precomputedRadii[i] = Vector(
+                sideLength * halfLengths[0],
+                sideLength * halfLengths[1],
+                sideLength * halfLengths[2]
+            );
         }
     }
 
+    void sortPoints() {
+        std::vector<std::pair<morton_t, Lpoint>> encoded_points;
+        encoded_points.reserve(points.size());
+        for(size_t i = 0; i < points.size(); i++) {
+            encoded_points.emplace_back(MortonEncoder::encodeMortonPoint(points[i], bbox), points[i]);
+        }
 
-	template<Kernel_t kernel_type = Kernel_t::square>
-	[[nodiscard]] inline std::vector<Lpoint*> searchNeighbors(const Point& p, double radius) const
-	/**
-   * @brief Search neighbors function. Given a point and a radius, return the points inside a given kernel type
-   * @param p Center of the kernel to be used
-   * @param radius Radius of the kernel to be used
-   * @return Points inside the given kernel type
-   */
-	{
-		const auto kernel = kernelFactory<kernel_type>(p, radius);
-		// Dummy condition that always returns true, so we can use the same function for all cases
-		// The compiler should optimize this away
-		constexpr auto dummyCondition = [](const Lpoint&) { return true; };
+        std::sort(encoded_points.begin(), encoded_points.end(),
+            [](const auto& a, const auto& b) {
+                return a.first < b.first;  // Compare only the morton codes
+        });
+        
+        // Copy back sorted codes and points
+        codes.resize(points.size());
+        for(size_t i = 0; i < points.size(); i++) {
+            codes[i] = encoded_points[i].first;
+            points[i] = encoded_points[i].second;
+        }
+    }
 
-		return neighbors(kernel, dummyCondition);
-	}
+    void buildOctreeLeaves() {
+        // Builds the octree sequentially using the cornerstone algorithm
 
-	template<Kernel_t kernel_type = Kernel_t::cube>
-	[[nodiscard]] inline std::vector<Lpoint*> searchNeighbors(const Point& p, const Vector& radii) const
-	/**
-   * @brief Search neighbors function. Given a point and a radius, return the points inside a given kernel type
-   * @param p Center of the kernel to be used
-   * @param radii Radii of the kernel to be used
-   * @return Points inside the given kernel type
-   */
-	{
-		const auto kernel = kernelFactory<kernel_type>(p, radii);
-		// Dummy condition that always returns true, so we can use the same function for all cases
-		// The compiler should optimize this away
-		constexpr auto dummyCondition = [](const Lpoint&) { return true; };
+        // We start with 0, 7777...777 (in octal)
+        leaves = {0, MortonEncoder::UPPER_BOUND};
+        counts = {(uint32_t) codes.size()};
 
-		return neighbors(kernel, dummyCondition);
-	}
+        while(!updateOctreeLeaves())
+            ;
+        
 
-	template<Kernel_t kernel_type = Kernel_t::square, class Function>
-	[[nodiscard]] inline std::vector<Lpoint*> searchNeighbors(const Point& p, double radius, Function&& condition) const
-	/**
-   * @brief Search neighbors function. Given a point and a radius, return the points inside a given kernel type
-   * @param p Center of the kernel to be used
-   * @param radius Radius of the kernel to be used
-   * @param condition function that takes a candidate neighbor point and imposes an additional condition (should return a boolean).
-   * The signature of the function should be equivalent to `bool cnd(const Lpoint &p);`
-   * @return Points inside the given kernel type
-   */
-	{
-		const auto kernel = kernelFactory<kernel_type>(p, radius);
-		return neighbors(kernel, std::forward<Function&&>(condition));
-	}
+        // Compute the final sizes of the octree
+        nLeaf = leaves.size() - 1; // TODO: shouldnt this be -1?
+        nInternal = (nLeaf - 1) / 7;
+        nTotal = nLeaf + nInternal;
 
-	template<Kernel_t kernel_type = Kernel_t::square, class Function>
-	[[nodiscard]] inline std::vector<Lpoint*> searchNeighbors(const Point& p, const Vector& radii,
-	                                                          Function&& condition) const
-	/**
-   * @brief Search neighbors function. Given a point and a radius, return the points inside a given kernel type
-   * @param p Center of the kernel to be used
-   * @param radii Radii of the kernel to be used
-   * @param condition function that takes a candidate neighbor point and imposes an additional condition (should return a boolean).
-   * The signature of the function should be equivalent to `bool cnd(const Lpoint &p);`
-   * @return Points inside the given kernel type
-   */
-	{
-		const auto kernel = kernelFactory<kernel_type>(p, radii);
-		return neighbors(kernel, std::forward<Function&&>(condition));
-	}
+        // Perform the exclusive scan to get the layout indices
+        layout.resize(leaves.size());
+        std::exclusive_scan(counts.begin(), counts.end() + 1, layout.begin(), 0);
+    }
 
-    // Finds the octant ID (child index) where a point inside a node resides
-    inline uint8_t octantIdx(const Lpoint* p, morton_t code) const;
+    bool updateOctreeLeaves() {
+        std::vector<uint32_t> nodeOps(leaves.size());
+        bool converged = rebalanceDecision(nodeOps);
 
-	[[nodiscard]] std::vector<Lpoint*> KNN(const Point& p, size_t k, size_t maxNeighs = DEFAULT_KNN) const;
+        std::vector<morton_t> newTree;
+        rebalanceTree(newTree, nodeOps);
+        counts.resize(newTree.size()-1);
+        swap(leaves, newTree);
 
-	template<typename Kernel, typename Function>
+        computeNodeCounts();
+        return converged;
+    }
+
+    void resize() {
+        // Resize the other fields
+        prefixes.resize(nTotal);
+        offsets.resize(nTotal+1);
+        parents.resize((nTotal-1) / 8);
+        internalToLeaf.resize(nTotal);
+        leafToInternal.resize(nTotal);
+        centers.resize(nTotal);
+        radii.resize(nTotal);
+    }
+
+    void buildOctreeInternal() {
+        createUnsortedLayout();
+        // Sort by key where the keys are the prefixes and the values to sort internalToLeaf
+        std::vector<std::pair<morton_t, uint32_t>> prefixes_internalToLeaf(nTotal);
+        for(int i = 0; i<nTotal; i++) {
+            prefixes_internalToLeaf[i] = {prefixes[i], internalToLeaf[i]};
+        }
+        std::stable_sort(prefixes_internalToLeaf.begin(), prefixes_internalToLeaf.end(), [](const auto &t1, const auto &t2) {
+            return t1.first < t2.first;
+        });
+
+        for(int i = 0; i<nTotal; i++) {
+            prefixes[i] = prefixes_internalToLeaf[i].first;
+            internalToLeaf[i] = prefixes_internalToLeaf[i].second;
+        }
+
+        // Compute the reverse mapping leafToInternal
+        for (uint32_t i = 0; i < nTotal; ++i) {
+            leafToInternal[internalToLeaf[i]] = i;
+        }
+
+        // Offset by the number of internal nodes
+        for (uint32_t i = 0; i < nTotal; ++i) {
+            internalToLeaf[i] -= nInternal;
+        }
+
+        // Find the LO array
+        getLevelRange();
+
+        // Clear child offsets
+        std::fill(offsets.begin(), offsets.end(), 0);
+
+        // Compute the links
+        linkTree();
+    }
+
+    // Computes the node centers and radii
+    void computeGeometry() {
+        for(uint32_t i = 0; i<prefixes.size(); i++) {
+            morton_t prefix = prefixes[i];
+            morton_t startKey = MortonEncoder::decodePlaceholderBit(prefix);
+            uint32_t level = MortonEncoder::decodePrefixLength(prefix) / 3;
+            std::tie(centers[i], radii[i]) = MortonEncoder::getCenterAndRadii(startKey, level, bbox, halfLengths, precomputedRadii);
+        }
+    }
+
+    void printArray(std::vector<uint32_t> &arr) {
+        for(int i = 0; i<arr.size();i++) {
+            std::cout << i << " -> " << arr[i] << std::endl;
+        }
+    }
+    void printArrayMortonCodes(std::vector<morton_t> &arr){
+        for(int i = 0; i<arr.size();i++) {
+            std::cout << i << " -> "; printMortonCode(arr[i]);
+        }
+    }
+
+    // A generic traversal along the tree
+    template<class C, class A>
+    void singleTraversal(C&& continuationCriterion, A&& endpointAction) const {
+        bool descend = continuationCriterion(0);
+        if (!descend) return;
+
+        if (offsets[0] == 0) {
+            // root node is already the endpoint
+            endpointAction(0);
+            return;
+        }
+
+        uint32_t stack[128];
+        stack[0] = 0;
+
+        uint32_t stackPos = 1;
+        uint32_t node = 0; // start at the root
+
+        do {
+            for (int octant = 0; octant < OCTANTS_PER_NODE; ++octant) {
+                uint32_t child = offsets[node] + octant;
+                bool descend = continuationCriterion(child);
+                if (descend) {
+                    if (offsets[child] == 0) {
+                        // endpoint reached with child is a leaf node
+                        endpointAction(child);
+                    } else {
+                        assert(stackPos < 128);
+                        stack[stackPos++] = child; // push
+                    }
+                }
+            }
+            node = stack[--stackPos];
+
+        } while (node != 0); // the root can only be obtained when the tree has been fully traversed
+    }
+
+    template<typename Kernel, typename Function>
     [[nodiscard]] std::vector<Lpoint*> neighbors(const Kernel& k, Function&& condition, morton_t root = 0) const
     /**
      * @brief Search neighbors function. Given kernel that already contains a point and a radius, return the points inside the region.
@@ -435,335 +599,47 @@ public:
      * @return Points inside the given kernel type. Actually the same as ptsInside.
      */
 	{
-        //size_t visited = 0;
-		std::vector<Lpoint*> ptsInside;
-		morton_t stack[128];
-        uint8_t stack_index = 0;
-        if(!isNode(root)) // Checks if the root is an actual node in the tree
-            return ptsInside;
-        stack[stack_index++] = root;
+        std::vector<Lpoint*> ptsInside;
+        auto center_id = k.center().id();
 
-		while (stack_index > 0) {
-            const morton_t code = stack[--stack_index];
-            //visited++;
-			if (isLeaf(code)) {
-                for (Lpoint* point_ptr : nodes.at(code)->points) {
-                    // Check the point
-                    if (k.isInside(*point_ptr) && k.center().id() != point_ptr->id() && condition(*point_ptr)) {
-                        ptsInside.emplace_back(point_ptr); // add the point to the result list
-                    }
+        auto intersectsKernel = [&](uint32_t nodeIndex) {
+            return k.boxOverlap(this->centers[nodeIndex], this->radii[nodeIndex]);
+        };
+        
+        auto findAndInsertPoints = [&](uint32_t nodeIndex) {
+            uint32_t leafIdx = this->internalToLeaf[nodeIndex];
+            auto pointsStart = this->layout[leafIdx], pointsEnd = this->layout[leafIdx+1];
+            for (int32_t j = pointsStart; j < pointsEnd; j++) {
+                Lpoint& p = this->points[j];  // Now we can get a non-const reference
+                if (k.isInside(p) && center_id != p.id() && condition(p)) {
+                    ptsInside.push_back(&p);
                 }
-			} else {
-                for(size_t index = 0; index < OCTANTS_PER_NODE; index++) {
-                    morton_t childCode = getChildrenCode(code, index);
-                    if(isNode(childCode) && k.boxOverlap(getNodeCenter(childCode), getNodeRadii(childCode))){
-                        assert(stack_index < 128);
-                        stack[stack_index++] = childCode;
-                    }
-                }
-			}
-		}
-        //std::cout << "visited: " << visited << std::endl;
-		return ptsInside;
+            }
+        };
+        
+        singleTraversal(intersectsKernel, findAndInsertPoints);
+        return ptsInside;
 	}
 
-    // Search neighbors overloads
-    [[nodiscard]] inline std::vector<Lpoint*> searchNeighbors2D(const Point& p, const double radius) const
-	{
-		return searchNeighbors<Kernel_t::square>(p, radius);
-	}
-
-	[[nodiscard]] inline std::vector<Lpoint*> searchCylinderNeighbors(const Lpoint& p, const double radius,
-	                                                                  const double zMin, const double zMax) const
-	{
-		return searchNeighbors<Kernel_t::circle>(p, radius,
-		                                         [&](const Lpoint& p) { return p.getZ() >= zMin && p.getZ() <= zMax; });
-	}
-
-	[[nodiscard]] inline std::vector<Lpoint*> searchCircleNeighbors(const Lpoint& p, const double radius) const
-	{
-		return searchNeighbors<Kernel_t::circle>(p, radius);
-	}
-
-	[[nodiscard]] inline std::vector<Lpoint*> searchCircleNeighbors(const Lpoint* p, const double radius) const
-	{
-		return searchCircleNeighbors(*p, radius);
-	}
-
-	[[nodiscard]] inline std::vector<Lpoint*> searchNeighbors3D(const Point& p, const Vector& radii) const
-	{
-		return searchNeighbors<Kernel_t::cube>(p, radii);
-	}
-
-	[[nodiscard]] inline std::vector<Lpoint*> searchNeighbors3D(const Point& p, double radius) const
-	{
-		return searchNeighbors<Kernel_t::cube>(p, radius);
-	}
-
-	[[nodiscard]] inline std::vector<Lpoint*> searchNeighbors3D(const Point& p, const double radius,
-	                                                            const std::vector<bool>& flags) const
+    template<Kernel_t kernel_type = Kernel_t::square>
+	[[nodiscard]] inline std::vector<Lpoint*> searchNeighbors(const Point& p, double radius) const
 	/**
-     * Searching neighbors in 3D using a different radius for each direction
-     * @param p Point around the neighbors will be search
-     * @param radius Vector of radiuses: one per spatial direction
-     * @param flags Vector of flags: return only points which flags[pointId] == false
-     * @return Points inside the given kernel
+     * @brief Search neighbors function. Given a point and a radius, return the points inside a given kernel type
+     * @param p Center of the kernel to be used
+     * @param radius Radius of the kernel to be used
+     * @return Points inside the given kernel type
      */
 	{
-		const auto condition = [&](const Point& point) { return !flags[point.id()]; };
-		return searchNeighbors<Kernel_t::cube>(p, radius, condition);
-	}
-
-    // Simpler functions for counting number of neighbors
-	template<Kernel_t kernel_type = Kernel_t::square>
-	[[nodiscard]] inline size_t numNeighbors(const Point& p, const double radius) const
-	/**
-   * @brief Search neighbors function. Given a point and a radius, return the number of points inside a given kernel type
-   * @param p Center of the kernel to be used
-   * @param radius Radius of the kernel to be used
-   * @param condition function that takes a candidate neighbor point and imposes an additional condition (should return a boolean).
-   * The signature of the function should be equivalent to `bool cnd(const Lpoint &p);`
-   * @return Points inside the given kernel
-   */
-	{
 		const auto kernel = kernelFactory<kernel_type>(p, radius);
-		return numNeighbors(kernel);
-	}
-    
-    template<typename Kernel, typename Function>
-	[[nodiscard]] size_t numNeighbors(const Kernel& k, morton_t root = 0) const
-	{
-		size_t ptsInside = 0;
-		std::stack<morton_t> toVisit;
+		// Dummy condition that always returns true, so we can use the same function for all cases
+		// The compiler should optimize this away
+		constexpr auto dummyCondition = [](const Lpoint&) { return true; };
 
-        if(!isNode(root)) // Checks if the root is an actual node in the tree
-            return ptsInside;
-		toVisit.push(root); // Root of the tree
-
-		while (!toVisit.empty()) {
-            const morton_t code = toVisit.top();
-			toVisit.pop();
-
-			if (isLeaf(code)) {
-                auto node = nodes.find(code)->second;
-				for (Lpoint* point_ptr : node->points) {
-                    // Check the point
-					if (k.isInside(*point_ptr) && k.center().id() != point_ptr->id()) {
-						ptsInside++;
-                    }
-				}
-			} else {
-                // If we are in an inner node, add all the child octants to the search list
-                for(int index = 0; index<8; index++) {
-                    morton_t childCode = getChildrenCode(code, index);
-                    // TODO
-                }
-			}
-		}
-		return ptsInside;
+		return neighbors(kernel, dummyCondition);
 	}
 
-    template<typename Kernel, typename Function>
-	[[nodiscard]] size_t numNeighbors(const Kernel& k, Function&& condition, morton_t root = 0) const
-	{
-		size_t ptsInside = 0;
-		std::stack<morton_t> toVisit;
-
-        if(!isNode(root)) // Checks if the root is an actual node in the tree
-            return ptsInside;
-		toVisit.push(root); // Root of the tree
-
-		while (!toVisit.empty()) {
-            const morton_t code = toVisit.top();
-			toVisit.pop();
-
-			if (isLeaf(code)) {
-                auto node = nodes.find(code)->second;
-				for (Lpoint* point_ptr : node->points) {
-                    // Check the point
-					if (k.isInside(*point_ptr) && k.center().id() != point_ptr->id() && condition(*point_ptr))
-						ptsInside++;
-				}
-			} else {
-                // If we are in an inner node, add all the child octants to the search list
-                for(int index = 0; index<8; index++) {
-                    morton_t childCode = getChildrenCode(code, index);
-                    if(isNode(childCode))
-                        toVisit.push(childCode);
-                }
-			}
-		}
-		return ptsInside;
-	}
-
-    // Other neighbourhood search methods
     [[nodiscard]] inline std::vector<Lpoint*> searchSphereNeighbors(const Point& point, const float radius) const
 	{
 		return searchNeighbors<Kernel_t::sphere>(point, radius);
 	}
-
-	[[nodiscard]] std::vector<Lpoint*> searchNeighborsRing(const Lpoint& p, const Vector& innerRingRadii,
-	                                                       const Vector& outerRingRadii) const
-	/**
-	 * A point is considered to be inside a Ring around a point if its outside the innerRing and inside the outerRing
-	 * @param p Center of the kernel to be used
-	 * @param innerRingRadii Radii of the inner part of the ring. Points within this part will be excluded
-	 * @param outerRingRadii Radii of the outer part of the ring
-	 * @return The points located between the inner ring and the outer ring
-	 */
-	{
-		// Search points within "outerRingRadii"
-		const auto outerKernel = kernelFactory<Kernel_t::cube>(p, outerRingRadii);
-		// But not too close (within "innerRingRadii")
-		const auto innerKernel = kernelFactory<Kernel_t::cube>(p, innerRingRadii);
-		const auto condition   = [&](const Point& point) { return !innerKernel.isInside(point); };
-
-		return neighbors(outerKernel, condition);
-	}
-
-	void writeOctree(std::ofstream& f, size_t index) const;
-
-    void    extractPoint(const Lpoint* p, morton_t code);
-	Lpoint* extractPoint(morton_t code);
-	void    extractPoints(std::vector<Lpoint>& points);
-	void    extractPoints(std::vector<Lpoint*>& points);
-
-	std::vector<Lpoint*> searchEraseCircleNeighbors(const std::vector<Lpoint*>& points, double radius);
-
-	/** Inside a sphere */
-	std::vector<Lpoint*> searchEraseSphereNeighbors(const std::vector<Lpoint*>& points, float radius);
-
-	/** Connected inside a spherical shell*/
-	[[nodiscard]] std::vector<Lpoint*> searchConnectedShellNeighbors(const Point& point, float nextDoorDistance,
-	                                                                 float minRadius, float maxRadius) const;
-
-	/** Connected circle neighbors*/
-	std::vector<Lpoint*> searchEraseConnectedCircleNeighbors(float nextDoorDistance);
-
-	static std::vector<Lpoint*> connectedNeighbors(const Point* point, std::vector<Lpoint*>& neighbors,
-	                                               float nextDoorDistance);
-
-	static std::vector<Lpoint*> extractCloseNeighbors(const Point* p, std::vector<Lpoint*>& neighbors, float radius);
-
-	std::vector<Lpoint*> kClosestCircleNeighbors(const Lpoint* p, size_t k) const;
-	std::vector<Lpoint*> nCircleNeighbors(const Lpoint* p, size_t n, float& radius, float minRadius, float maxRadius,
-	                                      float maxIncrement = 0.25, float maxDecrement = 0.25) const;
-
-	std::vector<Lpoint*> nSphereNeighbors(const Lpoint& p, size_t n, float& radius, float minRadius, float maxRadius,
-	                                      float maxStep = 0.25) const;
-
-    /**
-     * Debug function for testing linear octree functionality
-     */
-    void testOctree(std::vector<Lpoint>& points) {
-        // Check all points were inserted correctly
-        int total = 0;
-        for (auto& [code, node] : nodes) {
-            total += node->points.size();
-        }
-        std::cout << "Total inserted " << total << " out of " << points.size() << " points\n";
-
-/*         // Little test for seeing morton codes 
-        for(int i = 0; i<2; i++){
-            for(int j = 0; j<2; j++) {
-                for(int k = 0; k<2; k++) {
-                    morton_t code = (libmorton::morton3D_64_encode(i, j, k) << 7) | 1;
-                    std::cout << "(" << i << ", " << j << ", " << k << ") code: " 
-                        << std::bitset<64>(code) << "\n";
-                }
-            }
-        }
-
-        // Get center code at depth 3
-        coords_t x, y, z;
-        getAnchorCoords(center, 3, x, y, z);
-        std::cout << "anchor coods: " << x << " " << y << " " << z << "\n";
-        morton_t code = encodeMortonPoint(center, 3);
-        printMortonCode(center, code, true);
-        
-        // Get their children
-        for(int index = 0; index<8; index++) {
-            morton_t childCode = getChildrenCode(code, index);
-            std::cout << "child #" << index << "\n";
-            printMortonCode(childCode, true);
-            Point coords = getNodeCenter(childCode);
-            std::cout << "center: " << coords.getX() << " " << coords.getY() << " " << coords.getZ() << " " << std::endl;
-        }
-
-        // Get their siblings
-        for(int index = 0; index<8; index++) {
-            morton_t siblingCode = getSiblingCode(code, index);
-            std::cout << "sibling #" << index << "\n";
-            printMortonCode(siblingCode, true);
-            Point coords = getNodeCenter(siblingCode);
-            std::cout << "center: " << coords.getX() << " " << coords.getY() << " " << coords.getZ() << " " << std::endl;
-        }
-
-        // Get its parent
-        morton_t parentCode = getParentCode(code);
-        std::cout << "parent ";
-        printMortonCode(parentCode, true);
-        Point coords = getNodeCenter(parentCode);
-        std::cout << "center: " << coords.getX() << " " << coords.getY() << " " << coords.getZ() << " " << std::endl; */
-
-        // Search for all points in the octree
-        TimeWatcher tw;
-        int not_found = 0;
-        std::cout << "Searching all the points in the octree... " << std::endl;
-        tw.start();
-        for(int i = 0; i<points.size(); i++) {
-            const Lpoint p = points[i];
-            morton_t code = 0;
-            bool not_found_flag;
-            while(!isLeaf(code) && getDepth(code) <= MAX_DEPTH) {
-                not_found_flag = true;
-                for(uint8_t index = 0; index < 8; index++) {
-                    morton_t childCode = getChildrenCode(code, index);
-                    // If the node point is inside, go into the leaf
-                    if(isInside(p, childCode)) {
-                        code = childCode;
-                        not_found_flag = false;
-                    }
-                }
-                if(not_found_flag)
-                    break;
-            }
-            
-            if(not_found_flag || !isInside(p, code)) {    
-                not_found++;
-                //std::cout << "Could not find the point " << p << std::endl;
-                //printNodeGeometry(code);
-            } 
-        }
-        tw.stop();
-        std::cout   << "Found " << (points.size() - not_found) << "/" << points.size() 
-                    << " points in the octree in " << tw.getElapsedDecimalSeconds() << " seconds (" 
-                    << ((float) tw.getElapsedMicros() / (float) points.size()) << " microseconds per point)" << std::endl;
-
-
-
-        // Neighbourhood search test
-
-        // Lpoint p = points[5000];
-        // std::cout << "Sphere neighbourhood search for point " << p << std::endl;
-        // float radius = 1.0;
-        // auto neighPoints = nSphereNeighbors(p, 10, radius, 0.0001, 1000.0);
-        // std::cout << "Found " << neighPoints.size() << " points in a sphere of radius " << radius << std::endl;
-        // for(Lpoint* neighPoint : neighPoints) {
-        //     std::cout << *neighPoint << " with distance to center " << neighPoint->distance3D(p) << std::endl;
-        // }
-
-        // // Point extraction test
-
-        // Lpoint extract = points[1234];
-        // std::cout << "Extracting point " << extract << std::endl;
-        // extractPoint(&extract, 0);
-        // total = 0;
-        // for (auto& [code, node] : nodes) {
-        //     total += node->points.size();
-        // }
-        // std::cout << "Points after: " << total << " out of " << points.size() << " points\n";
-
-    }
-    friend class LinearOctreeNode;
 };

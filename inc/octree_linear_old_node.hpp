@@ -9,14 +9,14 @@
 using morton_t = uint_fast64_t;
 using coords_t = uint_fast32_t;
 
-class LinearOctreeNode {
+class LinearOctreeOldNode {
     private:
         std::vector<Lpoint*> points;
         morton_t code;
         double center[3];
         double radii[3];
     public:
-        LinearOctreeNode(std::vector<Lpoint*> p, morton_t c, uint8_t depth, coords_t x, coords_t y, coords_t z,
+        LinearOctreeOldNode(std::vector<Lpoint*> p, morton_t c, uint8_t depth, coords_t x, coords_t y, coords_t z,
                         Point rootCenter, Vector rootRadii): points(p), code(c) {
             // Returns the physical (approximate) physical center of the node
             radii[0] = rootRadii.getX() * (1.0f / (1 << depth));
@@ -40,13 +40,13 @@ class LinearOctreeNode {
 
 
         // Comparators based on Morton code
-        bool operator==(const LinearOctreeNode& other) const {
+        bool operator==(const LinearOctreeOldNode& other) const {
             return this->code == other.code;
         }
-        bool operator!=(const LinearOctreeNode& other) const {
+        bool operator!=(const LinearOctreeOldNode& other) const {
             return !(*this == other);
         }
-        bool operator<(const LinearOctreeNode& other) const {
+        bool operator<(const LinearOctreeOldNode& other) const {
             return this->code < other.code;
         }
         
@@ -55,6 +55,6 @@ class LinearOctreeNode {
         }
 
         // Since this is just a container, we can declare LinearOctree as a friend class
-        friend class LinearOctree;
+        friend class LinearOctreeOld;
 };
 

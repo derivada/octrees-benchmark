@@ -1,17 +1,35 @@
+#pragma once
+
 #include "libmorton/morton.h"
 #include "point.hpp"
 #include "Box.hpp"
 
-#pragma once
-
 using morton_t = uint_fast64_t;
 using coords_t = uint_fast32_t;
 
+/**
+* @namespace MortonEncoder
+* 
+* @brief A front-end for libmorton for getting adequate encodings needed on the linear octree
+* 
+* @cite Jeroen Baert. Libmorton: C++ Morton Encoding/Decoding Library. https://github.com/Forceflow/libmorton/tree/main
+* 
+* @authors Pablo Díaz Viñambres 
+* 
+* @date 16/11/2024
+* 
+*/
 namespace MortonEncoder {
-
+    /// @brief The maximum depth that this encoding allows (in Morton 64 bit integers, we need 3 bits for each level, so 21)
     constexpr unsigned MAX_DEPTH = 21;
-    constexpr double EPS = 1.0f / (1 << MAX_DEPTH); // Unit of length of the encoded coordinates
-    constexpr morton_t LAST_CODE = 0x8000000000000000;
+
+    /// @brief The minimum unit of length of the encoded coordinates
+    constexpr double EPS = 1.0f / (1 << MAX_DEPTH);
+
+    /// @brief The minimum (strict) upper bound for every Morton code. Equal to the unused bit followed by 63 zeros.
+    constexpr morton_t UPPER_BOUND = 0x8000000000000000;
+
+    /// @brief The amount of bits that are not used, in Morton encodings this is the MSB of the key
     constexpr uint32_t UNUSED_BITS = 1;
 
     inline void getAnchorCoords(const Point& p, const Box &bbox, coords_t &x, coords_t &y, coords_t &z) {
@@ -48,10 +66,7 @@ namespace MortonEncoder {
         // Decode the points
         coords_t min_x, min_y, min_z;
         decodeMorton(code, min_x, min_y, min_z);
-        // if(level < 2) {
-        //     std::cout << min_x << " " << min_y << " " << min_z << std::endl;
-        //     std::cout << min_x * halfLengths[0] << " " << min_y * halfLengths[1] << " " << min_z * halfLengths[2] << std::endl;
-        // }
+
         // Find the physical center by multiplying the encoding with the halflength
         // to get to the low corner of the cell, and then adding the radii of the cell
         Point center = Point(
@@ -83,7 +98,7 @@ namespace MortonEncoder {
     // Get the level in the octree of the given morton code
     inline uint32_t getLevel(morton_t range) {
         assert(isPowerOf8(range));
-        if(range == LAST_CODE)
+        if(range == UPPER_BOUND)
             return 0U;
         return (countLeadingZeros(range - 1) - UNUSED_BITS) / 3;
     }

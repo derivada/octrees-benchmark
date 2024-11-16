@@ -2,8 +2,8 @@
 // Created by Pablo Díaz Viñambres on 07/11/2024.
 //
 
-#include "octree_linear.hpp"
-#include "octree_linear_node.hpp"
+#include "octree_linear_old.hpp"
+#include "octree_linear_old_node.hpp"
 
 #include "Box.hpp"
 #include "NeighborKernels/KernelFactory.hpp"
@@ -14,7 +14,7 @@
 #include <bits/types.h>
 #include <fstream>
 
-std::vector<std::pair<Point, size_t>> LinearOctree::computeNumPoints() const
+std::vector<std::pair<Point, size_t>> LinearOctreeOld::computeNumPoints() const
 /**
  * @brief Returns a vector containing the number of points of all populated octants
  * @param numPoints
@@ -29,7 +29,7 @@ std::vector<std::pair<Point, size_t>> LinearOctree::computeNumPoints() const
 	return result;
 }
 
-std::vector<std::pair<Point, double>> LinearOctree::computeDensities() const
+std::vector<std::pair<Point, double>> LinearOctreeOld::computeDensities() const
 /*
  * Returns a vector containing the densities of all populated octrees
  */
@@ -43,7 +43,7 @@ std::vector<std::pair<Point, double>> LinearOctree::computeDensities() const
 	return result;
 }
 
-void LinearOctree::writeDensities(const std::filesystem::path& path) const
+void LinearOctreeOld::writeDensities(const std::filesystem::path& path) const
 /**
  * @brief Compute and write to file the density of each non-empty octan of a given octree.
  * @param path
@@ -59,7 +59,7 @@ void LinearOctree::writeDensities(const std::filesystem::path& path) const
 	}
 }
 
-void LinearOctree::writeNumPoints(const std::filesystem::path& path) const
+void LinearOctreeOld::writeNumPoints(const std::filesystem::path& path) const
 /**
  * @brief Compute and write to file the density of each non-empty octan of a given octree.
  * @param path
@@ -75,7 +75,7 @@ void LinearOctree::writeNumPoints(const std::filesystem::path& path) const
 	}
 }
 
-const LinearOctreeNode* LinearOctree::findNode(const Lpoint* p) const
+const LinearOctreeOldNode* LinearOctreeOld::findNode(const Lpoint* p) const
 /**
  * @brief Find the octant containing a given point.
  * @param p
@@ -106,7 +106,7 @@ const LinearOctreeNode* LinearOctree::findNode(const Lpoint* p) const
 	}
 }
 
-inline uint8_t LinearOctree::octantIdx(const Lpoint* p, morton_t code) const
+inline uint8_t LinearOctreeOld::octantIdx(const Lpoint* p, morton_t code) const
 {
 	for(int index = 0; index<OCTANTS_PER_NODE; index++) {
 		if(isInside(*p, getChildrenCode(code, index))) {
@@ -116,7 +116,7 @@ inline uint8_t LinearOctree::octantIdx(const Lpoint* p, morton_t code) const
 	return 0;
 }
 
-std::vector<Lpoint*> LinearOctree::KNN(const Point& p, const size_t k, const size_t maxNeighs) const
+std::vector<Lpoint*> LinearOctreeOld::KNN(const Point& p, const size_t k, const size_t maxNeighs) const
 /**
  * @brief KNN algorithm. Returns the min(k, maxNeighs) nearest neighbors of a given point p
  * @param p
@@ -156,10 +156,10 @@ std::vector<Lpoint*> LinearOctree::KNN(const Point& p, const size_t k, const siz
 	return knn;
 }
 
-void LinearOctree::writeOctree(std::ofstream& f, morton_t code = 0) const
+void LinearOctreeOld::writeOctree(std::ofstream& f, morton_t code = 0) const
 {
 	if(!isNode(code)) return;
-	LinearOctreeNode* node = nodes.at(code);
+	LinearOctreeOldNode* node = nodes.at(code);
 
 	f << "Depth: " << static_cast<int>(getDepth(code)) << " "
 	  << "numPoints: " << node->points.size() << "\n";
@@ -182,7 +182,7 @@ void LinearOctree::writeOctree(std::ofstream& f, morton_t code = 0) const
 	}
 }
 
-void LinearOctree::extractPoint(const Lpoint* p, morton_t code)
+void LinearOctreeOld::extractPoint(const Lpoint* p, morton_t code)
 /**
  * Searches for p and (if found) removes it from the octree.
  *
@@ -191,7 +191,7 @@ void LinearOctree::extractPoint(const Lpoint* p, morton_t code)
 {
 	// TODO: make this algorithm non-recursive
 	if(!isNode(code)) return;
-	LinearOctreeNode* node = nodes.at(code);
+	LinearOctreeOldNode* node = nodes.at(code);
 	if (isLeaf(code))
 	{
 		// Find point with the same ID inside points node and remove it
@@ -219,7 +219,7 @@ void LinearOctree::extractPoint(const Lpoint* p, morton_t code)
 	}
 }
 
-Lpoint* LinearOctree::extractPoint(morton_t code)
+Lpoint* LinearOctreeOld::extractPoint(morton_t code)
 /**
  * Searches for a point and, if it founds one, removes it from the octree.
  *
@@ -228,7 +228,7 @@ Lpoint* LinearOctree::extractPoint(morton_t code)
 {
 	// TODO: make this algorithm non-recursive
 	if(!isNode(code)) return nullptr;
-	LinearOctreeNode* node = nodes.at(code);
+	LinearOctreeOldNode* node = nodes.at(code);
 	
 	if (isLeaf(code))
 	{
@@ -255,7 +255,7 @@ Lpoint* LinearOctree::extractPoint(morton_t code)
 	return nullptr;
 }
 
-void LinearOctree::extractPoints(std::vector<Lpoint>& points)
+void LinearOctreeOld::extractPoints(std::vector<Lpoint>& points)
 {
 	for (Lpoint& p : points)
 	{
@@ -263,7 +263,7 @@ void LinearOctree::extractPoints(std::vector<Lpoint>& points)
 	}
 }
 
-void LinearOctree::extractPoints(std::vector<Lpoint*>& points)
+void LinearOctreeOld::extractPoints(std::vector<Lpoint*>& points)
 {
 	for (Lpoint* p : points)
 	{
@@ -271,7 +271,7 @@ void LinearOctree::extractPoints(std::vector<Lpoint*>& points)
 	}
 }
 
-std::vector<Lpoint*> LinearOctree::searchEraseCircleNeighbors(const std::vector<Lpoint*>& points, double radius)
+std::vector<Lpoint*> LinearOctreeOld::searchEraseCircleNeighbors(const std::vector<Lpoint*>& points, double radius)
 /*
  * Searches points' circle neighbors and erases them from the octree.
  */
@@ -292,7 +292,7 @@ std::vector<Lpoint*> LinearOctree::searchEraseCircleNeighbors(const std::vector<
 	return pointsNeighbors;
 }
 
-std::vector<Lpoint*> LinearOctree::searchEraseSphereNeighbors(const std::vector<Lpoint*>& points, float radius)
+std::vector<Lpoint*> LinearOctreeOld::searchEraseSphereNeighbors(const std::vector<Lpoint*>& points, float radius)
 {
 	std::vector<Lpoint*> pointsNeighbors{};
 
@@ -311,7 +311,7 @@ std::vector<Lpoint*> LinearOctree::searchEraseSphereNeighbors(const std::vector<
 }
 
 /** Connected inside a spherical shell*/
-std::vector<Lpoint*> LinearOctree::searchConnectedShellNeighbors(const Point& point, const float nextDoorDistance,
+std::vector<Lpoint*> LinearOctreeOld::searchConnectedShellNeighbors(const Point& point, const float nextDoorDistance,
                                                            const float minRadius, const float maxRadius) const
 {
 	std::vector<Lpoint*> connectedShellNeighs;
@@ -327,7 +327,7 @@ std::vector<Lpoint*> LinearOctree::searchConnectedShellNeighbors(const Point& po
 }
 
 /** Connected circle neighbors*/
-std::vector<Lpoint*> LinearOctree::searchEraseConnectedCircleNeighbors(const float nextDoorDistance)
+std::vector<Lpoint*> LinearOctreeOld::searchEraseConnectedCircleNeighbors(const float nextDoorDistance)
 {
 	std::vector<Lpoint*> connectedCircleNeighbors;
 
@@ -345,7 +345,7 @@ std::vector<Lpoint*> LinearOctree::searchEraseConnectedCircleNeighbors(const flo
 	return connectedCircleNeighbors;
 }
 
-std::vector<Lpoint*> LinearOctree::connectedNeighbors(const Point* point, std::vector<Lpoint*>& neighbors,
+std::vector<Lpoint*> LinearOctreeOld::connectedNeighbors(const Point* point, std::vector<Lpoint*>& neighbors,
                                                 const float nextDoorDistance)
 /**
 	 * Filters neighbors which are not connected to point through a chain of next-door neighbors. Erases neighbors in the
@@ -375,7 +375,7 @@ std::vector<Lpoint*> LinearOctree::connectedNeighbors(const Point* point, std::v
 	return connectedNeighbors;
 }
 
-std::vector<Lpoint*> LinearOctree::extractCloseNeighbors(const Point* p, std::vector<Lpoint*>& neighbors, const float radius)
+std::vector<Lpoint*> LinearOctreeOld::extractCloseNeighbors(const Point* p, std::vector<Lpoint*>& neighbors, const float radius)
 /**
 	 * Fetches neighbors within radius from p, erasing them from neighbors and returning them.
 	 *
@@ -400,7 +400,7 @@ std::vector<Lpoint*> LinearOctree::extractCloseNeighbors(const Point* p, std::ve
 	return closeNeighbors;
 }
 
-std::vector<Lpoint*> LinearOctree::kClosestCircleNeighbors(const Lpoint* p, const size_t k) const
+std::vector<Lpoint*> LinearOctreeOld::kClosestCircleNeighbors(const Lpoint* p, const size_t k) const
 /**
 	 * Fetches the (up to if not enough points in octree) k closest neighbors with respect to 2D-distance.
 	 *
@@ -435,7 +435,7 @@ std::vector<Lpoint*> LinearOctree::kClosestCircleNeighbors(const Lpoint* p, cons
 	return closeNeighbors;
 }
 
-std::vector<Lpoint*> LinearOctree::nCircleNeighbors(const Lpoint* p, const size_t n, float& radius, const float minRadius,
+std::vector<Lpoint*> LinearOctreeOld::nCircleNeighbors(const Lpoint* p, const size_t n, float& radius, const float minRadius,
                                               const float maxRadius, const float maxIncrement,
                                               const float maxDecrement) const
 /**
@@ -463,7 +463,7 @@ std::vector<Lpoint*> LinearOctree::nCircleNeighbors(const Lpoint* p, const size_
 	return neighs;
 }
 
-std::vector<Lpoint*> LinearOctree::nSphereNeighbors(const Lpoint& p, const size_t n, float& radius, const float minRadius,
+std::vector<Lpoint*> LinearOctreeOld::nSphereNeighbors(const Lpoint& p, const size_t n, float& radius, const float minRadius,
                                               const float maxRadius, const float maxStep) const
 /**
 	 * Radius-adaptive search method for sphere neighbors.
