@@ -15,6 +15,7 @@ namespace fs = std::filesystem;
 int main(int argc, char *argv[]) {
   setDefaults();
   processArgs(argc, argv);
+  std::cout << "Size of Point: " << sizeof(Point) << " bytes\n";
   std::cout << "Size of Lpoint: " << sizeof(Lpoint) << " bytes\n";
 
   fs::path inputFile = mainOptions.inputFile;
@@ -38,10 +39,10 @@ int main(int argc, char *argv[]) {
 
   // {0, 1, ..., 15}^3 testing grid
   // std::vector<Lpoint> points;
-  // points.reserve(128*128*128);
-  // for(int i = 0; i<128;i++) {
-  //     for(int j = 0; j<128;j++) {
-  //       for(int k = 0; k<128; k++) {
+  // points.reserve(16*16*16);
+  // for(int i = 0; i<16;i++) {
+  //     for(int j = 0; j<16;j++) {
+  //       for(int k = 0; k<16; k++) {
   //           points.push_back(Lpoint(Point(i*1.0, j*1.0, k*1.0)));
   //       }
   //   }  

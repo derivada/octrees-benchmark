@@ -48,28 +48,6 @@ class OctreeBenchmark {
             for(int i = 0; i<search_size; i++) {
                 auto point = searchResultsPointer[i];
                 auto lin = searchResultsLinear[i];
-                auto oldLin = searchResultsOldLinear[i];
-                /**
-                if(point.size() != oldLin.size()) {
-                    std::cout << "Wrong search result size in set " << i << 
-                    "\n Pointer = " << point.size() << " Old linear = " << oldLin.size() << std::endl;
-                    correct = false;
-                } else {
-                    sort(point.begin(), point.end(), [&] (Lpoint *p, Lpoint* q) -> bool {
-                        return p->id() < q->id();
-                    });
-                    sort(oldLin.begin(), oldLin.end(), [&] (Lpoint *p, Lpoint* q) -> bool {
-                        return p->id() < q->id();
-                    });
-                    for(int j = 0; j<point.size(); j++){
-                        if(point[j]->id() != oldLin[j]->id()) {
-                            std::cout << "Wrong search result point in set " << i << " at index " << j <<
-                            "\n Pointer = " << point[j]->id() << " Old linear = " << oldLin[j]->id() << std::endl;
-                            correct = false;
-                        }
-                    }
-                } */
-
                 if(point.size() != lin.size()) {
                     std::cout << "Wrong search result size in set " << i << 
                     "\n Pointer = " << point.size() << " Linear = " << lin.size() << std::endl << 
