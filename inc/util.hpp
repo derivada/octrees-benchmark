@@ -146,4 +146,13 @@ inline bool onDegree(const Vector& normal, const T interval, const Vector& neigh
 	return (diffs.getX() < interval && diffs.getY() < interval && diffs.getZ() < interval);
 }
 
+
+inline std::string getCurrentDate() {
+	auto t = std::time(nullptr);
+	auto tm = *std::localtime(&t);
+	std::ostringstream oss;
+	oss << std::put_time(&tm, "%Y-%m-%d-%H:%M:%S");
+	return oss.str();
+}
+
 #endif //CPP_UTIL_H

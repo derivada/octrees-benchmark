@@ -674,7 +674,7 @@ public:
      * @return Points inside the given kernel type. Actually the same as ptsInside.
      */
     template<typename Kernel, typename Function>
-    [[nodiscard]] std::vector<Lpoint*> neighbors(const Kernel& k, Function&& condition, morton_t root = 0) const {
+    [[nodiscard]] std::vector<Lpoint*> neighbors(const Kernel& k, Function&& condition) const {
         std::vector<Lpoint*> ptsInside;
         auto center_id = k.center().id();
 

@@ -11,6 +11,8 @@
 #include <octree_benchmark.hpp>
 #include <random>
 #include "NeighborKernels/KernelFactory.hpp"
+#include "octree_benchmark_generic.hpp"
+
 namespace fs = std::filesystem;
 
 int main(int argc, char *argv[]) {
@@ -44,46 +46,30 @@ int main(int argc, char *argv[]) {
   std::cout << "Time to read points: " << tw.getElapsedDecimalSeconds()
             << " seconds\n";
   
-  // Benchmark paramters
-  const size_t benchmarkSize = 50;
+  // Benchmark parameters
   // TODO: maybe a better idea is to choose radii based on point cloud density
   const std::vector<float> benchmarkRadii = {0.5, 1.0, 2.5, 3.5, 5.0};
   const size_t repeats = 5;
-  // TODO: For now we copy the points for the linear octree, since they get sorted and so its better if they are separate
-  // Should change this to first execute all benchmarks in pointer octree, then sort, then execute them in linear octree
-  // This way we don't waste memory and can run bigger examples.
-  std::vector<Lpoint> lOctreePoints(points);
-  OctreeBenchmark ob(points, lOctreePoints, benchmarkSize);
-  
+  const size_t numSearches = 50;
 
-  std::cout << "Running benchmarks with search radii {";
-  for(int i = 0; i<benchmarkRadii.size(); i++) {
-    std::cout << benchmarkRadii[i];
-    if(i != benchmarkRadii.size()-1) {
-      std::cout << ", ";
-    }
-  }
-  std::cout << "} with " << repeats << " repeats each over a set of " << benchmarkSize << " random center points." << std::endl;
+  // Generate the search set
+  std::shared_ptr<SearchSet> searchSet = std::make_shared<SearchSet>(numSearches, points);
 
-  for(int i = 0; i<benchmarkRadii.size(); i++) {
-    ob.benchmarkSearchNeigh<Kernel_t::sphere>(repeats, benchmarkRadii[i]);
-    ob.benchmarkSearchNeigh<Kernel_t::circle>(repeats, benchmarkRadii[i]);
-    ob.benchmarkSearchNeigh<Kernel_t::cube>(repeats, benchmarkRadii[i]);
-    ob.benchmarkSearchNeigh<Kernel_t::square>(repeats, benchmarkRadii[i]);
-    std::cout << "Benchmark search neighbors with radii " << benchmarkRadii[i] << " completed" << std::endl;
+  // Get the final .csv file
+  std::string csvFilename = mainOptions.inputFileName + "-" + getCurrentDate() + ".csv";
+  std::filesystem::path csvPath = mainOptions.outputDirName / csvFilename;
+  std::ofstream outputFile(csvPath, std::ios::app);
+  if (!outputFile.is_open()) {
+      throw std::ios_base::failure(std::string("Failed to open benchmark output file: ") + csvPath.string());
   }
 
-  for(int i = 0; i<benchmarkRadii.size(); i++) {
-    ob.benchmarkNumNeigh<Kernel_t::sphere>(repeats, benchmarkRadii[i]);
-    ob.benchmarkNumNeigh<Kernel_t::circle>(repeats, benchmarkRadii[i]);
-    ob.benchmarkNumNeigh<Kernel_t::cube>(repeats, benchmarkRadii[i]);
-    ob.benchmarkNumNeigh<Kernel_t::square>(repeats, benchmarkRadii[i]);
-    std::cout << "Benchmark number of neighbors with radii " << benchmarkRadii[i] << " completed" << std::endl;
-  }
+  OctreeBenchmarkGeneric<Octree> obPointer(points, numSearches, searchSet, outputFile);
+  OctreeBenchmarkGeneric<Octree>::runFullBenchmark(obPointer, benchmarkRadii, repeats, numSearches);
 
-  // TODO: fix the implementation of this other two benchmarks
-  // ob.benchmarkKNN(5);
-  // ob.benchmarkRingSearchNeigh(5);
-
+  OctreeBenchmarkGeneric<LinearOctree> obLinear(points, numSearches, searchSet, outputFile);
+  OctreeBenchmarkGeneric<LinearOctree>::runFullBenchmark(obLinear, benchmarkRadii, repeats, numSearches);
+  obLinear.resultsNeigh[4].clear();
+  std::cout << obPointer.resultsNeigh[4].size() << " " << obLinear.resultsNeigh[4].size() << std::endl;
+  OctreeBenchmarkGeneric<Octree>::checkResults(obPointer, obLinear);
   return EXIT_SUCCESS;
 }
