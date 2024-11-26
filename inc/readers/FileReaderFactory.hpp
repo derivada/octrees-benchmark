@@ -19,7 +19,13 @@ enum FileReader_t // Enumeration of the different types of FileReader
 	err_t  // error type (no compatible extension were found)
 };
 
-FileReader_t chooseReaderType(const std::string& fExt);
+FileReader_t chooseReaderType(const std::string& fExt)
+{
+	if (fExt == ".las" || fExt == ".laz") return las_t;
+	if (fExt == ".txt" || fExt == ".xyz") return txt_t;
+
+	return err_t;
+}
 
 /**
  * @author Miguel Yermo
@@ -35,14 +41,15 @@ class FileReaderFactory
 	 * @param numCols Number of columns of the txt file. Default = 0
 	 * @return
 	 */
-	static std::shared_ptr<FileReader> makeReader(FileReader_t type, const fs::path& path)
+	template <typename point_t>
+	static std::shared_ptr<FileReader<point_t>> makeReader(FileReader_t type, const fs::path& path)
 	{
 		switch (type)
 		{
 			case txt_t:
-				return std::make_shared<TxtFileReader>(path);
+				return std::make_shared<TxtFileReader<point_t>>(path);
 			case las_t:
-				return std::make_shared<LasFileReader>(path);
+				return std::make_shared<LasFileReader<point_t>>(path);
 			default:
 				std::cout << "Unable to create specialized FileReader\n";
 				exit(-2);

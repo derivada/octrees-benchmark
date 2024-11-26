@@ -422,7 +422,7 @@ public:
      * @details The points will be sorted in-place by the order given by the encoding to allow
      * spatial data locality
      */
-    explicit LinearOctree(std::vector<Lpoint> &points, bool printLog = false): points(points) {
+    explicit LinearOctree(std::vector<Lpoint> &points, bool printLog = true): points(points) {
         if(printLog)
             std::cout << "Linear octree build summary:\n";
         double total_time = 0.0;

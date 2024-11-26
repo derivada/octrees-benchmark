@@ -172,9 +172,7 @@ class Octree
    * @return Points inside the given kernel type. Actually the same as ptsInside.
    */
 	{
-		//size_t visited = 0;
 		std::vector<Lpoint*> ptsInside;
-
 		std::vector<std::reference_wrapper<const Octree>> toVisit;
 		toVisit.reserve(OCTANTS_PER_NODE); // There is usually less than 8 octants to visit
 		toVisit.emplace_back(*this);
@@ -183,7 +181,6 @@ class Octree
 		{
 			const auto& octree = toVisit.back().get();
 			toVisit.pop_back();
-			//visited++;
 			if (octree.isLeaf())
 			{
 				for (Lpoint* point_ptr : octree.points_)
@@ -200,7 +197,6 @@ class Octree
 				             [&](const Octree& octant) { return k.boxOverlap(octant.getCenter(), octant.getRadius()); });
 			}
 		}
-        //std::cout << "visited: " << visited << std::endl;
 		return ptsInside;
 	}
 

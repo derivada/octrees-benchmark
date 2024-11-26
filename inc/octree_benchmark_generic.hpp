@@ -18,67 +18,65 @@ class OctreeBenchmarkGeneric {
         constexpr static bool CHECK_RESULTS = true;
 
         const std::unique_ptr<Octree_t> oct;
-        const std::vector<Lpoint> &points;
+        std::vector<Lpoint> &points;
 
         std::ofstream &outputFile;
         
-
-
         void rebuild() {
             oct = std::make_unique<Octree_t>(points); 
         }
 
         template<Kernel_t kernel>
         void searchNeighParallel(float radii) {
-            if(CHECK_RESULTS)
+            if(CHECK_RESULTS && resultsNeigh.empty())
                 resultsNeigh.resize(searchSet->numSearches);
             #pragma omp parallel for schedule(static)
-                for(int i = 0; i<searchSet->numSearches; i++) {
+                for(size_t i = 0; i<searchSet->numSearches; i++) {
                     if(CHECK_RESULTS){
-                        resultsNeigh[i] = oct->template searchNeighbors<kernel>(points[searchSet->searchPointIndexes[i]], radii);
+                        resultsNeigh[i] = oct->template searchNeighbors<kernel>(searchSet->searchPoints[i], radii);
                     } else{
-                        (void) oct->template searchNeighbors<kernel>(points[searchSet->searchPointIndexes[i]], radii);
+                        (void) oct->template searchNeighbors<kernel>(searchSet->searchPoints[i], radii);
                     }
                 }
         }
 
         template<Kernel_t kernel>
         void numNeighParallel(float radii) {
-            if(CHECK_RESULTS)
+            if(CHECK_RESULTS && resultsNumNeigh.empty())
                 resultsNumNeigh.resize(searchSet->numSearches);
             #pragma omp parallel for schedule(static)
-                for(int i = 0; i<searchSet->numSearches; i++) {
+                for(size_t i = 0; i<searchSet->numSearches; i++) {
                     if(CHECK_RESULTS) {
-                        resultsNumNeigh[i] = oct->template numNeighbors<kernel>(points[searchSet->searchPointIndexes[i]], radii);
+                        resultsNumNeigh[i] = oct->template numNeighbors<kernel>(searchSet->searchPoints[i], radii);
                     } else {
-                        (void) oct->template numNeighbors<kernel>(points[searchSet->searchPointIndexes[i]], radii);
+                        (void) oct->template numNeighbors<kernel>(searchSet->searchPoints[i], radii);
                     }
                 }
         }
 
         void KNNParallel() {
-            if(CHECK_RESULTS)
+            if(CHECK_RESULTS && resultsKNN.empty())
                 resultsKNN.resize(searchSet->numSearches);
             #pragma omp parallel for schedule(static)
-                for(int i = 0; i<searchSet->numSearches; i++) {
+                for(size_t i = 0; i<searchSet->numSearches; i++) {
                     if(CHECK_RESULTS) {
-                        resultsKNN[i] = oct->template KNN(points[searchSet->searchPointIndexes[i]], searchSet->searchKNNLimits[i], searchSet->searchKNNLimits[i]);
+                        resultsKNN[i] = oct->template KNN(searchSet->searchPoints[i], searchSet->searchKNNLimits[i], searchSet->searchKNNLimits[i]);
                     } else {
-                        (void) oct->template KNN(points[searchSet->searchPointIndexes[i]], searchSet->searchKNNLimits[i], searchSet->searchKNNLimits[i]);
+                        (void) oct->template KNN(searchSet->searchPoints[i], searchSet->searchKNNLimits[i], searchSet->searchKNNLimits[i]);
                     }
                 }
         }
 
         void ringNeighSearchParallel(Vector &innerRadii, Vector &outerRadii) {
-            if(CHECK_RESULTS)
+            if(CHECK_RESULTS && resultsRingNeigh.empty())
                 resultsRingNeigh.resize(searchSet->numSearches);
             #pragma omp parallel for schedule(static)
-                for(int i = 0; i<searchSet->numSearches; i++) {
+                for(size_t i = 0; i<searchSet->numSearches; i++) {
                     if(CHECK_RESULTS) {    
-                        resultsRingNeigh[i] = oct->template searchNeighborsRing(points[searchSet->searchPointIndexes[i]], 
+                        resultsRingNeigh[i] = oct->template searchNeighborsRing(searchSet->searchPoints[i], 
                             innerRadii, outerRadii);
                     } else {
-                        (void) oct->template searchNeighborsRing(points[searchSet->searchPointIndexes[i]], 
+                        (void) oct->template searchNeighborsRing(searchSet->searchPoints[i], 
                             innerRadii, outerRadii);
                     }
                 }
@@ -108,7 +106,7 @@ class OctreeBenchmarkGeneric {
 
         static std::vector<size_t> checkNeighResults(std::vector<std::vector<Lpoint*>> &results1, std::vector<std::vector<Lpoint*>> &results2) {
             std::vector<size_t> wrongSearches;
-            for(int i = 0; i<results1.size(); i++) {
+            for(size_t i = 0; i<results1.size(); i++) {
                 auto v1 = results1[i];
                 auto v2 = results2[i];
                 if(v1.size() != v2.size()) {
@@ -120,7 +118,7 @@ class OctreeBenchmarkGeneric {
                     std::sort(v2.begin(), v2.end(), [&] (Lpoint *p, Lpoint* q) -> bool {
                         return p->id() < q->id();
                     });
-                    for(int j = 0; j<v1.size(); j++){
+                    for(size_t j = 0; j<v1.size(); j++){
                         if(v1[j]->id() != v2[j]->id()) {
                             wrongSearches.push_back(i);
                             break;
@@ -133,7 +131,7 @@ class OctreeBenchmarkGeneric {
 
         static std::vector<size_t> checkNumNeighResults(std::vector<size_t> &results1, std::vector<size_t> &results2) {
             std::vector<size_t> wrongSearches;
-            for(int i = 0; i<results1.size(); i++) {
+            for(size_t i = 0; i<results1.size(); i++) {
                 auto n1 = results1[i];
                 auto n2 = results2[i];
                 if(n1 != n2) {
@@ -155,13 +153,13 @@ class OctreeBenchmarkGeneric {
                 }
 
                 if (wrongSearches.size() > printingLimit) {
-                    std::cout << "And at " << (wrongSearches.size() - printingLimit) 
-                            << " other search instances..." << std::endl;
+                    std::cout << "\tAnd at " << (wrongSearches.size() - printingLimit)  << " other search instances..." << std::endl;
                 }
             } else {
                 std::cout << "All results are right!" << std::endl;
             }
         }
+
         static void checkOperationNumNeigh(std::vector<size_t> &results1, std::vector<size_t> &results2, size_t printingLimit = 10) {
             std::vector<size_t> wrongSearches = checkNumNeighResults(results1, results2);
             if (wrongSearches.size() > 0) {
@@ -174,8 +172,7 @@ class OctreeBenchmarkGeneric {
                 }
 
                 if (wrongSearches.size() > printingLimit) {
-                    std::cout << "And at " << (wrongSearches.size() - printingLimit) 
-                            << " other search instances..." << std::endl;
+                    std::cout << "\tAnd at " << (wrongSearches.size() - printingLimit) << " other search instances..." << std::endl;
                 }
             } else {
                 std::cout << "All results are right!" << std::endl;
@@ -183,16 +180,16 @@ class OctreeBenchmarkGeneric {
         }
 
     public:
-        const std::shared_ptr<SearchSet> searchSet;
+        const std::shared_ptr<const SearchSet> searchSet;
         std::vector<std::vector<Lpoint*>> resultsNeigh;
         std::vector<size_t> resultsNumNeigh;
         std::vector<std::vector<Lpoint*>> resultsKNN;
         std::vector<std::vector<Lpoint*>> resultsRingNeigh;
 
-        OctreeBenchmarkGeneric(std::vector<Lpoint>& points, size_t numSearches = 100, std::shared_ptr<SearchSet> searchSet = nullptr, std::ofstream &file = std::ofstream()) :
+        OctreeBenchmarkGeneric(std::vector<Lpoint>& points, size_t numSearches = 100, std::shared_ptr<const SearchSet> searchSet = nullptr, std::ofstream &file = std::ofstream()) :
             points(points), 
             oct(std::make_unique<Octree_t>(points)),
-            searchSet(searchSet ? searchSet : std::make_shared<SearchSet>(numSearches, points)),
+            searchSet(searchSet ? searchSet : std::make_shared<const SearchSet>(numSearches, points)),
             outputFile(file) {
         }
 

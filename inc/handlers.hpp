@@ -18,22 +18,65 @@
 #ifndef CPP_HANDLERS_H
 #define CPP_HANDLERS_H
 
-#include "main_options.hpp"
-#include "point.hpp"
-#include "Lpoint.hpp"
-#include <filesystem> // File extensions
-#include <string>
-#include <vector>
+#include "readers/FileReaderFactory.hpp"
+#include <algorithm>
+#include <filesystem>
+#include <fstream>
+#include <lasreader.hpp>
+#include <random>
 
 namespace fs = std::filesystem;
 
-void handleNumberOfPoints(std::vector<Lpoint>& points);
-
+template <typename point_t>
+void handleNumberOfPoints(std::vector<point_t>& points);
 unsigned int getNumberOfCols(const fs::path& filePath);
 
-void createDirectory(const fs::path& dirname);
+void createDirectory(const fs::path& dirName)
+/**
+ * This function creates a directory if it does not exist.
+ * @param dirname
+ * @return
+ */
+{
+	if (!fs::is_directory(dirName)) { fs::create_directories(dirName); }
+}
 
-std::vector<Lpoint> readPointCloud(const fs::path& fileName);
+template <typename point_t>
+void writePoints(fs::path& filename, std::vector<point_t>& points)
+{
+	std::ofstream f(filename);
+	f << std::fixed << std::setprecision(2);
 
+	for (point_t& p : points)
+	{
+		f << p << "\n";
+	}
+
+	f.close();
+}
+
+template <typename point_t>
+std::vector<point_t> readPointCloud(const fs::path& fileName)
+{
+	// Get Input File extension
+	auto fExt = fileName.extension();
+
+	FileReader_t readerType = chooseReaderType(fExt);
+
+	// asdf
+	if (readerType == err_t)
+	{
+		std::cout << "Uncompatible file format\n";
+		exit(-1);
+	}
+
+	std::shared_ptr<FileReader<point_t>> fileReader = FileReaderFactory::makeReader<point_t>(readerType, fileName);
+
+	std::vector<point_t> points = fileReader->read();
+	// Decimation. Implemented here because, tbh, I don't want to implement it for each reader type.
+	std::cout << "Point cloud size: " << points.size() << "\n";
+
+	return points;
+}
 
 #endif //CPP_HANDLERS_H

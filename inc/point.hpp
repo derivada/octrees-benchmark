@@ -18,10 +18,11 @@ using Vector = class Point; // Point and Vector are exactly the same entity, but
 class Point
 {
 	protected:
-	unsigned int id_{}; // Id of the point (in order of reading)
 	double       x_{};  // X Coordinate
 	double       y_{};  // Y Coordinate
 	double       z_{};  // Z Coordinate
+	unsigned int id_{}; // Id of the point (in order of reading)
+
 
 	public:
 	Point() = default;
