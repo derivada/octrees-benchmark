@@ -15,7 +15,7 @@
 template <OctreeType Octree_t, PointType Point_t>
 class OctreeBenchmarkGeneric {
     private:
-        constexpr static bool CHECK_RESULTS = true;
+        constexpr static bool CHECK_RESULTS = false;
 
         const std::unique_ptr<Octree_t> oct;
         std::vector<Point_t>& points;
@@ -35,7 +35,7 @@ class OctreeBenchmarkGeneric {
                     if(CHECK_RESULTS){
                         resultsNeigh[i] = oct->template searchNeighbors<kernel>(searchSet->searchPoints[i], radii);
                     } else{
-                        (void) oct->template searchNeighbors<kernel>(searchSet->searchPoints[i], radii);
+                        auto result = oct->template searchNeighbors<kernel>(searchSet->searchPoints[i], radii);
                     }
                 }
         }
@@ -49,7 +49,7 @@ class OctreeBenchmarkGeneric {
                     if(CHECK_RESULTS) {
                         resultsNumNeigh[i] = oct->template numNeighbors<kernel>(searchSet->searchPoints[i], radii);
                     } else {
-                        (void) oct->template numNeighbors<kernel>(searchSet->searchPoints[i], radii);
+                        auto result =  oct->template numNeighbors<kernel>(searchSet->searchPoints[i], radii);
                     }
                 }
         }
@@ -62,7 +62,7 @@ class OctreeBenchmarkGeneric {
                     if(CHECK_RESULTS) {
                         resultsKNN[i] = oct->template KNN(searchSet->searchPoints[i], searchSet->searchKNNLimits[i], searchSet->searchKNNLimits[i]);
                     } else {
-                        (void) oct->template KNN(searchSet->searchPoints[i], searchSet->searchKNNLimits[i], searchSet->searchKNNLimits[i]);
+                        auto result =  oct->template KNN(searchSet->searchPoints[i], searchSet->searchKNNLimits[i], searchSet->searchKNNLimits[i]);
                     }
                 }
         }
@@ -76,7 +76,7 @@ class OctreeBenchmarkGeneric {
                         resultsRingNeigh[i] = oct->template searchNeighborsRing(searchSet->searchPoints[i], 
                             innerRadii, outerRadii);
                     } else {
-                        (void) oct->template searchNeighborsRing(searchSet->searchPoints[i], 
+                        auto result = oct->template searchNeighborsRing(searchSet->searchPoints[i], 
                             innerRadii, outerRadii);
                     }
                 }

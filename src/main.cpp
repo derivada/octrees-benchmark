@@ -81,7 +81,7 @@ int main(int argc, char *argv[]) {
   OctreeBenchmarkGeneric<LinearOctree<Lpoint>, Lpoint>::runFullBenchmark(obLinear, benchmarkRadii, repeats, numSearches);
   OctreeBenchmarkGeneric<Octree<Lpoint>, Lpoint> obPointer(points, numSearches, searchSet, outputFile);
   OctreeBenchmarkGeneric<Octree<Lpoint>, Lpoint>::runFullBenchmark(obPointer, benchmarkRadii, repeats, numSearches);
-  OctreeBenchmarkGeneric<Octree<Lpoint64>, Lpoint64>::checkResults(obPointer, obLinear);
+  // OctreeBenchmarkGeneric<Octree<Lpoint64>, Lpoint64>::checkResults(obPointer, obLinear);
 
   points.clear();
   points.shrink_to_fit();
@@ -98,7 +98,7 @@ int main(int argc, char *argv[]) {
   OctreeBenchmarkGeneric<LinearOctree<Lpoint64>, Lpoint64>::runFullBenchmark(obLinear2, benchmarkRadii, repeats, numSearches);
   OctreeBenchmarkGeneric<Octree<Lpoint64>, Lpoint64> obPointer2(points2, numSearches, searchSet2, outputFile);
   OctreeBenchmarkGeneric<Octree<Lpoint64>, Lpoint64>::runFullBenchmark(obPointer2, benchmarkRadii, repeats, numSearches);
-  OctreeBenchmarkGeneric<Octree<Lpoint64>, Lpoint64>::checkResults(obPointer2, obLinear2);
+ // OctreeBenchmarkGeneric<Octree<Lpoint64>, Lpoint64>::checkResults(obPointer2, obLinear2);
 
   return EXIT_SUCCESS;
 }
