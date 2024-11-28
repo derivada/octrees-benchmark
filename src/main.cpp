@@ -32,9 +32,10 @@ void checkVectorMemory(std::vector<T> vec) {
 
 template <PointType Point_t>
 void octreeComparisonBenchmark(std::ofstream &outputFile, bool check = false) {
-  const std::vector<float> benchmarkRadii = {0.5, 1.0, 2.5, 3.5, 5.0};
+  // TODO: maybe a better idea is to choose radii based on point cloud density
+  const std::vector<float> benchmarkRadii = {0.5, 1.0, 2.5, 5.0, 10.0};
   const size_t repeats = 5;
-  const size_t numSearches = 1000;
+  const size_t numSearches = 5000;
   TimeWatcher tw;
   tw.start();
   auto points = readPointCloud<Point_t>(mainOptions.inputFile);
@@ -45,12 +46,10 @@ void octreeComparisonBenchmark(std::ofstream &outputFile, bool check = false) {
             << " seconds\n";
   checkVectorMemory(points);
   std::shared_ptr<const SearchSet> searchSet = std::make_shared<const SearchSet>(numSearches, points);
-  OctreeBenchmark<LinearOctree<Point_t>, Point_t> obLinear(points, numSearches, searchSet, outputFile, check);
-  OctreeBenchmark<LinearOctree<Point_t>, Point_t>::runFullBenchmark(obLinear, benchmarkRadii, repeats, numSearches);
-
   OctreeBenchmark<Octree<Point_t>, Point_t> obPointer(points, numSearches, searchSet, outputFile, check);
   OctreeBenchmark<Octree<Point_t>, Point_t>::runFullBenchmark(obPointer, benchmarkRadii, repeats, numSearches);
-
+  OctreeBenchmark<LinearOctree<Point_t>, Point_t> obLinear(points, numSearches, searchSet, outputFile, check);
+  OctreeBenchmark<LinearOctree<Point_t>, Point_t>::runFullBenchmark(obLinear, benchmarkRadii, repeats, numSearches);
   if(check)
     OctreeBenchmark<Octree<Point_t>, Point_t>::checkResults(obPointer, obLinear);
 }
@@ -78,11 +77,6 @@ int main(int argc, char *argv[]) {
 
   TimeWatcher tw;
 
-  // Benchmark parameters
-  // TODO: maybe a better idea is to choose radii based on point cloud density
-  const std::vector<float> benchmarkRadii = {0.5, 1.0, 2.5, 3.5, 5.0};
-  const size_t repeats = 5;
-  const size_t numSearches = 1000;
   std::string csvFilename = mainOptions.inputFileName + "-" + getCurrentDate() + ".csv";
   std::filesystem::path csvPath = mainOptions.outputDirName / csvFilename;
   std::ofstream outputFile(csvPath, std::ios::app);
@@ -91,5 +85,6 @@ int main(int argc, char *argv[]) {
   }
   octreeComparisonBenchmark<Lpoint>(outputFile);
   octreeComparisonBenchmark<Lpoint64>(outputFile);
+
   return EXIT_SUCCESS;
 }

@@ -12,22 +12,22 @@
  * @author Miguel Yermo
  * @brief Specialization of FileRead to read .las/.laz files
  */
-template <typename point_t>
-class LasFileReader : public FileReader<point_t>
+template <PointType Point_t>
+class LasFileReader : public FileReader<Point_t>
 {
 	public:
 	// ***  CONSTRUCTION / DESTRUCTION  *** //
 	// ************************************ //
-	LasFileReader(const fs::path& path) : FileReader<point_t>(path){};
+	LasFileReader(const fs::path& path) : FileReader<Point_t>(path){};
 	~LasFileReader(){};
 
 	/**
 	 * @brief Reads the points contained in the .las/.laz file
 	 * @return Vector of point_t
 	 */
-	std::vector<point_t> read()
+	std::vector<Point_t> read()
 	{
-		std::vector<point_t> points;
+		std::vector<Point_t> points;
 
 		// LAS File reading
 		LASreadOpener lasreadopener;

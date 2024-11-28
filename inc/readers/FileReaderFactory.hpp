@@ -3,7 +3,7 @@
 //
 
 #pragma once
-
+#include "util.hpp"
 #include "LasFileReader.hpp"
 #include "TxtFileReader.hpp"
 #include <filesystem>
@@ -41,15 +41,15 @@ class FileReaderFactory
 	 * @param numCols Number of columns of the txt file. Default = 0
 	 * @return
 	 */
-	template <typename point_t>
-	static std::shared_ptr<FileReader<point_t>> makeReader(FileReader_t type, const fs::path& path)
+	template <PointType Point_t>
+	static std::shared_ptr<FileReader<Point_t>> makeReader(FileReader_t type, const fs::path& path)
 	{
 		switch (type)
 		{
 			case txt_t:
-				return std::make_shared<TxtFileReader<point_t>>(path);
+				return std::make_shared<TxtFileReader<Point_t>>(path);
 			case las_t:
-				return std::make_shared<LasFileReader<point_t>>(path);
+				return std::make_shared<LasFileReader<Point_t>>(path);
 			default:
 				std::cout << "Unable to create specialized FileReader\n";
 				exit(-2);

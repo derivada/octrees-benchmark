@@ -33,7 +33,7 @@ template <PointType Point_t>
 class LinearOctree {
 private:
     /// @brief The maximum number of points in a leaf
-    static constexpr unsigned int MAX_POINTS        = 128;
+    static constexpr unsigned int MAX_POINTS        = 100;
 
     /// @brief The minimum octant radius to have in a leaf (TODO: this is still not implemented, and may not be needed)
 	static constexpr float        MIN_OCTANT_RADIUS = 0.1;

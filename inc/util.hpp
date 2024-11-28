@@ -18,6 +18,7 @@
 #ifndef CPP_UTIL_H
 #define CPP_UTIL_H
 
+#include "point.hpp"
 #include <algorithm>
 #include <numbers>
 #include <numeric>

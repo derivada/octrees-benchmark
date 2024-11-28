@@ -10,15 +10,15 @@
 /**
  * @brief Specialization of FileRead to read .txt/.xyz files
  */
-template <typename point_t>
-class TxtFileReader : public FileReader<point_t>
+template <PointType Point_t>
+class TxtFileReader : public FileReader<Point_t>
 {
 	public:
 	uint8_t numCols{};
 
 	// ***  CONSTRUCTION / DESTRUCTION  *** //
 	// ************************************ //
-	TxtFileReader(const fs::path& path) : FileReader<point_t>(path){};
+	TxtFileReader(const fs::path& path) : FileReader<Point_t>(path){};
 	~TxtFileReader(){};
 
 	std::vector<std::string> splitLine(std::string& line)
@@ -51,7 +51,7 @@ class TxtFileReader : public FileReader<point_t>
 	 * @brief Reads the points contained in the .txt/.xyz file
 	 * @return Vector of point_t
 	 */
-	std::vector<point_t> read()
+	std::vector<Point_t> read()
 	{
 		std::ifstream file(this->path.string());
 		std::string   line{};
@@ -59,7 +59,7 @@ class TxtFileReader : public FileReader<point_t>
 		setNumberOfColumns(file);
 
 		unsigned int        idx = 0;
-		std::vector<point_t> points;
+		std::vector<Point_t> points;
 
 		// TODO: Pensar como modularizarlo...
 		// TODO: Factory as a function of the number of columns to read different inputs!

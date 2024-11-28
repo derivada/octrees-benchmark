@@ -17,6 +17,7 @@
 
 #pragma once
 
+#include "util.hpp"
 #include <filesystem>
 #include <iostream>
 #include <vector>
@@ -27,7 +28,7 @@ namespace fs = std::filesystem;
  * @author Miguel Yermo
  * @brief Abstract class defining common behavor for all file readers
  */
-template <typename point_t>
+template <PointType Point_t>
 class FileReader
 {
 	protected:
@@ -46,5 +47,5 @@ class FileReader
 	 */
 	FileReader(const fs::path& path) : path(path){};
 	virtual ~FileReader(){}; // Every specialization of this class must manage its own destruction
-	virtual std::vector<point_t> read() = 0;
+	virtual std::vector<Point_t> read() = 0;
 };

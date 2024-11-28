@@ -27,8 +27,8 @@
 
 namespace fs = std::filesystem;
 
-template <typename point_t>
-void handleNumberOfPoints(std::vector<point_t>& points);
+template <typename Point_t>
+void handleNumberOfPoints(std::vector<Point_t>& points);
 unsigned int getNumberOfCols(const fs::path& filePath);
 
 void createDirectory(const fs::path& dirName)
@@ -41,13 +41,13 @@ void createDirectory(const fs::path& dirName)
 	if (!fs::is_directory(dirName)) { fs::create_directories(dirName); }
 }
 
-template <typename point_t>
-void writePoints(fs::path& filename, std::vector<point_t>& points)
+template <typename Point_t>
+void writePoints(fs::path& filename, std::vector<Point_t>& points)
 {
 	std::ofstream f(filename);
 	f << std::fixed << std::setprecision(2);
 
-	for (point_t& p : points)
+	for (Point_t& p : points)
 	{
 		f << p << "\n";
 	}
@@ -55,8 +55,8 @@ void writePoints(fs::path& filename, std::vector<point_t>& points)
 	f.close();
 }
 
-template <typename point_t>
-std::vector<point_t> readPointCloud(const fs::path& fileName)
+template <typename Point_t>
+std::vector<Point_t> readPointCloud(const fs::path& fileName)
 {
 	// Get Input File extension
 	auto fExt = fileName.extension();
@@ -70,9 +70,9 @@ std::vector<point_t> readPointCloud(const fs::path& fileName)
 		exit(-1);
 	}
 
-	std::shared_ptr<FileReader<point_t>> fileReader = FileReaderFactory::makeReader<point_t>(readerType, fileName);
+	std::shared_ptr<FileReader<Point_t>> fileReader = FileReaderFactory::makeReader<Point_t>(readerType, fileName);
 
-	std::vector<point_t> points = fileReader->read();
+	std::vector<Point_t> points = fileReader->read();
 	// Decimation. Implemented here because, tbh, I don't want to implement it for each reader type.
 	std::cout << "Point cloud size: " << points.size() << "\n";
 
