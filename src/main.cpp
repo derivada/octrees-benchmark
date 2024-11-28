@@ -30,6 +30,31 @@ void checkVectorMemory(std::vector<T> vec) {
     }
 }
 
+template <PointType Point_t>
+void octreeComparisonBenchmark(std::ofstream &outputFile, bool check = false) {
+  const std::vector<float> benchmarkRadii = {0.5, 1.0, 2.5, 3.5, 5.0};
+  const size_t repeats = 5;
+  const size_t numSearches = 1000;
+  TimeWatcher tw;
+  tw.start();
+  auto points = readPointCloud<Point_t>(mainOptions.inputFile);
+  tw.stop();
+
+  std::cout << "Number of read points: " << points.size() << "\n";
+  std::cout << "Time to read points: " << tw.getElapsedDecimalSeconds()
+            << " seconds\n";
+  checkVectorMemory(points);
+  std::shared_ptr<const SearchSet> searchSet = std::make_shared<const SearchSet>(numSearches, points);
+  OctreeBenchmark<LinearOctree<Point_t>, Point_t> obLinear(points, numSearches, searchSet, outputFile, check);
+  OctreeBenchmark<LinearOctree<Point_t>, Point_t>::runFullBenchmark(obLinear, benchmarkRadii, repeats, numSearches);
+
+  OctreeBenchmark<Octree<Point_t>, Point_t> obPointer(points, numSearches, searchSet, outputFile, check);
+  OctreeBenchmark<Octree<Point_t>, Point_t>::runFullBenchmark(obPointer, benchmarkRadii, repeats, numSearches);
+
+  if(check)
+    OctreeBenchmark<Octree<Point_t>, Point_t>::checkResults(obPointer, obLinear);
+}
+
 int main(int argc, char *argv[]) {
   setDefaults();
   processArgs(argc, argv);
@@ -58,47 +83,13 @@ int main(int argc, char *argv[]) {
   const std::vector<float> benchmarkRadii = {0.5, 1.0, 2.5, 3.5, 5.0};
   const size_t repeats = 5;
   const size_t numSearches = 1000;
-
-  // Get the final .csv file
   std::string csvFilename = mainOptions.inputFileName + "-" + getCurrentDate() + ".csv";
   std::filesystem::path csvPath = mainOptions.outputDirName / csvFilename;
   std::ofstream outputFile(csvPath, std::ios::app);
   if (!outputFile.is_open()) {
       throw std::ios_base::failure(std::string("Failed to open benchmark output file: ") + csvPath.string());
   }
-
-
-  tw.start();
-  auto points = readPointCloud<Lpoint>(mainOptions.inputFile);
-  tw.stop();
-
-  std::cout << "Number of read points: " << points.size() << "\n";
-  std::cout << "Time to read points: " << tw.getElapsedDecimalSeconds()
-            << " seconds\n";
-  checkVectorMemory(points);
-  std::shared_ptr<const SearchSet> searchSet = std::make_shared<const SearchSet>(numSearches, points);
-  OctreeBenchmark<LinearOctree<Lpoint>, Lpoint> obLinear(points, numSearches, searchSet, outputFile);
-  OctreeBenchmark<LinearOctree<Lpoint>, Lpoint>::runFullBenchmark(obLinear, benchmarkRadii, repeats, numSearches);
-  OctreeBenchmark<Octree<Lpoint>, Lpoint> obPointer(points, numSearches, searchSet, outputFile);
-  OctreeBenchmark<Octree<Lpoint>, Lpoint>::runFullBenchmark(obPointer, benchmarkRadii, repeats, numSearches);
-  // OctreeBenchmark<Octree<Lpoint64>, Lpoint64>::checkResults(obPointer, obLinear);
-
-  points.clear();
-  points.shrink_to_fit();
-  
-  tw.start();
-  auto points64 = readPointCloud<Lpoint64>(mainOptions.inputFile);
-  tw.stop();
-  std::cout << "Number of read points: " << points64.size() << "\n";
-  std::cout << "Time to read points: " << tw.getElapsedDecimalSeconds()
-            << " seconds\n";
-  checkVectorMemory(points64);
-  // std::shared_ptr<const SearchSet> searchSet64 = std::make_shared<const SearchSet>(numSearches, points64);
-  OctreeBenchmark<LinearOctree<Lpoint64>, Lpoint64> obLinear2(points64, numSearches, searchSet, outputFile);
-  OctreeBenchmark<LinearOctree<Lpoint64>, Lpoint64>::runFullBenchmark(obLinear2, benchmarkRadii, repeats, numSearches);
-  OctreeBenchmark<Octree<Lpoint64>, Lpoint64> obPointer2(points64, numSearches, searchSet, outputFile);
-  OctreeBenchmark<Octree<Lpoint64>, Lpoint64>::runFullBenchmark(obPointer2, benchmarkRadii, repeats, numSearches);
-  // OctreeBenchmark<Octree<Lpoint64>, Lpoint64>::checkResults(obPointer2, obLinear2);
-
+  octreeComparisonBenchmark<Lpoint>(outputFile);
+  octreeComparisonBenchmark<Lpoint64>(outputFile);
   return EXIT_SUCCESS;
 }
