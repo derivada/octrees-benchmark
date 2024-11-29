@@ -7,3 +7,6 @@ build
 debug
 out
 data
+
+# Benchmark execution scripts
+*.sh

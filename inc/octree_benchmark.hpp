@@ -12,8 +12,9 @@ class OctreeBenchmark {
     private:
 
         const std::unique_ptr<Octree_t> oct;
-        std::vector<Point_t>& points;
+        const std::string comment;
 
+        std::vector<Point_t>& points;
         std::ofstream &outputFile;
         
         void rebuild() {
@@ -29,7 +30,7 @@ class OctreeBenchmark {
                     if(check){
                         resultsNeigh[i] = oct->template searchNeighbors<kernel>(searchSet->searchPoints[i], radii);
                     } else{
-                        auto result = oct->template searchNeighbors<kernel>(searchSet->searchPoints[i], radii);
+                        volatile auto result = oct->template searchNeighbors<kernel>(searchSet->searchPoints[i], radii);
                     }
                 }
         }
@@ -43,7 +44,7 @@ class OctreeBenchmark {
                     if(check) {
                         resultsNumNeigh[i] = oct->template numNeighbors<kernel>(searchSet->searchPoints[i], radii);
                     } else {
-                        auto result =  oct->template numNeighbors<kernel>(searchSet->searchPoints[i], radii);
+                        volatile auto result =  oct->template numNeighbors<kernel>(searchSet->searchPoints[i], radii);
                     }
                 }
         }
@@ -56,7 +57,7 @@ class OctreeBenchmark {
                     if(check) {
                         resultsKNN[i] = oct->template KNN(searchSet->searchPoints[i], searchSet->searchKNNLimits[i], searchSet->searchKNNLimits[i]);
                     } else {
-                        auto result =  oct->template KNN(searchSet->searchPoints[i], searchSet->searchKNNLimits[i], searchSet->searchKNNLimits[i]);
+                        volatile auto result =  oct->template KNN(searchSet->searchPoints[i], searchSet->searchKNNLimits[i], searchSet->searchKNNLimits[i]);
                     }
                 }
         }
@@ -70,7 +71,7 @@ class OctreeBenchmark {
                         resultsRingNeigh[i] = oct->template searchNeighborsRing(searchSet->searchPoints[i], 
                             innerRadii, outerRadii);
                     } else {
-                        auto result = oct->template searchNeighborsRing(searchSet->searchPoints[i], 
+                        volatile auto result = oct->template searchNeighborsRing(searchSet->searchPoints[i], 
                             innerRadii, outerRadii);
                     }
                 }
@@ -80,12 +81,13 @@ class OctreeBenchmark {
                             const std::string& kernel, const float radius, const benchmarking::Stats<>& stats) {
             // Check if the file is empty and append header if it is
             if (outputFile.tellp() == 0) {
-                outputFile << "date,octree,operation,kernel,radius,num_searches,repeats,accumulated,mean,median,stdev,used_warmup\n";
+                outputFile << "date,octree,npoints,operation,kernel,radius,num_searches,repeats,accumulated,mean,median,stdev,used_warmup\n";
             }
-
+            std::string octreeName = getOctreeName<Octree_t, Point_t>() + " " + comment;
             // Append the benchmark data
             outputFile << getCurrentDate() << ',' 
-                << getOctreeName<Octree_t, Point_t>() << ',' 
+                << octreeName << ',' 
+                << points.size() << ','
                 << operation << ',' 
                 << kernel << ',' 
                 << radius << ','
@@ -198,12 +200,14 @@ class OctreeBenchmark {
         std::vector<std::vector<Point_t*>> resultsKNN;
         std::vector<std::vector<Point_t*>> resultsRingNeigh;
 
-        OctreeBenchmark(std::vector<Point_t>& points, size_t numSearches = 100, std::shared_ptr<const SearchSet> searchSet = nullptr, std::ofstream &file = std::ofstream(), bool check = false) :
+        OctreeBenchmark(std::vector<Point_t>& points, size_t numSearches = 100, std::shared_ptr<const SearchSet> searchSet = nullptr, std::ofstream &file = std::ofstream(), bool check = false,
+            std::string comment = "") :
             points(points), 
             oct(std::make_unique<Octree_t>(points)),
             searchSet(searchSet ? searchSet : std::make_shared<const SearchSet>(numSearches, points)),
             outputFile(file),
-            check(check) { }
+            check(check),
+            comment(comment) { }
 
         void benchmarkBuild(size_t repeats) {
             auto stats = benchmarking::benchmark(repeats, [&]() { rebuild(); });
@@ -270,7 +274,7 @@ class OctreeBenchmark {
 
             std::cout << "Benchmark done!" << std::endl << std::endl;
         }
-
+    
     template <typename Octree_t1, typename Octree_t2>
     static void checkResults(
         OctreeBenchmark<Octree_t1, typename Octree_t1::PointType> &bench1,

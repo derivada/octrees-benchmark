@@ -620,6 +620,10 @@ public:
         }
     }
 
+    double getDensity() {
+        return (double) points.size() / (bbox.radii().getX() * bbox.radii().getY() * bbox.radii().getZ() * 8.0f);
+    }
+
     /**
      * @brief Traverse the octree in a single pass
      * 

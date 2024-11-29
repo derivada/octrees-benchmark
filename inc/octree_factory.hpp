@@ -39,9 +39,9 @@ template <OctreeType Octree_t, PointType Point_t>
 std::string getOctreeName() {
     std::string pointTypeName = getPointName<Point_t>();
     if constexpr (std::is_same_v<Octree_t, LinearOctree<Point_t>>) {
-        return "linear<" + pointTypeName + ">";
+        return "linear <" + pointTypeName + ">";
     } else if constexpr (std::is_same_v<Octree_t, Octree<Point_t>>) {
-        return "pointer<" + pointTypeName + ">";
+        return "pointer <" + pointTypeName + ">";
     } else {
         static_assert(false, "Unsupported octree type in getOctreeName");
     }
