@@ -74,7 +74,7 @@ std::vector<Point_t> readPointCloud(const fs::path& fileName)
 
 	std::vector<Point_t> points = fileReader->read();
 	// Decimation. Implemented here because, tbh, I don't want to implement it for each reader type.
-	std::cout << "Point cloud size: " << points.size() << "\n";
+	std::cout << "Point cloud size: " << points.size() << std::endl;
 
 	return points;
 }

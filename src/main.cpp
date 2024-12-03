@@ -1,3 +1,4 @@
+#include "util.hpp"
 #include "TimeWatcher.hpp"
 #include "handlers.hpp"
 #include "main_options.hpp"
@@ -133,7 +134,7 @@ int main(int argc, char *argv[]) {
       throw std::ios_base::failure(std::string("Failed to open benchmark output file: ") + csvPath.string());
   }
 
-  octreeComparisonBenchmark<Lpoint>(outputFile, false);
+  // octreeComparisonBenchmark<Lpoint>(outputFile, false);
   octreeComparisonBenchmark<Lpoint64>(outputFile, false);
 
   return EXIT_SUCCESS;

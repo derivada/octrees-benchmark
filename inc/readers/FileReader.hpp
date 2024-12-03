@@ -36,6 +36,39 @@ class FileReader
 	 * @brief Path to file to be written
 	 */
 	fs::path path{};
+	
+
+	template<typename TerminationCondition, typename PointInserter>
+	void file_reading_loop(
+		std::vector<Point_t>& points, 
+		TerminationCondition&& terminationCondition, 
+		PointInserter&& pointInserter,
+		size_t total_points = -1,
+		bool show_progress = false
+	) {
+		size_t percent_threeshold = total_points != -1 ? total_points / 100 : 0;
+		size_t idx = 0, current_count = 0, current_percent = 0;
+
+		while (terminationCondition()) {
+			// Perform the loop action (point creation)
+			pointInserter(idx, points);
+			idx++, current_count++;
+			if(show_progress) {
+				if(total_points != -1 && current_count > percent_threeshold) {
+					current_count = 0;
+					current_percent++;
+					progressBar(current_percent, total_points);
+				} else if(total_points == -1 && idx % 100000 == 0) { // every 100000 points when we don't have a given total size for instance
+					progressNumber(idx);
+				}
+			}
+		}
+		if (show_progress)
+			if(total_points != -1)
+				progressBar(100, idx+1);
+			else
+				progressNumber(idx+1);
+	}
 
 	public:
 	// ***  CONSTRUCTION / DESTRUCTION  *** //

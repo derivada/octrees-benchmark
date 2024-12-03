@@ -7,6 +7,7 @@
 #include "FileReader.hpp"
 #include <iterator>
 #include <fstream>
+#include <functional>
 /**
  * @brief Specialization of FileRead to read .txt/.xyz files
  */
@@ -47,10 +48,12 @@ class TxtFileReader : public FileReader<Point_t>
 			numCols++;
 	}
 
+
 	/**
 	 * @brief Reads the points contained in the .txt/.xyz file
 	 * @return Vector of point_t
 	 */
+	
 	std::vector<Point_t> read()
 	{
 		std::ifstream file(this->path.string());
@@ -63,76 +66,71 @@ class TxtFileReader : public FileReader<Point_t>
 
 		// TODO: Pensar como modularizarlo...
 		// TODO: Factory as a function of the number of columns to read different inputs!
-		switch (numCols)
-		{
-			case 3:
-				while (std::getline(file, line, '\n'))
-				{
-					auto tokens = splitLine(line);
-					points.emplace_back(idx++,                 // id
-										std::stod(tokens[0]),  // x
-										std::stod(tokens[1]),  // y
-										std::stod(tokens[2])); // z
-				}
-				break;
+		auto terminationCondition = [&file, &line] { 
+			if (std::getline(file, line)) {
+				return true;
+			} else {
+				return false;
+			}
+		 };
 
-			case 7:
-				while (std::getline(file, line, '\n'))
-				{
-					auto tokens = splitLine(line);
-					points.emplace_back(idx++,                 // id
-										std::stod(tokens[0]),  // x
-										std::stod(tokens[1]),  // y
-										std::stod(tokens[2]),  // z
-										std::stod(tokens[3]),  // I
-										std::stod(tokens[4]),  // rn
-										std::stod(tokens[5]),  // nor
-										std::stoi(tokens[6])); // classification
-				}
+		auto pointInserter = [&](size_t& idx, std::vector<Point_t>& points) { 
+			auto tokens = splitLine(line);
+			switch (numCols) {
+				case 3:
+					points.emplace_back(idx,  	// id
+						std::stod(tokens[0]),  	// x
+						std::stod(tokens[1]),  	// y
+						std::stod(tokens[2])); 	// z
 				break;
-
-			// Raw point cloud without RGB
-			case 9:
-				while (std::getline(file, line, '\n'))
-				{
-					auto tokens = splitLine(line);
-					points.emplace_back(idx++,                 // id
-										std::stod(tokens[0]),  // x
-										std::stod(tokens[1]),  // y
-										std::stod(tokens[2]),  // z
-										std::stod(tokens[3]),  // I
-										std::stoi(tokens[4]),  // rn
-										std::stoi(tokens[5]),  // nor
-										std::stoi(tokens[6]),  // dir
-										std::stoi(tokens[7]),  // edge
-										std::stoi(tokens[8])); // classification
-				}
+				case 7:
+					points.emplace_back(idx,
+						std::stod(tokens[0]),  	// x
+						std::stod(tokens[1]),  	// y
+						std::stod(tokens[2]),  	// z
+						std::stod(tokens[3]),  	// I
+						std::stod(tokens[4]),  	// rn
+						std::stod(tokens[5]),  	// nor
+						std::stoi(tokens[6])   	// classification
+					);
 				break;
-
-			case 12:
-				while (std::getline(file, line, '\n'))
-				{
-					auto tokens = splitLine(line);
-					points.emplace_back(idx++,                  // id
-										std::stod(tokens[0]),   // x
-										std::stod(tokens[1]),   // y
-										std::stod(tokens[2]),   // z
-										std::stod(tokens[3]),   // I
-										std::stoi(tokens[4]),   // rn
-										std::stoi(tokens[5]),   // nor
-										std::stoi(tokens[6]),   // dir
-										std::stoi(tokens[7]),   // edge
-										std::stoi(tokens[8]),   // classification
-										std::stoi(tokens[9]),   // r
-										std::stoi(tokens[10]),  // g
-										std::stoi(tokens[11])); // b
-				}
+				case 9:
+					points.emplace_back(idx,
+						std::stod(tokens[0]),  	// x
+						std::stod(tokens[1]),  	// y
+						std::stod(tokens[2]),  	// z
+						std::stod(tokens[3]),  	// I
+						std::stoi(tokens[4]),  	// rn
+						std::stoi(tokens[5]),  	// nor
+						std::stoi(tokens[6]),  	// dir
+						std::stoi(tokens[7]),  	// edge
+						std::stoi(tokens[8])   	// classification
+					);
 				break;
+				case 12:
+					points.emplace_back(idx,
+						std::stod(tokens[0]),   // x
+						std::stod(tokens[1]),   // y
+						std::stod(tokens[2]),   // z
+						std::stod(tokens[3]),   // I
+						std::stoi(tokens[4]),   // rn
+						std::stoi(tokens[5]),   // nor
+						std::stoi(tokens[6]),   // dir
+						std::stoi(tokens[7]),   // edge
+						std::stoi(tokens[8]),   // classification
+						std::stoi(tokens[9]),   // r
+						std::stoi(tokens[10]),  // g
+						std::stoi(tokens[11])   // b
+					);
+				break;
+				default:
+					std::cout << "Unrecognized format\n";
+					exit(1);
+			};
+		};
 
-			default:
-				std::cout << "Unrecognized format\n";
-				exit(1);
-		}
+		this->file_reading_loop(points, terminationCondition, pointInserter, -1, true);
+
 		file.close();
 		std::cout << "Read points: " << idx << "\n";
 		return points;

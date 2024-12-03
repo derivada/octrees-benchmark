@@ -15,13 +15,13 @@
 *
 */
 
-#ifndef CPP_UTIL_H
-#define CPP_UTIL_H
+#pragma once
 
 #include "point.hpp"
 #include <algorithm>
 #include <numbers>
 #include <numeric>
+#include <iomanip>
 
 // Memory Handling
 namespace mem
@@ -169,5 +169,27 @@ inline std::string getCurrentDate() {
 	return oss.str();
 }
 
+// Width of the progress bar
+constexpr int BAR_WIDTH = 70; 
 
-#endif //CPP_UTIL_H
+inline void progressBar(size_t progress, size_t total) {
+    int pos = static_cast<int>((float) progress  * BAR_WIDTH / 100.0);
+    std::cout << "Reading point cloud [";
+    for (int i = 0; i < BAR_WIDTH; ++i) {
+        if (i < pos) {
+            std::cout << "=";
+        } else if (i == pos) {
+            std::cout << ">";
+        } else {
+            std::cout << " ";
+        }
+    }
+    std::cout << "] " << std::setw(3) << static_cast<int>(progress) << "%\r";
+    std::cout.flush();
+}
+
+// in a .txt file we dont have a total number of points before reading, so we just print how many points we have read periodically
+inline void progressNumber(size_t progress) {
+    std::cout << "Points read: " << progress << "\r";
+    std::cout.flush();
+}
