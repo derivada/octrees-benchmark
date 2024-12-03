@@ -5,30 +5,176 @@
 #include <omp.h>
 #include "NeighborKernels/KernelFactory.hpp"
 #include "octree_factory.hpp"
-#include "search_set.hpp"
+
+struct SearchSet {
+    const size_t numSearches;
+    std::vector<Point> searchPoints;
+    std::vector<uint32_t> searchKNNLimits;
+    constexpr static uint32_t MIN_KNN = 5;
+    constexpr static uint32_t MAX_KNN = 100;
+    std::mt19937 rng;
+
+    template <PointType Point_t>
+    SearchSet(size_t numSearches, const std::vector<Point_t>& points)
+        : numSearches(numSearches) {
+
+        rng.seed(42);
+        searchPoints.resize(numSearches);
+        searchKNNLimits.resize(numSearches);
+
+        std::uniform_int_distribution<size_t> indexDist(0, points.size() - 1);
+        std::uniform_int_distribution<size_t> knnDist(MIN_KNN, MAX_KNN);
+
+        for (size_t i = 0; i < numSearches; ++i) {
+            searchPoints[i] = points[indexDist(rng)];
+            searchKNNLimits[i] = knnDist(rng);
+        }
+    }
+};
+
+template <PointType Point_t>
+struct ResultSet {
+    const std::shared_ptr<const SearchSet> searchSet;
+    std::vector<std::vector<Point_t*>> resultsNeigh;
+    std::vector<size_t> resultsNumNeigh;
+    std::vector<std::vector<Point_t*>> resultsKNN;
+    std::vector<std::vector<Point_t*>> resultsRingNeigh;
+
+    ResultSet(const std::shared_ptr<const SearchSet> searchSet): searchSet(searchSet) {  }
+
+    // Generic check for neighbor results
+    std::vector<size_t> checkNeighResults(std::vector<std::vector<Point_t*>> &results1, std::vector<std::vector<Point_t*>> &results2)
+    {
+        std::vector<size_t> wrongSearches;
+        for (size_t i = 0; i < results1.size(); i++) {
+            auto v1 = results1[i];
+            auto v2 = results2[i];
+            if (v1.size() != v2.size()) {
+                wrongSearches.push_back(i);
+            } else {
+                std::sort(v1.begin(), v1.end(), [](Point_t *p, Point_t* q) -> bool {
+                    return p->id() < q->id();
+                });
+                std::sort(v2.begin(), v2.end(), [](Point_t *p, Point_t* q) -> bool {
+                    return p->id() < q->id();
+                });
+                for (size_t j = 0; j < v1.size(); j++) {
+                    if (v1[j]->id() != v2[j]->id()) {
+                        wrongSearches.push_back(i);
+                        break;
+                    }
+                }
+            }
+        }
+        return wrongSearches;
+    }
+
+    // Generic check for the number of neighbors
+    std::vector<size_t> checkNumNeighResults(std::vector<size_t> &results1, std::vector<size_t> &results2)
+    {
+        std::vector<size_t> wrongSearches;
+        for (size_t i = 0; i < results1.size(); i++) {
+            auto n1 = results1[i];
+            auto n2 = results2[i];
+            if (n1 != n2) {
+                wrongSearches.push_back(i);
+            }
+        }
+        return wrongSearches;
+    }
+
+    // Operation for checking neighbor results
+    void checkOperationNeigh(
+        std::vector<std::vector<Point_t*>> &results1,
+        std::vector<std::vector<Point_t*>> &results2,
+        size_t printingLimit = 10)
+    {
+        std::vector<size_t> wrongSearches = checkNeighResults(results1, results2);
+        if (wrongSearches.size() > 0) {
+            std::cout << "Wrong results at " << wrongSearches.size() << " search sets" << std::endl;
+            for (size_t i = 0; i < std::min(wrongSearches.size(), printingLimit); i++) {
+                size_t idx = wrongSearches[i];
+                size_t nPoints1 = results1[idx].size(), nPoints2 = results2[idx].size();
+                std::cout << "\tAt set " << idx << " with "
+                        << nPoints1 << " VS " << nPoints2 << " points found" << std::endl;
+            }
+
+            if (wrongSearches.size() > printingLimit) {
+                std::cout << "\tAnd at " << (wrongSearches.size() - printingLimit) << " other search instances..." << std::endl;
+            }
+        } else {
+            std::cout << "All results are right!" << std::endl;
+        }
+    }
+
+    // Operation for checking number of neighbor results
+    void checkOperationNumNeigh(
+        std::vector<size_t> &results1,
+        std::vector<size_t> &results2,
+        size_t printingLimit = 10)
+    {
+        std::vector<size_t> wrongSearches = checkNumNeighResults(results1, results2);
+        if (wrongSearches.size() > 0) {
+            std::cout << "Wrong results at " << wrongSearches.size() << " search sets" << std::endl;
+            for (size_t i = 0; i < std::min(wrongSearches.size(), printingLimit); i++) {
+                size_t idx = wrongSearches[i];
+                size_t nPoints1 = results1[idx], nPoints2 = results2[idx];
+                std::cout << "\tAt set " << idx << " with "
+                        << nPoints1 << " VS " << nPoints2 << " points found" << std::endl;
+            }
+
+            if (wrongSearches.size() > printingLimit) {
+                std::cout << "\tAnd at " << (wrongSearches.size() - printingLimit) << " other search instances..." << std::endl;
+            }
+        } else {
+            std::cout << "All results are right!" << std::endl;
+        }
+    }
+    
+    void checkResults(std::shared_ptr<ResultSet<Point_t>> other, size_t printingLimit = 10) {
+        // Ensure the search sets are the same
+        assert(searchSet == other->searchSet && "The search sets of the benchmarks are not the same");
+        
+        // Check neighbor search results if available
+        if (!resultsNeigh.empty() && !other->resultsNeigh.empty()) {
+            std::cout << "Checking search results for neighbor searches..." << std::endl;
+            checkOperationNeigh(resultsNeigh, other->resultsNeigh, printingLimit);
+        }
+
+        // Check number of neighbor search results if available
+        if (!resultsNumNeigh.empty() && !other->resultsNumNeigh.empty()) {
+            std::cout << "Checking search results for number of neighbor searches..." << std::endl;
+            checkOperationNumNeigh(resultsNumNeigh, other->resultsNumNeigh, printingLimit);
+        }
+    }
+};
+
 
 template <OctreeType Octree_t, PointType Point_t>
 class OctreeBenchmark {
     private:
-
         const std::unique_ptr<Octree_t> oct;
         const std::string comment;
 
         std::vector<Point_t>& points;
         std::ofstream &outputFile;
         
+        const bool check;
+        const std::shared_ptr<const SearchSet> searchSet;
+        std::shared_ptr<ResultSet<Point_t>> resultSet;
+
         void rebuild() {
             oct = std::make_unique<Octree_t>(points); 
         }
 
         template<Kernel_t kernel>
         void searchNeighParallel(float radii) {
-            if(check && resultsNeigh.empty())
-                resultsNeigh.resize(searchSet->numSearches);
+            if(check && resultSet->resultsNeigh.empty())
+                resultSet->resultsNeigh.resize(searchSet->numSearches);
             #pragma omp parallel for schedule(static)
                 for(size_t i = 0; i<searchSet->numSearches; i++) {
                     if(check){
-                        resultsNeigh[i] = oct->template searchNeighbors<kernel>(searchSet->searchPoints[i], radii);
+                        resultSet->resultsNeigh[i] = oct->template searchNeighbors<kernel>(searchSet->searchPoints[i], radii);
                     } else{
                         volatile auto result = oct->template searchNeighbors<kernel>(searchSet->searchPoints[i], radii);
                     }
@@ -37,12 +183,12 @@ class OctreeBenchmark {
 
         template<Kernel_t kernel>
         void numNeighParallel(float radii) {
-            if(check && resultsNumNeigh.empty())
-                resultsNumNeigh.resize(searchSet->numSearches);
+            if(check && resultSet->resultsNumNeigh.empty())
+                resultSet->resultsNumNeigh.resize(searchSet->numSearches);
             #pragma omp parallel for schedule(static)
                 for(size_t i = 0; i<searchSet->numSearches; i++) {
                     if(check) {
-                        resultsNumNeigh[i] = oct->template numNeighbors<kernel>(searchSet->searchPoints[i], radii);
+                        resultSet->resultsNumNeigh[i] = oct->template numNeighbors<kernel>(searchSet->searchPoints[i], radii);
                     } else {
                         volatile auto result =  oct->template numNeighbors<kernel>(searchSet->searchPoints[i], radii);
                     }
@@ -50,12 +196,12 @@ class OctreeBenchmark {
         }
 
         void KNNParallel() {
-            if(check && resultsKNN.empty())
-                resultsKNN.resize(searchSet->numSearches);
+            if(check && resultSet->resultsKNN.empty())
+                resultSet->resultsKNN.resize(searchSet->numSearches);
             #pragma omp parallel for schedule(static)
                 for(size_t i = 0; i<searchSet->numSearches; i++) {
                     if(check) {
-                        resultsKNN[i] = oct->template KNN(searchSet->searchPoints[i], searchSet->searchKNNLimits[i], searchSet->searchKNNLimits[i]);
+                        resultSet->resultsKNN[i] = oct->template KNN(searchSet->searchPoints[i], searchSet->searchKNNLimits[i], searchSet->searchKNNLimits[i]);
                     } else {
                         volatile auto result =  oct->template KNN(searchSet->searchPoints[i], searchSet->searchKNNLimits[i], searchSet->searchKNNLimits[i]);
                     }
@@ -63,12 +209,12 @@ class OctreeBenchmark {
         }
 
         void ringNeighSearchParallel(Vector &innerRadii, Vector &outerRadii) {
-            if(check && resultsRingNeigh.empty())
-                resultsRingNeigh.resize(searchSet->numSearches);
+            if(check && resultSet->resultsRingNeigh.empty())
+                resultSet->resultsRingNeigh.resize(searchSet->numSearches);
             #pragma omp parallel for schedule(static)
                 for(size_t i = 0; i<searchSet->numSearches; i++) {
                     if(check) {    
-                        resultsRingNeigh[i] = oct->template searchNeighborsRing(searchSet->searchPoints[i], 
+                        resultSet->resultsRingNeigh[i] = oct->template searchNeighborsRing(searchSet->searchPoints[i], 
                             innerRadii, outerRadii);
                     } else {
                         volatile auto result = oct->template searchNeighborsRing(searchSet->searchPoints[i], 
@@ -100,106 +246,7 @@ class OctreeBenchmark {
                 << stats.usedWarmup() << '\n';
         }
 
-        // Generic check for neighbor results
-        template <typename Point_t2>
-        static std::vector<size_t> checkNeighResults(std::vector<std::vector<Point_t2*>> &results1, std::vector<std::vector<Point_t2*>> &results2)
-        {
-            std::vector<size_t> wrongSearches;
-            for (size_t i = 0; i < results1.size(); i++) {
-                auto v1 = results1[i];
-                auto v2 = results2[i];
-                if (v1.size() != v2.size()) {
-                    wrongSearches.push_back(i);
-                } else {
-                    std::sort(v1.begin(), v1.end(), [](Point_t2 *p, Point_t2* q) -> bool {
-                        return p->id() < q->id();
-                    });
-                    std::sort(v2.begin(), v2.end(), [](Point_t2 *p, Point_t2* q) -> bool {
-                        return p->id() < q->id();
-                    });
-                    for (size_t j = 0; j < v1.size(); j++) {
-                        if (v1[j]->id() != v2[j]->id()) {
-                            wrongSearches.push_back(i);
-                            break;
-                        }
-                    }
-                }
-            }
-            return wrongSearches;
-        }
-
-        // Generic check for the number of neighbors
-        static std::vector<size_t> checkNumNeighResults(std::vector<size_t> &results1, std::vector<size_t> &results2)
-        {
-            std::vector<size_t> wrongSearches;
-            for (size_t i = 0; i < results1.size(); i++) {
-                auto n1 = results1[i];
-                auto n2 = results2[i];
-                if (n1 != n2) {
-                    wrongSearches.push_back(i);
-                }
-            }
-            return wrongSearches;
-        }
-
-        // Operation for checking neighbor results
-        template <typename Point_t2>
-        static void checkOperationNeigh(
-            std::vector<std::vector<Point_t2*>> &results1,
-            std::vector<std::vector<Point_t2*>> &results2,
-            size_t printingLimit = 10)
-        {
-            std::vector<size_t> wrongSearches = checkNeighResults(results1, results2);
-            if (wrongSearches.size() > 0) {
-                std::cout << "Wrong results at " << wrongSearches.size() << " search sets" << std::endl;
-                for (size_t i = 0; i < std::min(wrongSearches.size(), printingLimit); i++) {
-                    size_t idx = wrongSearches[i];
-                    size_t nPoints1 = results1[idx].size(), nPoints2 = results2[idx].size();
-                    std::cout << "\tAt set " << idx << " with "
-                            << nPoints1 << " VS " << nPoints2 << " points found" << std::endl;
-                }
-
-                if (wrongSearches.size() > printingLimit) {
-                    std::cout << "\tAnd at " << (wrongSearches.size() - printingLimit) << " other search instances..." << std::endl;
-                }
-            } else {
-                std::cout << "All results are right!" << std::endl;
-            }
-        }
-
-        // Operation for checking number of neighbor results
-        static void checkOperationNumNeigh(
-            std::vector<size_t> &results1,
-            std::vector<size_t> &results2,
-            size_t printingLimit = 10)
-        {
-            std::vector<size_t> wrongSearches = checkNumNeighResults(results1, results2);
-            if (wrongSearches.size() > 0) {
-                std::cout << "Wrong results at " << wrongSearches.size() << " search sets" << std::endl;
-                for (size_t i = 0; i < std::min(wrongSearches.size(), printingLimit); i++) {
-                    size_t idx = wrongSearches[i];
-                    size_t nPoints1 = results1[idx], nPoints2 = results2[idx];
-                    std::cout << "\tAt set " << idx << " with "
-                            << nPoints1 << " VS " << nPoints2 << " points found" << std::endl;
-                }
-
-                if (wrongSearches.size() > printingLimit) {
-                    std::cout << "\tAnd at " << (wrongSearches.size() - printingLimit) << " other search instances..." << std::endl;
-                }
-            } else {
-                std::cout << "All results are right!" << std::endl;
-            }
-        }
-
     public:
-        using PointType = Point_t;
-        const bool check = false;
-        const std::shared_ptr<const SearchSet> searchSet;
-        std::vector<std::vector<Point_t*>> resultsNeigh;
-        std::vector<size_t> resultsNumNeigh;
-        std::vector<std::vector<Point_t*>> resultsKNN;
-        std::vector<std::vector<Point_t*>> resultsRingNeigh;
-
         OctreeBenchmark(std::vector<Point_t>& points, size_t numSearches = 100, std::shared_ptr<const SearchSet> searchSet = nullptr, std::ofstream &file = std::ofstream(), bool check = false,
             std::string comment = "") :
             points(points), 
@@ -207,7 +254,8 @@ class OctreeBenchmark {
             searchSet(searchSet ? searchSet : std::make_shared<const SearchSet>(numSearches, points)),
             outputFile(file),
             check(check),
-            comment(comment) { }
+            comment(comment),
+            resultSet(std::make_shared<ResultSet<Point_t>>(searchSet)) { }
 
         void benchmarkBuild(size_t repeats) {
             auto stats = benchmarking::benchmark(repeats, [&]() { rebuild(); });
@@ -274,26 +322,7 @@ class OctreeBenchmark {
 
             std::cout << "Benchmark done!" << std::endl << std::endl;
         }
-    
-    template <typename Octree_t1, typename Octree_t2>
-    static void checkResults(
-        OctreeBenchmark<Octree_t1, typename Octree_t1::PointType> &bench1,
-        OctreeBenchmark<Octree_t2, typename Octree_t2::PointType> &bench2,
-        size_t printingLimit = 10) {
-            // Ensure the search sets are the same
-            assert(bench1.searchSet == bench2.searchSet && "The search sets of the benchmarks are not the same");
-            assert(bench1.check && bench2.check && "The octrees did not save results for checking");
-            
-            // Check neighbor search results if available
-            if (!bench1.resultsNeigh.empty() && !bench2.resultsNeigh.empty()) {
-                std::cout << "Checking search results for neighbor searches..." << std::endl;
-                checkOperationNeigh<typename Octree_t1::PointType>(bench1.resultsNeigh, bench2.resultsNeigh, printingLimit);
-            }
-
-            // Check number of neighbor search results if available
-            if (!bench1.resultsNumNeigh.empty() && !bench2.resultsNumNeigh.empty()) {
-                std::cout << "Checking search results for number of neighbor searches..." << std::endl;
-                checkOperationNumNeigh(bench1.resultsNumNeigh, bench2.resultsNumNeigh, printingLimit);
-            }
-    }
+        
+        std::shared_ptr<const SearchSet> getSearchSet() const { return searchSet; }
+        std::shared_ptr<ResultSet<Point_t>> getResultSet() const { return resultSet; }
 };
