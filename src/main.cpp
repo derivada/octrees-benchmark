@@ -18,7 +18,7 @@
 namespace fs = std::filesystem;
 
 // Global benchmark parameters
-const std::vector<float> BENCHMARK_RADII = {2.5, 5.0, 7.5, 10.0};
+const std::vector<float> BENCHMARK_RADII = {0.5, 1.0, 2.5, 5.0};
 constexpr size_t REPEATS = 5;
 constexpr size_t NUM_SEARCHES = 1000;
 constexpr bool CHECK_RESULTS = false;
@@ -46,6 +46,15 @@ std::shared_ptr<ResultSet<Point_t>> buildAndRunBenchmark(std::ofstream &outputFi
   return ob.getResultSet();
 }
 
+template <template <typename> class Octree_t, typename Point_t>
+requires OctreeType<Octree_t<Point_t>>
+std::shared_ptr<ResultSet<Point_t>> buildAndRunAlgoComparisonBenchmark(std::ofstream &outputFile, std::vector<Point_t>& points,
+  std::shared_ptr<const SearchSet> searchSet, std::string comment = "") {
+  OctreeBenchmark<Octree_t<Point_t>, Point_t> ob(points, NUM_SEARCHES, searchSet, outputFile, CHECK_RESULTS, comment);
+  OctreeBenchmark<Octree_t<Point_t>, Point_t>::runAlgoComparisonBenchmark(ob, BENCHMARK_RADII, REPEATS, NUM_SEARCHES);
+  return ob.getResultSet();
+}
+
 template <PointType Point_t>
 void octreeComparisonBenchmark(std::ofstream &outputFile) {
   // TODO: maybe a better idea is to choose radii based on point cloud density
@@ -69,6 +78,32 @@ void octreeComparisonBenchmark(std::ofstream &outputFile) {
   // Check the results if needed
   if(CHECK_RESULTS) {
     resultsLinear->checkResults(resultsPointerSorted);
+  }
+}
+
+
+// To test different implementations of the same methods (i.e. numNeighbors vs numNeighborsOld)
+template <PointType Point_t>
+void algorithmComparisonBenchmark(std::ofstream &outputFile) {
+  // TODO: maybe a better idea is to choose radii based on point cloud density
+  TimeWatcher tw;
+  tw.start();
+  auto points = readPointCloud<Point_t>(mainOptions.inputFile);
+  tw.stop();
+
+  std::cout << "Number of read points: " << points.size() << "\n";
+  std::cout << "Time to read points: " << tw.getElapsedDecimalSeconds()
+            << " seconds\n";
+  checkVectorMemory(points);
+
+  // Generate a shared search set for each benchmark execution
+  std::shared_ptr<const SearchSet> searchSet = std::make_shared<const SearchSet>(NUM_SEARCHES, points);
+
+  auto results = buildAndRunAlgoComparisonBenchmark<LinearOctree>(outputFile, points, searchSet);
+
+  // Check the results if needed
+  if(CHECK_RESULTS) {
+    results->checkResultsAlgo();
   }
 }
 
@@ -104,8 +139,22 @@ int main(int argc, char *argv[]) {
   }
 
   // Run the comparison benchmarks
-  octreeComparisonBenchmark<Lpoint>(outputFile);
-  octreeComparisonBenchmark<Lpoint64>(outputFile);
+  // octreeComparisonBenchmark<Lpoint>(outputFile);
+  // octreeComparisonBenchmark<Lpoint64>(outputFile);
 
+  algorithmComparisonBenchmark<Lpoint64>(outputFile);
+
+  // Regular testing grid
+  // std::vector<Point> points;
+  // constexpr size_t GRID_SIZE = 6;
+  // for(int i = 0; i<GRID_SIZE*2; i++) {
+  // for(int j = 0; j<GRID_SIZE; j++) {
+  // for(int k = 0; k<GRID_SIZE*3; k++) {
+  //   Point p = Point(i*GRID_SIZE*GRID_SIZE + j*GRID_SIZE + k, i, j, k);
+  //   points.push_back(p);
+  // }}}
+  // auto points = readPointCloud<Lpoint64>(mainOptions.inputFile);
+  // auto loct = LinearOctree(points);
+  // loct.printMetadata();
   return EXIT_SUCCESS;
 }

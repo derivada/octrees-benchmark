@@ -70,10 +70,16 @@ private:
     std::vector<morton_t> leaves; 
 
     /// @brief  This array contains how many points have an encoding with a value between two of the leaves
-    std::vector<uint32_t> counts;
+    std::vector<size_t> counts;
+
+    /// @brief  This array is built from counts via a traversal, and counts how many points internal nodes and leaves have
+    std::vector<size_t> internalCounts;
 
     /// @brief This array is simply an exclusive scan of counts, and marks the index of the first point for a leaf
-    std::vector<uint32_t> layout;
+    std::vector<size_t> layout;
+
+    /// @brief This array is built from exclusiveScan via a traversal, and marks the index of the first and last points for a leaf or internal node
+    std::vector<std::pair<size_t, size_t>> internalLayoutRanges;
 
     /**
      * @brief The Warren-Salmon encoding of each node in the octree
@@ -293,7 +299,7 @@ private:
     }
 
     /**
-     * @brief Count number of particles in each leafd
+     * @brief Count number of particles in each leaf
      * 
      * @details This functions counts how many particles have encodings at leaf i, that is
      * between leaves[i] and leaves[i+1]
@@ -327,7 +333,7 @@ private:
     }
 
     /// @brief Since the codes array is sorted, we can use binary search to accelerate the counts computation
-    uint32_t calculateNodeCount(morton_t keyStart, morton_t keyEnd) {
+    size_t calculateNodeCount(morton_t keyStart, morton_t keyEnd) {
         auto rangeStart = std::lower_bound(codes.begin(), codes.end(), keyStart);
         auto rangeEnd   = std::lower_bound(codes.begin(), codes.end(), keyEnd);
         return rangeEnd - rangeStart;
@@ -400,7 +406,7 @@ private:
 
             uint32_t leafSearchStart = levelRange[level + 1];
             uint32_t leafSearchEnd   = levelRange[level + 2];
-            uint32_t childIdx = std::distance(prefixes.begin(), 
+            auto childIdx = std::distance(prefixes.begin(), 
                 std::lower_bound(prefixes.begin() + leafSearchStart, prefixes.begin() + leafSearchEnd, childPrefix));
 
             if (childIdx != leafSearchEnd && childPrefix == prefixes[childIdx]) {
@@ -411,6 +417,62 @@ private:
                 parents[(childIdx - 1) / 8] = idxA;
             }
         } 
+    }
+    
+    // TODO: generalize postOrderTraversals and make iterative
+    size_t computeInternalNodeCountsAux(uint32_t node) {
+        // If node is a leaf, get its count from the array using itL mapping
+        if(offsets[node] == 0) {
+            internalCounts[node] = counts[internalToLeaf[node]];
+            return counts[internalToLeaf[node]];
+        }
+
+        // Compute recursively (post-order DFS) the count of the internal node
+        size_t count = 0;
+        for(int octant = 0; octant < OCTANTS_PER_NODE; octant++) {
+            uint32_t child = offsets[node] + octant;
+            count += computeInternalNodeCountsAux(child);   
+        }
+        internalCounts[node] = count;
+        return count;
+    }
+
+    // Computes the internal node counts array
+    void computeInternalNodeCounts() {
+        if (nInternal == 0) return;
+        internalCounts[0] = computeInternalNodeCountsAux(0);
+        // At the root, every point should have been counted
+        assert(internalCounts[0] == points.size());
+    }
+
+    // TODO: generalize postOrderTraversals and make iterative
+    std::pair<size_t, size_t> computeInternalNodeLayoutsAux(uint32_t node) {
+        // If node is a leaf, get its internal layout from the two consecutive leafs on the layout array
+        if(offsets[node] == 0) {
+            internalLayoutRanges[node] = std::make_pair(layout[internalToLeaf[node]], layout[internalToLeaf[node] + 1]);
+            return internalLayoutRanges[node];
+        }
+
+        // Compute recursively (post-order DFS) the count of the internal node
+        size_t first, last;
+        for(int octant = 0; octant < OCTANTS_PER_NODE; octant++) {
+            uint32_t child = offsets[node] + octant;
+            auto childLayout = computeInternalNodeLayoutsAux(child);
+            if(octant == 0)
+                first = childLayout.first;
+            else if(octant == OCTANTS_PER_NODE-1)
+                last = childLayout.second;
+        }
+        internalLayoutRanges[node] = std::make_pair(first, last);
+        // Check the range is correct by comparing its span to internalCounts
+        assert(internalCounts[node] == last - first);
+        return internalLayoutRanges[node];
+    }
+
+    // Computes the internal node counts array
+    void computeInternalNodeLayouts() {
+        if (nInternal == 0) return;
+        internalLayoutRanges[0] = computeInternalNodeLayoutsAux(0);
     }
 
 public:
@@ -557,6 +619,8 @@ public:
         centers.resize(nTotal);
         radii.resize(nTotal);
         layout.resize(leaves.size());
+        internalCounts.resize(nTotal);
+        internalLayoutRanges.resize(nTotal);
 
         // Perform the exclusive scan to get the layout indices (first index in the codes for each leaf)
         std::exclusive_scan(counts.begin(), counts.end() + 1, layout.begin(), 0);
@@ -601,6 +665,12 @@ public:
 
         // Compute the links
         linkTree();
+
+        // Compute internal node counts
+        computeInternalNodeCounts();
+
+        // Compute internal node layouts
+        computeInternalNodeLayouts();
     }
 
     /**
@@ -678,13 +748,37 @@ public:
      * @param root The morton code for the node to start (usually the tree root which is 0)
      * @return Points inside the given kernel type. Actually the same as ptsInside.
      */
-    template<typename Kernel, typename Function>
-    [[nodiscard]] std::vector<Point_t*> neighbors(const Kernel& k, Function&& condition) const {
+    template<typename Kernel>
+    [[nodiscard]] std::vector<Point_t*> neighbors(const Kernel& k) const {
         std::vector<Point_t*> ptsInside;
         auto center_id = k.center().id();
 
-        auto intersectsKernel = [&](uint32_t nodeIndex) {
-            return k.boxOverlap(this->centers[nodeIndex], this->radii[nodeIndex]);
+        auto overlapsOrContainsKernel = [&](uint32_t nodeIndex) {
+            auto nodeCenter = this->centers[nodeIndex];
+            auto nodeRadii = this->radii[nodeIndex];
+            // First, check if node is entirely contained within bounds. If it is, we
+            // can just add all the points (EXCEPT THE CENTER)
+            // TODO: this is quite slow for some reason, needs optimizations
+            if(k.boxInside(nodeCenter, nodeRadii)) {
+                size_t startIndex = this->internalLayoutRanges[nodeIndex].first;
+                size_t endIndex = this->internalLayoutRanges[nodeIndex].second;
+                ptsInside.reserve(ptsInside.size() + (endIndex - startIndex));
+
+                for (size_t i = startIndex; i < endIndex; ++i) {
+                    if (center_id != this->points[i].id()) {  // Exclude the center point
+                        ptsInside.push_back(&this->points[i]);
+                    }
+                }
+                return false;
+            }
+
+            // If not, check if it intersects the kernel, then we will descend
+            if(k.boxOverlap(nodeCenter, nodeRadii)) {
+                return true;
+            }
+            
+            // If we are completely outside, we prune
+            return false;
         };
         
         auto findAndInsertPoints = [&](uint32_t nodeIndex) {
@@ -692,13 +786,13 @@ public:
             auto pointsStart = this->layout[leafIdx], pointsEnd = this->layout[leafIdx+1];
             for (int32_t j = pointsStart; j < pointsEnd; j++) {
                 Point_t& p = this->points[j];  // Now we can get a non-const reference
-                if (k.isInside(p) && center_id != p.id() && condition(p)) {
+                if (k.isInside(p) && center_id != p.id()) {
                     ptsInside.push_back(&p);
                 }
             }
         };
         
-        singleTraversal(intersectsKernel, findAndInsertPoints);
+        singleTraversal(overlapsOrContainsKernel, findAndInsertPoints);
         return ptsInside;
 	}
 
@@ -706,17 +800,30 @@ public:
      * @brief Search neighbors function. Given a point and a radius, return the number of points inside a given kernel type
      * @param p Center of the kernel to be used
      * @param radius Radius of the kernel to be used
-     * @param condition function that takes a candidate neighbor point and imposes an additional condition (should return a boolean).
      * The signature of the function should be equivalent to `bool cnd(const PointType &p);`
      * @return Points inside the given kernel
      */
-	template<typename Kernel, typename Function>
-	[[nodiscard]] size_t numNeighbors(const Kernel& k, Function&& condition) const {
+	template<typename Kernel>
+	[[nodiscard]] size_t numNeighbors(const Kernel& k) const {
         size_t ptsInside = 0;
         auto center_id = k.center().id();
+        bool subtractCenter = true;
+        auto overlapsOrContainsKernel = [&](uint32_t nodeIndex) {
+            auto nodeCenter = this->centers[nodeIndex];
+            auto nodeRadii = this->radii[nodeIndex];
+            // First, check if node is entirely contained within bounds. If it is, we
+            // can just add all the points
+            if(k.boxInside(nodeCenter, nodeRadii)) {
+                ptsInside += this->internalCounts[nodeIndex];
+                return false;
+            }
 
-        auto intersectsKernel = [&](uint32_t nodeIndex) {
-            return k.boxOverlap(this->centers[nodeIndex], this->radii[nodeIndex]);
+            // If not, check if it intersects the kernel, then we will descend
+            if(k.boxOverlap(nodeCenter, nodeRadii)) {
+                return true;
+            }
+            // If we are completely outside, we prune
+            return false;
         };
         
         auto findAndIncrementPointsCount = [&](uint32_t nodeIndex) {
@@ -724,13 +831,20 @@ public:
             auto pointsStart = this->layout[leafIdx], pointsEnd = this->layout[leafIdx+1];
             for (int32_t j = pointsStart; j < pointsEnd; j++) {
                 Point_t& p = this->points[j];
-                if (k.isInside(p) && center_id != p.id() && condition(p)) {
+                // If we find the center here, we don't need to subtract one at the end
+                if(center_id == p.id()) {
+                    subtractCenter = false;
+                    continue;
+                }
+                if (k.isInside(p)) {
                     ptsInside++;
                 }
             }
         };
         
-        singleTraversal(intersectsKernel, findAndIncrementPointsCount);
+        singleTraversal(overlapsOrContainsKernel, findAndIncrementPointsCount);
+        // If we added the center via boxInside check, we subtract it from the final count
+        if(subtractCenter) ptsInside--;
         return ptsInside;
 	}
 
@@ -782,8 +896,8 @@ public:
 		const auto kernel = kernelFactory<kernel_type>(p, radius);
 		// Dummy condition that always returns true, so we can use the same function for all cases
 		// The compiler should optimize this away
-		constexpr auto dummyCondition = [](const Point_t&) { return true; };
-		return neighbors(kernel, dummyCondition);
+		// constexpr auto dummyCondition = [](const Point_t&) { return true; };
+		return neighbors(kernel);
 	}
 	/**
      * @brief Search neighbors function. Given a point and a radius, return the points inside a given kernel type
@@ -796,36 +910,8 @@ public:
 		const auto kernel = kernelFactory<kernel_type>(p, radii);
 		// Dummy condition that always returns true, so we can use the same function for all cases
 		// The compiler should optimize this away
-		constexpr auto dummyCondition = [](const Point_t&) { return true; };
-		return neighbors(kernel, dummyCondition);
-	}
-    /**
-     * @brief Search neighbors function. Given a point and a radius, return the points inside a given kernel type
-     * @param p Center of the kernel to be used
-     * @param radius Radius of the kernel to be used
-     * @param condition function that takes a candidate neighbor point and imposes an additional condition (should return a boolean).
-     * The signature of the function should be equivalent to `bool cnd(const PointType &p);`
-     * @return Points inside the given kernel type
-     */
-	template<Kernel_t kernel_type = Kernel_t::square, class Function>
-	[[nodiscard]] inline std::vector<Point_t*> searchNeighbors(const Point& p, double radius, Function&& condition) const {
-		const auto kernel = kernelFactory<kernel_type>(p, radius);
-		return neighbors(kernel, std::forward<Function&&>(condition));
-	}
-
-	/**
-     * @brief Search neighbors function. Given a point and a radius, return the points inside a given kernel type
-     * @param p Center of the kernel to be used
-     * @param radii Radii of the kernel to be used
-     * @param condition function that takes a candidate neighbor point and imposes an additional condition (should return a boolean).
-     * The signature of the function should be equivalent to `bool cnd(const PointType &p);`
-     * @return Points inside the given kernel type
-     */
-	template<Kernel_t kernel_type = Kernel_t::square, class Function>
-	[[nodiscard]] inline std::vector<Point_t*> searchNeighbors(const Point& p, const Vector& radii,
-	                                                          Function&& condition) const {
-		const auto kernel = kernelFactory<kernel_type>(p, radii);
-		return neighbors(kernel, std::forward<Function&&>(condition));
+		// constexpr auto dummyCondition = [](const Point_t&) { return true; };
+		return neighbors(kernel);
 	}
 
 	/**
@@ -899,20 +985,169 @@ public:
     template<Kernel_t kernel_type = Kernel_t::square>
 	[[nodiscard]] inline size_t numNeighbors(const Point& p, const double radius) const {
 		const auto kernel = kernelFactory<kernel_type>(p, radius);
-        constexpr auto dummyCondition = [](const Point_t&) { return true; };
-		return numNeighbors(kernel, dummyCondition);
+        // constexpr auto dummyCondition = [](const Point_t&) { return true; };
+		return numNeighbors(kernel);
 	}
-	/**
-     * @brief Search neighbors function. Given a point and a radius, return the number of points inside a given kernel type
-     * @param p Center of the kernel to be used
-     * @param radius Radius of the kernel to be used
-     * @param condition function that takes a candidate neighbor point and imposes an additional condition (should return a boolean).
-     * The signature of the function should be equivalent to `bool cnd(const PointType &p);`
-     * @return Points inside the given kernel
-     */
+
+
+
+
+    // OLD IMPLEMENTATIONS KEPT FOR COMPARISON AND TESTING PURPOSES
+    // ALSO THE OLD IMPL CAN TAKE AN ARBITRARY CONDITION ON THE SEARCHES, WHILE THE NEW CAN'T
+    template<typename Kernel, typename Function>
+    [[nodiscard]] std::vector<Point_t*> neighborsOld(const Kernel& k, Function&& condition) const {
+        std::vector<Point_t*> ptsInside;
+        auto center_id = k.center().id();
+
+        auto intersectsKernel = [&](uint32_t nodeIndex) {
+            return k.boxOverlap(this->centers[nodeIndex], this->radii[nodeIndex]);
+        };
+        
+        auto findAndInsertPoints = [&](uint32_t nodeIndex) {
+            uint32_t leafIdx = this->internalToLeaf[nodeIndex];
+            auto pointsStart = this->layout[leafIdx], pointsEnd = this->layout[leafIdx+1];
+            for (int32_t j = pointsStart; j < pointsEnd; j++) {
+                Point_t& p = this->points[j];  // Now we can get a non-const reference
+                if (k.isInside(p) && center_id != p.id() && condition(p)) {
+                    ptsInside.push_back(&p);
+                }
+            }
+        };
+        singleTraversal(intersectsKernel, findAndInsertPoints);
+        return ptsInside;
+	}
+    template<Kernel_t kernel_type = Kernel_t::square>
+	[[nodiscard]] inline std::vector<Point_t*> searchNeighborsOld(const Point& p, double radius) const {
+		const auto kernel = kernelFactory<kernel_type>(p, radius);
+		constexpr auto dummyCondition = [](const Point_t&) { return true; };
+		return neighborsOld(kernel, dummyCondition);
+	}
+	template<Kernel_t kernel_type = Kernel_t::cube>
+	[[nodiscard]] inline std::vector<Point_t*> searchNeighborsOld(const Point& p, const Vector& radii) const {
+		const auto kernel = kernelFactory<kernel_type>(p, radii);
+		constexpr auto dummyCondition = [](const Point_t&) { return true; };
+		return neighborsOld(kernel, dummyCondition);
+	}
 	template<Kernel_t kernel_type = Kernel_t::square, class Function>
-	[[nodiscard]] inline size_t numNeighbors(const Point& p, const double radius, Function&& condition) const {
-		const auto kernel = kernelFactory<kernel>(p, radius);
-		return numNeighbors(kernel, std::forward<Function&&>(condition));
+	[[nodiscard]] inline std::vector<Point_t*> searchNeighborsOld(const Point& p, double radius, Function&& condition) const {
+		const auto kernel = kernelFactory<kernel_type>(p, radius);
+		return neighborsOld(kernel, std::forward<Function&&>(condition));
 	}
+	template<Kernel_t kernel_type = Kernel_t::square, class Function>
+	[[nodiscard]] inline std::vector<Point_t*> searchNeighborsOld(const Point& p, const Vector& radii,
+	                                                          Function&& condition) const {
+		const auto kernel = kernelFactory<kernel_type>(p, radii);
+		return neighborsOld(kernel, std::forward<Function&&>(condition));
+	}
+	[[nodiscard]] inline std::vector<Point_t*> searchNeighbors3DOld(const Point& p, const double radius,
+	                                                            const std::vector<bool>& flags) const {
+		const auto condition = [&](const Point& point) { return !flags[point.id()]; };
+		return searchNeighborsOld<Kernel_t::cube>(p, radius, condition);
+	}
+    [[nodiscard]] inline std::vector<Point_t*> searchSphereNeighborsOld(const Point& point, const float radius) const {
+		return searchNeighborsOld<Kernel_t::sphere>(point, radius);
+	}
+	[[nodiscard]] std::vector<Point_t*> searchNeighborsRingOld(const Point_t& p, const Vector& innerRingRadii,
+	                                                       const Vector& outerRingRadii) const {
+		const auto outerKernel = kernelFactory<Kernel_t::cube>(p, outerRingRadii);
+		const auto innerKernel = kernelFactory<Kernel_t::cube>(p, innerRingRadii);
+		const auto condition   = [&](const Point& point) { return !innerKernel.isInside(point); };
+
+		return neighborsOld(outerKernel, condition);
+	}
+    [[nodiscard]] inline std::vector<Point_t*> searchNeighbors2DOld(const Point& p, const double radius) const {
+		return searchNeighborsOld<Kernel_t::square>(p, radius);
+	}
+	[[nodiscard]] inline std::vector<Point_t*> searchCylinderNeighborsOld(const Point_t& p, const double radius,
+	                                                                  const double zMin, const double zMax) const {
+		return searchNeighborsOld<Kernel_t::circle>(p, radius,
+		                                         [&](const Point_t& p) { return p.getZ() >= zMin && p.getZ() <= zMax; });
+	}
+	[[nodiscard]] inline std::vector<Point_t*> searchCircleNeighborsOld(const Point_t& p, const double radius) const {
+		return searchNeighborsOld<Kernel_t::circle>(p, radius);
+	}
+	[[nodiscard]] inline std::vector<Point_t*> searchCircleNeighborsOld(const Point_t* p, const double radius) const {
+		return searchCircleNeighborsOld(*p, radius);
+	}
+	[[nodiscard]] inline std::vector<Point_t*> searchNeighbors3DOld(const Point& p, const Vector& radii) const {
+		return searchNeighborsOld<Kernel_t::cube>(p, radii);
+	}
+
+	[[nodiscard]] inline std::vector<Point_t*> searchNeighbors3DOld(const Point& p, double radius) const {
+		return searchNeighborsOld<Kernel_t::cube>(p, radius);
+	}
+    template<typename Kernel, typename Function>
+	[[nodiscard]] size_t numNeighborsOld(const Kernel& k, Function&& condition) const {
+        size_t ptsInside = 0;
+        auto center_id = k.center().id();
+
+        auto intersectsKernel = [&](uint32_t nodeIndex) {
+            return k.boxOverlap(this->centers[nodeIndex], this->radii[nodeIndex]);
+        };
+        
+        auto findAndIncrementPointsCount = [&](uint32_t nodeIndex) {
+            uint32_t leafIdx = this->internalToLeaf[nodeIndex];
+            auto pointsStart = this->layout[leafIdx], pointsEnd = this->layout[leafIdx+1];
+            for (int32_t j = pointsStart; j < pointsEnd; j++) {
+                Point_t& p = this->points[j];
+                if (k.isInside(p) && center_id != p.id() && condition(p)) {
+                    ptsInside++;
+                }
+            }
+        };
+        
+        singleTraversal(intersectsKernel, findAndIncrementPointsCount);
+        return ptsInside;
+	}
+    template<Kernel_t kernel_type = Kernel_t::square>
+	[[nodiscard]] inline size_t numNeighborsOld(const Point& p, const double radius) const {
+		const auto kernel = kernelFactory<kernel_type>(p, radius);
+        constexpr auto dummyCondition = [](const Point_t&) { return true; };
+		return numNeighborsOld(kernel, dummyCondition);
+	}
+	template<Kernel_t kernel_type = Kernel_t::square, class Function>
+	[[nodiscard]] inline size_t numNeighborsOld(const Point& p, const double radius, Function&& condition) const {
+		const auto kernel = kernelFactory<kernel>(p, radius);
+		return numNeighborsOld(kernel, std::forward<Function&&>(condition));
+	}
+
+
+    // Misc. functions for debugging
+    template <typename T>
+    inline void printVector(std::vector<T> &v, std::string name = "v") {
+        std::cout << "Size of " << name << " = " << v.size() << "\n";
+        for(size_t i = 0; i<v.size(); i++)
+            std::cout << name << "[" << i << "] = " << v[i] << "\n";
+    }
+
+    template <typename U, typename V>
+    inline void printPairsVector(std::vector<std::pair<U, V>> &v, std::string name = "v") {
+        std::cout << "Size of " << name << " = " << v.size() << "\n";
+        for(size_t i = 0; i<v.size(); i++)
+            std::cout << name << "[" << i << "] = " << v[i].first << ", " << v[i].second << "\n";
+    }
+
+    template <typename T>
+    inline void printVectorBinary(std::vector<T> &v, std::string name = "v") {
+        std::cout << "Size of " << name << " = " << v.size() << "\n";
+        for(size_t i = 0; i<v.size(); i++)
+            std::cout << name << "[" << i << "] = 0b" << std::bitset<64>(v[i]) << "\n";
+    }
+    
+    void printMetadata() {
+        std::cout << "MAX_POINTS = " << MAX_POINTS << "\n";
+        std::cout << "n = " << nTotal << "  leafs = " << nLeaf << " internal = " << nInternal << "\n";
+        printVectorBinary(leaves, "leaves");
+        printVector(counts, "counts");
+        printVector(layout, "layout");
+        printVectorBinary(prefixes, "prefixes");
+        printVector(offsets, "offsets");
+        printVector(parents, "parents");
+        printVector(levelRange, "levelRange");
+        printVector(internalToLeaf, "internalToLeaf");
+        printVector(leafToInternal, "leafToInternal");
+        printVector(internalCounts, "internalCounts");
+        printPairsVector(internalLayoutRanges, "internalLayoutRanges");
+        std::cout << std::flush;
+    }
 };

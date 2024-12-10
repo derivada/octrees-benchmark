@@ -47,5 +47,8 @@ class KernelAbstract
 	[[nodiscard]] virtual bool isInside(const Point& p) const                       = 0;
 	[[nodiscard]] virtual bool boxOverlap(const Point& center, double radius) const = 0;
 	[[nodiscard]] virtual bool boxOverlap(const Point& center, const Vector& radii) const = 0;
-
+	
+	// Checks if box is entirely within kernel
+	[[nodiscard]] virtual bool boxInside(const Point& center, double radius) const = 0;
+	[[nodiscard]] virtual bool boxInside(const Point& center, const Vector& radii) const = 0;
 };

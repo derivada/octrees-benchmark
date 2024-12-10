@@ -1,7 +1,7 @@
 # In order of magnitude
 
 # config 0.5, 1.0, 2.5, 5.0 radii
-datasets=(
+datasets_1=(
   "data/paris_lille/Lille_0.las"
   "data/paris_lille/Paris_Luxembourg_6.las"
   "data/paris_lille/Lille_11.las"
@@ -21,7 +21,7 @@ datasets_3=(
     "data/dales_las/train/5110_54320.las"
 )
 
-for dataset in "${datasets_3[@]}"; do
+for dataset in "${datasets_1[@]}"; do
     if [[ ! -f "$dataset" ]]; then
         echo "Error: File not found - $dataset"
         exit 1
