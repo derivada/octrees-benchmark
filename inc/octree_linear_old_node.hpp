@@ -6,17 +6,17 @@
 #include "Geometry/Lpoint.hpp"
 
 // Here we also define a couple shorthands for the integers used in morton encoding
-using morton_t = uint_fast64_t;
+using key_t = uint_fast64_t;
 using coords_t = uint_fast32_t;
 
 class LinearOctreeOldNode {
     private:
         std::vector<Lpoint*> points;
-        morton_t code;
+        key_t code;
         double center[3];
         double radii[3];
     public:
-        LinearOctreeOldNode(std::vector<Lpoint*> p, morton_t c, uint8_t depth, coords_t x, coords_t y, coords_t z,
+        LinearOctreeOldNode(std::vector<Lpoint*> p, key_t c, uint8_t depth, coords_t x, coords_t y, coords_t z,
                         Point rootCenter, Vector rootRadii): points(p), code(c) {
             // Returns the physical (approximate) physical center of the node
             radii[0] = rootRadii.getX() * (1.0f / (1 << depth));

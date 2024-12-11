@@ -37,25 +37,25 @@ void checkVectorMemory(std::vector<T> vec) {
     }
 }
 
-template <template <typename> class Octree_t, typename Point_t>
+template <template <typename> class Octree_t, typename Point_t, typename Encoder_t>
 requires OctreeType<Octree_t<Point_t>>
 std::shared_ptr<ResultSet<Point_t>> buildAndRunBenchmark(std::ofstream &outputFile, std::vector<Point_t>& points,
   std::shared_ptr<const SearchSet> searchSet, std::string comment = "") {
-  OctreeBenchmark<Octree_t<Point_t>, Point_t> ob(points, NUM_SEARCHES, searchSet, outputFile, CHECK_RESULTS, comment);
-  OctreeBenchmark<Octree_t<Point_t>, Point_t>::runFullBenchmark(ob, BENCHMARK_RADII, REPEATS, NUM_SEARCHES);
+  OctreeBenchmark<Octree_t<Point_t>, Point_t, Encoder_t> ob(points, NUM_SEARCHES, searchSet, outputFile, CHECK_RESULTS, comment);
+  OctreeBenchmark<Octree_t<Point_t>, Point_t, Encoder_t>::runFullBenchmark(ob, BENCHMARK_RADII, REPEATS, NUM_SEARCHES);
   return ob.getResultSet();
 }
 
-template <template <typename> class Octree_t, typename Point_t>
+template <template <typename> class Octree_t, typename Point_t, typename Encoder_t>
 requires OctreeType<Octree_t<Point_t>>
 std::shared_ptr<ResultSet<Point_t>> buildAndRunAlgoComparisonBenchmark(std::ofstream &outputFile, std::vector<Point_t>& points,
   std::shared_ptr<const SearchSet> searchSet, std::string comment = "") {
-  OctreeBenchmark<Octree_t<Point_t>, Point_t> ob(points, NUM_SEARCHES, searchSet, outputFile, CHECK_RESULTS, comment);
-  OctreeBenchmark<Octree_t<Point_t>, Point_t>::runAlgoComparisonBenchmark(ob, BENCHMARK_RADII, REPEATS, NUM_SEARCHES);
+  OctreeBenchmark<Octree_t<Point_t>, Point_t, Encoder_t> ob(points, NUM_SEARCHES, searchSet, outputFile, CHECK_RESULTS, comment);
+  OctreeBenchmark<Octree_t<Point_t>, Point_t, Encoder_t>::runAlgoComparisonBenchmark(ob, BENCHMARK_RADII, REPEATS, NUM_SEARCHES);
   return ob.getResultSet();
 }
 
-template <PointType Point_t>
+template <PointType Point_t, typename Encoder_t = PointEncoding::MortonEncoder64>
 void octreeComparisonBenchmark(std::ofstream &outputFile) {
   // TODO: maybe a better idea is to choose radii based on point cloud density
   TimeWatcher tw;
@@ -83,7 +83,7 @@ void octreeComparisonBenchmark(std::ofstream &outputFile) {
 
 
 // To test different implementations of the same methods (i.e. numNeighbors vs numNeighborsOld)
-template <PointType Point_t>
+template <PointType Point_t, typename Encoder_t = PointEncoding::MortonEncoder64>
 void algorithmComparisonBenchmark(std::ofstream &outputFile) {
   // TODO: maybe a better idea is to choose radii based on point cloud density
   TimeWatcher tw;
@@ -99,7 +99,7 @@ void algorithmComparisonBenchmark(std::ofstream &outputFile) {
   // Generate a shared search set for each benchmark execution
   std::shared_ptr<const SearchSet> searchSet = std::make_shared<const SearchSet>(NUM_SEARCHES, points);
 
-  auto results = buildAndRunAlgoComparisonBenchmark<LinearOctree>(outputFile, points, searchSet);
+  auto results = buildAndRunAlgoComparisonBenchmark<LinearOctree, Point_t, Encoder_t>(outputFile, points, searchSet);
 
   // Check the results if needed
   if(CHECK_RESULTS) {

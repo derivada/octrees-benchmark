@@ -5,6 +5,7 @@
 #include <omp.h>
 #include "NeighborKernels/KernelFactory.hpp"
 #include "octree_factory.hpp"
+#include "PointEncoding/morton_encoder.hpp"
 
 struct SearchSet {
     const size_t numSearches;
@@ -163,7 +164,7 @@ struct ResultSet {
 };
 
 
-template <OctreeType Octree_t, PointType Point_t>
+template <OctreeType Octree_t, PointType Point_t, typename Encoder_t = PointEncoding::MortonEncoder64>
 class OctreeBenchmark {
     private:
         const std::unique_ptr<Octree_t> oct;
@@ -177,7 +178,7 @@ class OctreeBenchmark {
         std::shared_ptr<ResultSet<Point_t>> resultSet;
 
         void rebuild() {
-            oct = std::make_unique<Octree_t>(points); 
+            oct = std::make_unique(octreeFactory<Octree_t, Point_t, Encoder_t>(points)); 
         }
 
         #pragma GCC push_options
@@ -278,7 +279,7 @@ class OctreeBenchmark {
             if (outputFile.tellp() == 0) {
                 outputFile << "date,octree,npoints,operation,kernel,radius,num_searches,repeats,accumulated,mean,median,stdev,used_warmup\n";
             }
-            std::string octreeName = getOctreeName<Octree_t, Point_t>() + " " + comment;
+            std::string octreeName = getOctreeName<Octree_t, Point_t, Encoder_t>() + " " + comment;
             // Append the benchmark data
             outputFile << getCurrentDate() << ',' 
                 << octreeName << ',' 
@@ -351,7 +352,7 @@ class OctreeBenchmark {
         }
 
         static void runAlgoComparisonBenchmark(OctreeBenchmark &ob, const std::vector<float> &benchmarkRadii, const size_t repeats, const size_t numSearches) {
-            std::cout << "Running algorithm implementation comparison benchmark on " << getOctreeName<Octree_t, Point_t>() << " with parameters " << std::endl;
+            std::cout << "Running algorithm implementation comparison benchmark on " << getOctreeName<Octree_t, Point_t, Encoder_t>() << " with parameters " << std::endl;
             for(int i = 0; i<benchmarkRadii.size(); i++) {
                 std::cout << benchmarkRadii[i];
                 if(i != benchmarkRadii.size()-1) {

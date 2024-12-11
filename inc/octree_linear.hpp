@@ -6,10 +6,10 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <filesystem>
-#include "PointEncoding/libmorton/morton.h"
+#include "PointEncoding/morton_encoder.hpp"
+#include "PointEncoding/common.hpp"
 #include "NeighborKernels/KernelFactory.hpp"
 #include "TimeWatcher.hpp"
-#include "PointEncoding/morton_encoder.hpp"
 #include "Geometry/Box.hpp"
 
 /**
@@ -29,9 +29,12 @@
 * @date 16/11/2024
 * 
 */
-template <PointType Point_t>
+template <PointType Point_t, typename Encoder = PointEncoding::MortonEncoder64>
 class LinearOctree {
 private:
+    using key_t = typename Encoder::key_t;
+    using coords_t = typename Encoder::coords_t;
+
     /// @brief The maximum number of points in a leaf
     static constexpr unsigned int MAX_POINTS        = 100;
 
@@ -67,7 +70,7 @@ private:
      * 
      * For more details about the construction, check the cornerstone paper, section 4.
      */
-    std::vector<morton_t> leaves; 
+    std::vector<key_t> leaves; 
 
     /// @brief  This array contains how many points have an encoding with a value between two of the leaves
     std::vector<size_t> counts;
@@ -88,7 +91,7 @@ private:
      * 
      * The process to obtain this array and link it with the leaves array is detailed in the cornerstone paper, section 5.
      */
-    std::vector<morton_t> prefixes;
+    std::vector<key_t> prefixes;
 
     /// @brief Index of the first child of each node (if 0 we have a leaf)
     std::vector<uint32_t> offsets;
@@ -97,7 +100,7 @@ private:
     std::vector<uint32_t> parents; // TODO: this may not be needed
 
     /// @brief First node index of every tree level (L+2 elements where L is MAX_DEPTH)
-    std::vector<uint32_t> levelRange = std::vector<uint32_t>(MortonEncoder::MAX_DEPTH + 2);
+    std::vector<uint32_t> levelRange = std::vector<uint32_t>(Encoder::MAX_DEPTH + 2);
 
     /// @brief A map between the internal representation at offsets and the one in cornerstone format in leaves
     std::vector<int32_t> internalToLeaf;
@@ -113,7 +116,7 @@ private:
     std::vector<Point_t> &points;
 
     /// @brief The encodings of the points in the octree
-    std::vector<morton_t> codes;
+    std::vector<key_t> codes;
 
     /// @brief The center points of each node in the octree
     std::vector<Point> centers;
@@ -125,7 +128,7 @@ private:
     Box bbox = Box(Point(), Vector());
 
     /// @brief A simple vector containinf the radii of each level in the octree to speed up computations.
-    Vector precomputedRadii[MortonEncoder::MAX_DEPTH + 1];
+    Vector precomputedRadii[Encoder::MAX_DEPTH + 1];
 
     /// @brief A vector containing the half-lengths of the minimum measure of the encoding.
     float halfLengths[3];
@@ -180,22 +183,22 @@ private:
         // Decide if we split or not
         // TODO: check MIN_OCTANT_RADIUS
         // split into 4 layers
-        if (nodeCount > MAX_POINTS * 512 && level + 3 < MortonEncoder::MAX_DEPTH) { 
+        if (nodeCount > MAX_POINTS * 512 && level + 3 < Encoder::MAX_DEPTH) { 
             maxDepthSeen = std::max(maxDepthSeen, level + 4);
             return 4096; 
         }
         // split into 3 layers
-        if (nodeCount > MAX_POINTS * 64 && level + 2 < MortonEncoder::MAX_DEPTH) { 
+        if (nodeCount > MAX_POINTS * 64 && level + 2 < Encoder::MAX_DEPTH) { 
             maxDepthSeen = std::max(maxDepthSeen, level + 3);
             return 512;
         }
         // split into 2 layers
-        if (nodeCount > MAX_POINTS * 8 && level + 1 < MortonEncoder::MAX_DEPTH) { 
+        if (nodeCount > MAX_POINTS * 8 && level + 1 < Encoder::MAX_DEPTH) { 
             maxDepthSeen = std::max(maxDepthSeen, level + 2);
             return 64; 
         }
         // split into 1 layer
-        if (nodeCount > MAX_POINTS && level < MortonEncoder::MAX_DEPTH ) { 
+        if (nodeCount > MAX_POINTS && level < Encoder::MAX_DEPTH ) { 
             maxDepthSeen = std::max(maxDepthSeen, level + 1);
             return 8; 
         }
@@ -211,25 +214,25 @@ private:
      * @param index The leaf index to find
      */
     inline std::pair<int32_t, uint32_t> siblingAndLevel(uint32_t index) {
-        morton_t node = leaves[index];
-        morton_t range = leaves[index+1] - node;
-        uint32_t level = MortonEncoder::getLevel(range);
+        key_t node = leaves[index];
+        key_t range = leaves[index+1] - node;
+        uint32_t level = PointEncoding::getLevel<Encoder>(range);
         if(level == 0) {
             return {-1, level};
         }
 
-        uint32_t siblingId = MortonEncoder::getSiblingId(node, level);
+        uint32_t siblingId = PointEncoding::getSiblingId<Encoder>(node, level);
 
         // Checks if all siblings are on the tree, to do this, checks if the difference between the two parent nodes corresponding
         // to the code parent and the next parent is the range spanned by two consecutive codes at that level
-        bool siblingsOnTree = leaves[index - siblingId + 8] == (leaves[index - siblingId] + MortonEncoder::nodeRange(level - 1));
+        bool siblingsOnTree = leaves[index - siblingId + 8] == (leaves[index - siblingId] + PointEncoding::nodeRange<Encoder>(level - 1));
         if(!siblingsOnTree) siblingId = -1;
 
         return {siblingId, level};
     }
 
     /// @brief  Print the bits of the given code in groups of 3 to represent each level
-    static void printMortonCode(morton_t code) {
+    static void printMortonCode(key_t code) {
         //
         std::cout << std::bitset<1>(code >> 63) << " ";
         for (int i = 62; i >= 0; i -= 3) {
@@ -246,7 +249,7 @@ private:
      * @param newLeaves The new leaves array that will be swapped with the current one after this function execution
      * @param nodeOps The array of operations performed in the first step (g1)
      */
-    void rebalanceTree(std::vector<morton_t> &newLeaves, std::vector<uint32_t> &nodeOps) {
+    void rebalanceTree(std::vector<key_t> &newLeaves, std::vector<uint32_t> &nodeOps) {
         uint32_t n = leaves.size() - 1;
 
         // Exclusive scan, step g2
@@ -273,15 +276,15 @@ private:
      * @param nodeOps The operation to be performed on the index
      * @param newLeaves The new leaves array that will be swapped with the current one after this function execution
      */
-    void processNode(uint32_t index, std::vector<uint32_t> &nodeOps, std::vector<morton_t> &newLeaves) {
+    void processNode(uint32_t index, std::vector<uint32_t> &nodeOps, std::vector<key_t> &newLeaves) {
         // The original value of the opCode (before exclusive scan)
         uint32_t opCode = nodeOps[index + 1] - nodeOps[index]; 
         if(opCode == 0)
             return;
     
-        morton_t node = leaves[index];
-        morton_t range = leaves[index+1] - node;
-        uint32_t level = MortonEncoder::getLevel(range);
+        key_t node = leaves[index];
+        key_t range = leaves[index+1] - node;
+        uint32_t level = PointEncoding::getLevel<Encoder>(range);
 
         // The new position to put the node into (nodeOps value after exclusive scan)
         uint32_t newNodeIndex = nodeOps[index]; 
@@ -290,8 +293,8 @@ private:
         newLeaves[newNodeIndex] = node;
         if(opCode > 1) {
             // Split the node into 8^L as marked by the opCode, add the adequate codes to the new leaves
-            uint32_t levelDiff = MortonEncoder::log8ceil(opCode);
-            morton_t gap = MortonEncoder::nodeRange(level + levelDiff);
+            uint32_t levelDiff = PointEncoding::log8ceil<Encoder>(opCode);
+            key_t gap = PointEncoding::nodeRange<Encoder>(level + levelDiff);
             for (uint32_t sibling = 1; sibling < opCode; sibling++) {
                 newLeaves[newNodeIndex + sibling] = newLeaves[newNodeIndex + sibling - 1] + gap;
             }
@@ -333,7 +336,7 @@ private:
     }
 
     /// @brief Since the codes array is sorted, we can use binary search to accelerate the counts computation
-    size_t calculateNodeCount(morton_t keyStart, morton_t keyEnd) {
+    size_t calculateNodeCount(key_t keyStart, key_t keyEnd) {
         auto rangeStart = std::lower_bound(codes.begin(), codes.end(), keyStart);
         auto rangeEnd   = std::lower_bound(codes.begin(), codes.end(), keyEnd);
         return rangeEnd - rangeStart;
@@ -351,11 +354,11 @@ private:
         }
     }
 
-    constexpr uint32_t binaryKeyWeight(morton_t key, unsigned level){
+    constexpr uint32_t binaryKeyWeight(key_t key, unsigned level){
         uint32_t ret = 0;
         for (uint32_t l = 1; l <= level + 1; ++l)
         {
-            uint32_t digit = MortonEncoder::octalDigit(key, l);
+            uint32_t digit = PointEncoding::octalDigit<Encoder>(key, l);
             ret += digitWeight(digit);
         }
         return ret;
@@ -369,15 +372,15 @@ private:
     void createUnsortedLayout() {
         // Create the prefixesand internaltoleaf arrays for the leafs
         for(int i = 0; i<nLeaf; i++) {
-            morton_t key = leaves[i];
-            uint32_t level = MortonEncoder::getLevel(leaves[i+1] - key);
-            prefixes[i + nInternal] = MortonEncoder::encodePlaceholderBit(key, 3*level);
+            key_t key = leaves[i];
+            uint32_t level = PointEncoding::getLevel<Encoder>(leaves[i+1] - key);
+            prefixes[i + nInternal] = PointEncoding::encodePlaceholderBit<Encoder>(key, 3*level);
             internalToLeaf[i + nInternal] = i + nInternal;
 
-            uint32_t prefixLength = MortonEncoder::commonPrefix(key, leaves[i+1]);
+            uint32_t prefixLength = PointEncoding::commonPrefix<Encoder>(key, leaves[i+1]);
             if(prefixLength % 3 == 0 && i < nLeaf - 1) {
                 uint32_t octIndex = (i + binaryKeyWeight(key, prefixLength / 3)) / 7;
-                prefixes[octIndex] = MortonEncoder::encodePlaceholderBit(key, prefixLength);
+                prefixes[octIndex] = PointEncoding::encodePlaceholderBit<Encoder>(key, prefixLength);
                 internalToLeaf[octIndex] = octIndex;
             }
         }
@@ -385,24 +388,24 @@ private:
 
     // Determine octree subdivision level boundaries
     void getLevelRange() {
-        for(uint32_t level = 0; level <= MortonEncoder::MAX_DEPTH; level++) {
-            auto it = std::lower_bound(prefixes.begin(), prefixes.end(), MortonEncoder::encodePlaceholderBit(0, 3 * level));
+        for(uint32_t level = 0; level <= Encoder::MAX_DEPTH; level++) {
+            auto it = std::lower_bound(prefixes.begin(), prefixes.end(), PointEncoding::encodePlaceholderBit<Encoder>(0, 3 * level));
             levelRange[level] = std::distance(prefixes.begin(), it);
         }
-        levelRange[MortonEncoder::MAX_DEPTH + 1] = nTotal;
+        levelRange[Encoder::MAX_DEPTH + 1] = nTotal;
     }
 
     // Extract parent/child relationships from binary tree and translate to sorted order
     void linkTree() {
         for(int i = 0; i<nInternal; i++) {
             uint32_t idxA = leafToInternal[i];
-            morton_t prefix = prefixes[idxA];
-            morton_t nodeKey = MortonEncoder::decodePlaceholderBit(prefix);
-            unsigned prefixLength = MortonEncoder::decodePrefixLength(prefix);
+            key_t prefix = prefixes[idxA];
+            key_t nodeKey = PointEncoding::decodePlaceholderBit<Encoder>(prefix);
+            unsigned prefixLength = PointEncoding::decodePrefixLength<Encoder>(prefix);
             unsigned level = prefixLength / 3;
-            assert(level < MortonEncoder::MAX_DEPTH);
+            assert(level < Encoder::MAX_DEPTH);
 
-            morton_t childPrefix = MortonEncoder::encodePlaceholderBit(nodeKey, prefixLength + 3);
+            key_t childPrefix = PointEncoding::encodePlaceholderBit<Encoder>(nodeKey, prefixLength + 3);
 
             uint32_t leafSearchStart = levelRange[level + 1];
             uint32_t leafSearchEnd   = levelRange[level + 2];
@@ -529,12 +532,12 @@ public:
         bbox = Box(center, radii);
 
         // Compute the physical half lengths for multiplying with the encoded coordinates
-        halfLengths[0] = 0.5f * MortonEncoder::EPS * (bbox.maxX() - bbox.minX());
-        halfLengths[1] = 0.5f * MortonEncoder::EPS * (bbox.maxY() - bbox.minY());
-        halfLengths[2] = 0.5f * MortonEncoder::EPS * (bbox.maxZ() - bbox.minZ());
+        halfLengths[0] = 0.5f * Encoder::EPS * (bbox.maxX() - bbox.minX());
+        halfLengths[1] = 0.5f * Encoder::EPS * (bbox.maxY() - bbox.minY());
+        halfLengths[2] = 0.5f * Encoder::EPS * (bbox.maxZ() - bbox.minZ());
 
-        for(int i = 0; i<= MortonEncoder::MAX_DEPTH; i++) {
-            coords_t sideLength = (1u << (MortonEncoder::MAX_DEPTH - i));
+        for(int i = 0; i<= Encoder::MAX_DEPTH; i++) {
+            coords_t sideLength = (1u << (Encoder::MAX_DEPTH - i));
             precomputedRadii[i] = Vector(
                 sideLength * halfLengths[0],
                 sideLength * halfLengths[1],
@@ -551,10 +554,10 @@ public:
      */
     void sortPoints() {
         // Temporal vector of pairs
-        std::vector<std::pair<morton_t, Point_t>> encoded_points;
+        std::vector<std::pair<key_t, Point_t>> encoded_points;
         encoded_points.reserve(points.size());
         for(size_t i = 0; i < points.size(); i++) {
-            encoded_points.emplace_back(MortonEncoder::encodeMortonPoint(points[i], bbox), points[i]);
+            encoded_points.emplace_back(Encoder::encode(points[i], bbox), points[i]);
         }
 
         // TODO: implement parallel radix sort
@@ -576,7 +579,7 @@ public:
         // Builds the octree sequentially using the cornerstone algorithm
 
         // We start with 0, 7777...777 (in octal)
-        leaves = {0, MortonEncoder::UPPER_BOUND};
+        leaves = {0, Encoder::UPPER_BOUND};
         counts = {(uint32_t) codes.size()};
 
         while(!updateOctreeLeaves())
@@ -594,7 +597,7 @@ public:
         std::vector<uint32_t> nodeOps(leaves.size());
         bool converged = rebalanceDecision(nodeOps);
         if(!converged) {
-            std::vector<morton_t> newTree;
+            std::vector<key_t> newTree;
             rebalanceTree(newTree, nodeOps);
             counts.resize(newTree.size()-1);
             swap(leaves, newTree);
@@ -634,7 +637,7 @@ public:
     void buildOctreeInternal() {
         createUnsortedLayout();
         // Sort by key where the keys are the prefixes and the values to sort internalToLeaf
-        std::vector<std::pair<morton_t, uint32_t>> prefixes_internalToLeaf(nTotal);
+        std::vector<std::pair<key_t, uint32_t>> prefixes_internalToLeaf(nTotal);
         for(int i = 0; i<nTotal; i++) {
             prefixes_internalToLeaf[i] = {prefixes[i], internalToLeaf[i]};
         }
@@ -682,11 +685,11 @@ public:
      */
     void computeGeometry() {
         for(uint32_t i = 0; i<prefixes.size(); i++) {
-            morton_t prefix = prefixes[i];
-            morton_t startKey = MortonEncoder::decodePlaceholderBit(prefix);
-            uint32_t level = MortonEncoder::decodePrefixLength(prefix) / 3;
+            key_t prefix = prefixes[i];
+            key_t startKey = PointEncoding::decodePlaceholderBit<Encoder>(prefix);
+            uint32_t level = PointEncoding::decodePrefixLength<Encoder>(prefix) / 3;
             std::tie(centers[i], radii[i]) = 
-                MortonEncoder::getCenterAndRadii(startKey, level, bbox, halfLengths, precomputedRadii);
+                PointEncoding::getCenterAndRadii<Encoder>(startKey, level, bbox, halfLengths, precomputedRadii);
         }
     }
 
