@@ -252,21 +252,21 @@ class Point
 	friend Point operator+(const double val, const Point& rhs) { return { rhs.x_ + val, rhs.y_ + val, rhs.z_ + val }; }
 
 	// Multiplication of vector and a scalar
-	template<typename T>
-	Vector operator*(const T scalar) const
+	template<typename Time_t>
+	Vector operator*(const Time_t scalar) const
 	{
 		return Vector(x_ * scalar, y_ * scalar, z_ * scalar);
 	}
 
 	// Division of vector and a scalar
-	template<typename T>
-	Vector operator/(const T scalar) const
+	template<typename Time_t>
+	Vector operator/(const Time_t scalar) const
 	{
 		return Vector(x_ / scalar, y_ / scalar, z_ / scalar);
 	}
 
-	template<typename T>
-	void operator/=(const T scalar)
+	template<typename Time_t>
+	void operator/=(const Time_t scalar)
 	{
 		x_ /= scalar, y_ /= scalar, z_ /= scalar;
 	}

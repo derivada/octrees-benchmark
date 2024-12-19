@@ -26,21 +26,7 @@ constexpr size_t REPEATS = 5;
 constexpr size_t NUM_SEARCHES = 1000;
 constexpr bool CHECK_RESULTS = true;
 
-template <typename T>
-void checkVectorMemory(std::vector<T> vec) {
-    std::cout << "Size in memory: " << (sizeof(std::vector<T>) + (sizeof(T) * vec.size())) / (1024.0 * 1024.0) << "MB" << std::endl;
-
-    void* data = vec.data();
-    // Check if the data is aligned to cache liens
-    constexpr std::size_t CACHE_LINE_SIZE = std::hardware_destructive_interference_size;
-    if (reinterpret_cast<std::uintptr_t>(data) % CACHE_LINE_SIZE == 0) {
-        std::cout << "The vector's data is aligned to a cache line!" << std::endl;
-    } else {
-        std::cout << "The vector's data is NOT aligned to a cache line." << std::endl;
-    }
-}
-
-template <template <typename, typename> class Octree_t, typename Point_t, typename Encoder_t>
+template <template <typename, typename> class Octree_t, PointType Point_t, typename Encoder_t>
 std::shared_ptr<ResultSet<Point_t>> buildAndRunBenchmark(std::ofstream &outputFile, std::vector<Point_t>& points,
   std::shared_ptr<const SearchSet> searchSet, std::string comment = "") {
   OctreeBenchmark<Octree_t, Point_t, Encoder_t> ob(points, NUM_SEARCHES, searchSet, outputFile, CHECK_RESULTS, comment);
@@ -48,7 +34,7 @@ std::shared_ptr<ResultSet<Point_t>> buildAndRunBenchmark(std::ofstream &outputFi
   return ob.getResultSet();
 }
 
-template <template <typename, typename> class Octree_t, typename Point_t, typename Encoder_t>
+template <template <typename, typename> class Octree_t, PointType Point_t, typename Encoder_t>
 std::shared_ptr<ResultSet<Point_t>> buildAndRunAlgoComparisonBenchmark(std::ofstream &outputFile, std::vector<Point_t>& points,
   std::shared_ptr<const SearchSet> searchSet, std::string comment = "") {
   OctreeBenchmark<Octree_t, Point_t, Encoder_t> ob(points, NUM_SEARCHES, searchSet, outputFile, CHECK_RESULTS, comment);
@@ -72,19 +58,21 @@ void octreeComparisonBenchmark(std::ofstream &outputFile) {
   // Generate a shared search set for each benchmark execution
   std::shared_ptr<const SearchSet> searchSet = std::make_shared<const SearchSet>(NUM_SEARCHES, points);
 
-  auto resultsPointer = buildAndRunBenchmark<Octree, Point_t, PointEncoding::NoEncoder>(outputFile, points, searchSet);
-  auto resultsLinear = buildAndRunBenchmark<LinearOctree, Point_t, Encoder_t>(outputFile, points, searchSet);
-  auto resultsPointerSorted = buildAndRunBenchmark<Octree, Point_t, Encoder_t>(outputFile, points, searchSet);
+  buildAndRunBenchmark<Octree, Point_t, PointEncoding::NoEncoder>(outputFile, points, searchSet);
+  auto resultsLinearMorton = buildAndRunBenchmark<LinearOctree, Point_t, PointEncoding::MortonEncoder3D>(outputFile, points, searchSet);
+  auto resultsPointerMorton = buildAndRunBenchmark<Octree, Point_t, PointEncoding::MortonEncoder3D>(outputFile, points, searchSet);
+  auto resultsLinearHilbert = buildAndRunBenchmark<LinearOctree, Point_t, PointEncoding::HilbertEncoder3D>(outputFile, points, searchSet);
+  auto resultsPointerHilbert = buildAndRunBenchmark<Octree, Point_t, PointEncoding::HilbertEncoder3D>(outputFile, points, searchSet);
 
   // Check the results if needed
   if(CHECK_RESULTS) {
-    resultsLinear->checkResults(resultsPointerSorted);
+    resultsLinearMorton->checkResults(resultsPointerMorton);
+    resultsLinearHilbert->checkResults(resultsPointerHilbert);
   }
 }
 
-
 // To test different implementations of the same methods (i.e. numNeighbors vs numNeighborsOld)
-template <PointType Point_t, typename Encoder_t = PointEncoding::MortonEncoder3D>
+template <PointType Point_t, typename Encoder_t>
 void algorithmComparisonBenchmark(std::ofstream &outputFile) {
   // TODO: maybe a better idea is to choose radii based on point cloud density
   TimeWatcher tw;
@@ -106,13 +94,6 @@ void algorithmComparisonBenchmark(std::ofstream &outputFile) {
   if(CHECK_RESULTS) {
     results->checkResultsAlgo();
   }
-}
-
-void printKey(uint64_t key) {
-  for(int i=20; i>=0; i--) {
-    std::cout << std::bitset<3>(key >> (3*i)) << " ";
-  }
-  std::cout << std::endl;
 }
 
 int main(int argc, char *argv[]) {

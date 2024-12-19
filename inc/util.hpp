@@ -41,13 +41,26 @@ concept PointType = std::is_base_of_v<Point, T>;
 // Concept for Octree classes
 template <typename T>
 concept OctreeType = requires {
-    typename T::PointType;  // T should have a member named PointType
-    requires PointType<typename T::PointType>;  // PointType should satisfy the PointType concept
+	typename T::PointType;  // T should have a member named PointType
+	requires PointType<typename T::PointType>;  // PointType should satisfy the PointType concept
 };
 
+template <typename Time_t>
+void checkVectorMemory(std::vector<Time_t> vec) {
+    std::cout << "Size in memory: " << (sizeof(std::vector<Time_t>) + (sizeof(Time_t) * vec.size())) / (1024.0 * 1024.0) << "MB" << std::endl;
 
-template<typename... T>
-inline bool are_the_same(const std::vector<T...>& v1_, const std::vector<T...>& v2_)
+    void* data = vec.data();
+    // Check if the data is aligned to cache liens
+	constexpr std::size_t CACHE_LINE_SIZE = 64; // Typical cache line size
+    if (reinterpret_cast<std::uintptr_t>(data) % CACHE_LINE_SIZE == 0) {
+        std::cout << "The vector's data is aligned to a cache line!" << std::endl;
+    } else {
+        std::cout << "The vector's data is NOT aligned to a cache line." << std::endl;
+    }
+}
+
+template<typename... Time_t>
+inline bool are_the_same(const std::vector<Time_t...>& v1_, const std::vector<Time_t...>& v2_)
 {
 	if (v1_.size() != v2_.size())
 	{
@@ -101,26 +114,26 @@ constexpr inline Tp average(const Container_t& container, F unaryOp)
 	       container.size();
 }
 
-template<typename T>
-constexpr inline T square(const T& n)
+template<typename Time_t>
+constexpr inline Time_t square(const Time_t& n)
 {
 	return n * n;
 }
 
-template<typename T>
-constexpr inline bool onInterval(const T& n, const T& min, const T& max)
+template<typename Time_t>
+constexpr inline bool onInterval(const Time_t& n, const Time_t& min, const Time_t& max)
 {
 	return n > min && n < max;
 }
 
-template<typename T>
-constexpr inline T midpoint(const T& min, const T& max)
+template<typename Time_t>
+constexpr inline Time_t midpoint(const Time_t& min, const Time_t& max)
 {
 	return min + (max - min) / 2;
 }
 
-template<typename T>
-constexpr inline bool isNumber(const T x)
+template<typename Time_t>
+constexpr inline bool isNumber(const Time_t x)
 {
 	return (!std::isnan(x) && !std::isinf(x));
 }
@@ -135,22 +148,22 @@ inline double ccw(const Point_t* p1, const Point_t* p2, const Point_t* p3)
 }
 
 // TODO: put onRange and onIntensity in the same function? (the only use of onRange is here...)
-template<typename T>
-inline bool onRange(const T value, const T offset, const T center)
+template<typename Time_t>
+inline bool onRange(const Time_t value, const Time_t offset, const Time_t center)
 {
 	return (value >= (center - offset) && value <= (center + offset));
 }
 
-template<typename T>
-inline bool onIntensity(const T int1, const T int2, const T interval)
+template<typename Time_t>
+inline bool onIntensity(const Time_t int1, const Time_t int2, const Time_t interval)
 {
 	const auto offset = std::max(int1, int2) * interval;
 
 	return onRange(int1, offset, int2);
 }
 
-template<typename T>
-inline bool onDegree(const Vector& normal, const T interval, const Vector& neighNormal)
+template<typename Time_t>
+inline bool onDegree(const Vector& normal, const Time_t interval, const Vector& neighNormal)
 {
 	Vector degrees    = normal.vectorAngles();
 	Vector epiDegrees = neighNormal.vectorAngles();

@@ -343,10 +343,10 @@ private:
     }
 
     /// @brief Simple serial implementation of an exclusive scan
-    template<class T>
-    void exclusiveScan(T* out, size_t numElements) {
-        T a = T(0);
-        T b = T(0);
+    template<class Time_t>
+    void exclusiveScan(Time_t* out, size_t numElements) {
+        Time_t a = Time_t(0);
+        Time_t b = Time_t(0);
         for (size_t i = 0; i < numElements; ++i) {
             a += out[i];
             out[i] = b;
@@ -1107,8 +1107,8 @@ public:
 
 
     // Misc. functions for debugging
-    template <typename T>
-    inline void writeVector(std::ofstream &file, std::vector<T> &v, std::string name = "v") {
+    template <typename Time_t>
+    inline void writeVector(std::ofstream &file, std::vector<Time_t> &v, std::string name = "v") {
         file << "Size of " << name << " = " << v.size() << "\n";
         for(size_t i = 0; i<v.size(); i++)
             file << name << "[" << i << "] = " << v[i] << "\n";
@@ -1121,8 +1121,8 @@ public:
             file << name << "[" << i << "] = " << v[i].first << ", " << v[i].second << "\n";
     }
 
-    template <typename T>
-    inline void writeVectorBinary(std::ofstream &file, std::vector<T> &v, std::string name = "v") {
+    template <typename Time_t>
+    inline void writeVectorBinary(std::ofstream &file, std::vector<Time_t> &v, std::string name = "v") {
         file << "Size of " << name << " = " << v.size() << "\n";
         for(size_t i = 0; i<v.size(); i++)
             file << name << "[" << i << "] = 0b" << std::bitset<64>(v[i]) << "\n";

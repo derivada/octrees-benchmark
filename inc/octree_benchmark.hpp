@@ -185,59 +185,78 @@ class OctreeBenchmark {
         #pragma GCC pop_options
         
         template<Kernel_t kernel>
-        void searchNeighParallel(float radii) {
+        size_t searchNeighParallel(float radii) {
             if(check && resultSet->resultsNeigh.empty())
                 resultSet->resultsNeigh.resize(searchSet->numSearches);
-            #pragma omp parallel for schedule(static)
+            size_t averageResultSize = 0;
+            #pragma omp parallel for schedule(static) reduction(+:averageResultSize)
                 for(size_t i = 0; i<searchSet->numSearches; i++) {
                     if(check){
                         resultSet->resultsNeigh[i] = oct->template searchNeighbors<kernel>(searchSet->searchPoints[i], radii);
+                        averageResultSize += resultSet->resultsNeigh[i].size();
                     } else{
-                        volatile auto result = oct->template searchNeighbors<kernel>(searchSet->searchPoints[i], radii);
+                        auto result = oct->template searchNeighbors<kernel>(searchSet->searchPoints[i], radii);
+                        averageResultSize += result.size();
                     }
                 }
+            
+            averageResultSize = averageResultSize / searchSet->numSearches;
+            return averageResultSize;
         }
 
         template<Kernel_t kernel>
-        void searchNeighOldParallel(float radii) {
+        size_t searchNeighOldParallel(float radii) {
             if(check && resultSet->resultsNeighOld.empty())
                 resultSet->resultsNeighOld.resize(searchSet->numSearches);
-            #pragma omp parallel for schedule(static)
+            size_t averageResultSize = 0;
+            #pragma omp parallel for schedule(static) reduction(+:averageResultSize)
                 for(size_t i = 0; i<searchSet->numSearches; i++) {
                     if(check){
                         resultSet->resultsNeighOld[i] = oct->template searchNeighborsOld<kernel>(searchSet->searchPoints[i], radii);
+                        averageResultSize += resultSet->resultsNeigh[i].size();
                     } else{
-                        volatile auto result = oct->template searchNeighborsOld<kernel>(searchSet->searchPoints[i], radii);
+                        auto result = oct->template searchNeighborsOld<kernel>(searchSet->searchPoints[i], radii);
+                        averageResultSize += resultSet->resultsNeigh[i].size();
                     }
                 }
+            averageResultSize = averageResultSize / searchSet->numSearches;
+            return averageResultSize;
         }
 
         template<Kernel_t kernel>
-        void numNeighParallel(float radii) {
+        size_t numNeighParallel(float radii) {
             if(check && resultSet->resultsNumNeigh.empty())
                 resultSet->resultsNumNeigh.resize(searchSet->numSearches);
-            #pragma omp parallel for schedule(static)
+            size_t averageResultSize = 0;
+            #pragma omp parallel for schedule(static) reduction(+:averageResultSize)
                 for(size_t i = 0; i<searchSet->numSearches; i++) {
                     if(check) {
                         resultSet->resultsNumNeigh[i] = oct->template numNeighbors<kernel>(searchSet->searchPoints[i], radii);
+                        averageResultSize += resultSet->resultsNumNeigh[i];
                     } else {
-                        preventOptimization(oct->template numNeighbors<kernel>(searchSet->searchPoints[i], radii));
+                        averageResultSize += oct->template numNeighbors<kernel>(searchSet->searchPoints[i], radii);
                     }
                 }
+            averageResultSize = averageResultSize / searchSet->numSearches;
+            return averageResultSize;
         }
 
         template<Kernel_t kernel>
-        void numNeighOldParallel(float radii) {
+        size_t numNeighOldParallel(float radii) {
             if(check && resultSet->resultsNumNeighOld.empty())
                 resultSet->resultsNumNeighOld.resize(searchSet->numSearches);
-            #pragma omp parallel for schedule(static)
+            size_t averageResultSize = 0;
+            #pragma omp parallel for schedule(static) reduction(+:averageResultSize)
                 for(size_t i = 0; i<searchSet->numSearches; i++) {
                     if(check) {
                         resultSet->resultsNumNeighOld[i] = oct->template numNeighborsOld<kernel>(searchSet->searchPoints[i], radii);
+                        averageResultSize += resultSet->resultsNumNeigh[i];
                     } else {
                         preventOptimization(oct->template numNeighborsOld<kernel>(searchSet->searchPoints[i], radii));
                     }
                 }
+            averageResultSize = averageResultSize / searchSet->numSearches;
+            return averageResultSize;
         }
 
         void KNNParallel() {
@@ -248,31 +267,36 @@ class OctreeBenchmark {
                     if(check) {
                         resultSet->resultsKNN[i] = oct->template KNN(searchSet->searchPoints[i], searchSet->searchKNNLimits[i], searchSet->searchKNNLimits[i]);
                     } else {
-                        volatile auto result = oct->template KNN(searchSet->searchPoints[i], searchSet->searchKNNLimits[i], searchSet->searchKNNLimits[i]);
+                        auto result = oct->template KNN(searchSet->searchPoints[i], searchSet->searchKNNLimits[i], searchSet->searchKNNLimits[i]);
                     }
                 }
         }
 
-        void ringNeighSearchParallel(Vector &innerRadii, Vector &outerRadii) {
+        size_t ringNeighSearchParallel(Vector &innerRadii, Vector &outerRadii) {
             if(check && resultSet->resultsRingNeigh.empty())
                 resultSet->resultsRingNeigh.resize(searchSet->numSearches);
-            #pragma omp parallel for schedule(static)
+            size_t averageResultSize = 0;
+            #pragma omp parallel for schedule(static) reduction(+:averageResultSize)
                 for(size_t i = 0; i<searchSet->numSearches; i++) {
                     if(check) {    
                         resultSet->resultsRingNeigh[i] = oct->template searchNeighborsRing(searchSet->searchPoints[i], 
                             innerRadii, outerRadii);
+                        averageResultSize += resultSet->resultsRingNeigh[i].size();
                     } else {
-                        volatile auto result = oct->template searchNeighborsRing(searchSet->searchPoints[i], 
+                        auto result = oct->template searchNeighborsRing(searchSet->searchPoints[i], 
                             innerRadii, outerRadii);
+                        averageResultSize += result.size();
                     }
                 }
+            averageResultSize = averageResultSize / searchSet->numSearches;
+            return averageResultSize;
         }
 
         inline void appendToCsv(const std::string& operation, 
-                            const std::string& kernel, const float radius, const benchmarking::Stats<>& stats) {
+                            const std::string& kernel, const float radius, const benchmarking::Stats<>& stats, size_t averageResultSize = 0) {
             // Check if the file is empty and append header if it is
             if (outputFile.tellp() == 0) {
-                outputFile << "date,octree,point_type,encoder,npoints,operation,kernel,radius,num_searches,repeats,accumulated,mean,median,stdev,used_warmup\n";
+                outputFile << "date,octree,point_type,encoder,npoints,operation,kernel,radius,num_searches,repeats,accumulated,mean,median,stdev,used_warmup,avg_result_size\n";
             }
             std::string octreeName = getOctreeName<Octree_t>();
             std::string pointTypeName = getPointName<Point_t>();
@@ -292,7 +316,8 @@ class OctreeBenchmark {
                 << stats.mean() << ',' 
                 << stats.median() << ',' 
                 << stats.stdev() << ','
-                << stats.usedWarmup() << '\n';
+                << stats.usedWarmup() << ','
+                << averageResultSize << '\n';
         }
 
     public:
@@ -309,40 +334,40 @@ class OctreeBenchmark {
         template<Kernel_t kernel>
         void benchmarkSearchNeigh(size_t repeats, float radius) {
             const auto kernelStr = kernelToString(kernel);
-            auto stats = benchmarking::benchmark(repeats, [&]() { searchNeighParallel<kernel>(radius); });
-            appendToCsv("neighSearch", kernelStr, radius, stats);
+            auto [stats, averageResultSize] = benchmarking::benchmark<size_t>(repeats, [&]() { return searchNeighParallel<kernel>(radius); });
+            appendToCsv("neighSearch", kernelStr, radius, stats, averageResultSize);
         }
 
         template<Kernel_t kernel>
         void benchmarkSearchNeighOld(size_t repeats, float radius) {
             const auto kernelStr = kernelToString(kernel);
-            auto stats = benchmarking::benchmark(repeats, [&]() { searchNeighOldParallel<kernel>(radius); });
-            appendToCsv("neighOldSearch", kernelStr, radius, stats);
+            auto [stats, averageResultSize] = benchmarking::benchmark<size_t>(repeats, [&]() { return searchNeighOldParallel<kernel>(radius); });
+            appendToCsv("neighOldSearch", kernelStr, radius, stats, averageResultSize);
         }
 
         template<Kernel_t kernel>
         void benchmarkNumNeigh(size_t repeats, float radius) {
             const auto kernelStr = kernelToString(kernel);
-            auto stats = benchmarking::benchmark(repeats, [&]() { numNeighParallel<kernel>(radius); });
-            appendToCsv("numNeighSearch", kernelStr, radius, stats);
+            auto [stats, averageResultSize] = benchmarking::benchmark<size_t>(repeats, [&]() { return numNeighParallel<kernel>(radius); });
+            appendToCsv("numNeighSearch", kernelStr, radius, stats, averageResultSize);
         }
 
         template<Kernel_t kernel>
         void benchmarkNumNeighOld(size_t repeats, float radius) {
             const auto kernelStr = kernelToString(kernel);
-            auto stats = benchmarking::benchmark(repeats, [&]() { numNeighOldParallel<kernel>(radius); });
-            appendToCsv("numNeighOldSearch", kernelStr, radius, stats);
+            auto [stats, averageResultSize] = benchmarking::benchmark<size_t>(repeats, [&]() { return numNeighOldParallel<kernel>(radius); });
+            appendToCsv("numNeighOldSearch", kernelStr, radius, stats, averageResultSize);
         }
 
 
         void benchmarkKNN(size_t repeats) {
-            auto stats = benchmarking::benchmark(repeats, [&]() { KNNParallel(); });
+            auto [stats, averageResultSize] = benchmarking::benchmark(repeats, [&]() { KNNParallel(); });
             appendToCsv("KNN", "NA", -1.0, stats);
         }
 
         void benchmarkRingSearchNeigh(size_t repeats, Vector &innerRadii, Vector &outerRadii) {
-            auto stats = benchmarking::benchmark(repeats, [&]() { ringNeighSearchParallel(innerRadii, outerRadii); });
-            appendToCsv("ringNeighSearch", "NA", -1.0, stats);
+            auto [stats, averageResultSize] = benchmarking::benchmark<size_t>(repeats, [&]() { return ringNeighSearchParallel(innerRadii, outerRadii); });
+            appendToCsv("ringNeighSearch", "NA", -1.0, stats, averageResultSize);
         }
 
         static void runAlgoComparisonBenchmark(OctreeBenchmark &ob, const std::vector<float> &benchmarkRadii, const size_t repeats, const size_t numSearches) {

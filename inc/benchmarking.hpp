@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <numeric>
 #include <functional>
+#include <optional>
 
 namespace benchmarking
 {
@@ -18,6 +19,7 @@ class Stats
 {
 	private:
 	std::vector<T> values_;
+	T warmupValue_;
 
 	T mean_{};
 
@@ -31,6 +33,8 @@ class Stats
 
 	public:
 	Stats(bool warmup): warmup(warmup) {}
+	
+	inline void set_warmup_value(const T value) { warmupValue_ = value; }
 
 	inline void add_value(const T value)
 	{
@@ -76,25 +80,51 @@ class Stats
 		return stdev_;
 	}
 
+	inline const T warmupValue() const { return warmupValue_; }
+
 	inline const bool usedWarmup() const { return warmup; }
 };
 
 template<typename F>
-auto benchmark(const size_t repeats, F function, size_t warmupRepeats = 1)
+auto benchmark(const size_t repeats, F function, bool warmup = true)
 {
-	Stats stats(warmupRepeats >= 1);
-	size_t totalRepeats = repeats + warmupRepeats;
+    Stats<double> stats(warmup);
+	size_t totalRepeats = repeats + warmup;
 	for (size_t i = 0; i < totalRepeats; i++)
 	{
 		TimeWatcher tw;
 		tw.start();
 		function();
 		tw.stop();
-		if(i >= warmupRepeats)
+		if(warmup && i == 0)
+			stats.set_warmup_value(tw.getElapsedDecimalSeconds());
+		else
+			stats.add_value(tw.getElapsedDecimalSeconds());
+	}
+	return stats;
+}
+
+// General case for non-void return type
+template <typename ReturnType, typename F>
+auto benchmark(const size_t repeats, F function, bool warmup = true)
+{
+	Stats<double> stats(warmup);  // Store time in double for simplicity
+	size_t totalRepeats = repeats + warmup;
+	ReturnType returnValue;
+	for (size_t i = 0; i < totalRepeats; i++)
+	{
+		TimeWatcher tw;
+		tw.start();
+		returnValue = function();  // Capture the return value
+		tw.stop();
+
+		if (warmup && i == 0)
+			stats.set_warmup_value(tw.getElapsedDecimalSeconds());
+		else
 			stats.add_value(tw.getElapsedDecimalSeconds());
 	}
 
-	return stats;
+	return std::make_pair(stats, returnValue);  // Return both stats and result
 }
 
 template<typename F>
