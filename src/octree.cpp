@@ -17,12 +17,10 @@
 // TODO: move this implementations to octree.hpp so we dont need to predefine all possible pointer octrees
 template class Octree<Lpoint, PointEncoding::NoEncoder>;
 template class Octree<Lpoint64, PointEncoding::NoEncoder>;
-template class Octree<Lpoint, PointEncoding::HilbertEncoder64>;
-template class Octree<Lpoint64, PointEncoding::HilbertEncoder64>;
-template class Octree<Lpoint, PointEncoding::MortonEncoder32>;
-template class Octree<Lpoint64, PointEncoding::MortonEncoder32>;
-template class Octree<Lpoint, PointEncoding::MortonEncoder64>;
-template class Octree<Lpoint64, PointEncoding::MortonEncoder64>;
+template class Octree<Lpoint, PointEncoding::HilbertEncoder3D>;
+template class Octree<Lpoint64, PointEncoding::HilbertEncoder3D>;
+template class Octree<Lpoint, PointEncoding::MortonEncoder3D>;
+template class Octree<Lpoint64, PointEncoding::MortonEncoder3D>;
 
 template <PointType Point_t, typename Encoder_t>
 Octree<Point_t, Encoder_t>::Octree() = default;

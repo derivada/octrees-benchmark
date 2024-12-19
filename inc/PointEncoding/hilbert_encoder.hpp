@@ -8,13 +8,15 @@
 
 namespace PointEncoding {
     /**
-    * @struct HilbertEncoder64
+    * @struct HilbertEncoder3D
+    * 
+    * @brief Implements the Hilbert space filling curve to encode integer point coordinates. The keys are 64 bit unsigned integers.
     * 
     * @date 11/12/2024
     * 
     * @cite https://doi.org/10.1016/j.newast.2016.10.007
     */
-    struct HilbertEncoder64 {
+    struct HilbertEncoder3D {
         using key_t = uint64_t;
         using coords_t = uint32_t;
                 
@@ -30,10 +32,10 @@ namespace PointEncoding {
         /// @brief The amount of bits that are not used, in Morton encodings this is the MSB of the key
         static constexpr uint32_t UNUSED_BITS = 1;
 
+        /// @brief A constant array to map adequately rotated x, y, z coordinates to their corresponding octant 
         static constexpr coords_t mortonToHilbert[8] = {0, 1, 3, 2, 7, 6, 4, 5};
-            
-        // This methods should not be called from the outside, as they use geometric information computed here
-        // (radii and center) of the point cloud
+        
+        /// @brief Encodes the given coordinates into their Hilbert key
         static inline key_t encode(coords_t x, coords_t y, coords_t z) {
             key_t key = 0;
             for(int level = MAX_DEPTH - 1; level >= 0; level--) {
@@ -42,17 +44,21 @@ namespace PointEncoding {
                 const coords_t yi = (y >> level) & 1u;
                 const coords_t zi = (z >> level) & 1u;
                 const coords_t octant = (xi << 2) | (yi << 1) | zi;
-                key = (key << 3) + mortonToHilbert[octant];
+                key <<= 3;
+                key |= mortonToHilbert[octant];
                 
-                // Turn x, y, z
+                // Turn x, y, z (Karnaugh mapped operations, check citation and Lam and Shapiro paper detailing 2D case 
+                // for understanding how this works)
                 x ^= -(xi & ((!yi) | zi));
                 y ^= -((xi & (yi | zi)) | (yi & (!zi)));
                 z ^= -((xi & (!yi) & (!zi)) | (yi & (!zi)));
 
                 if (zi) {
+                    // Cylic anticlockwise rotation x, y, z -> y, z, x
                     coords_t temp = x;
                     x = y, y = z, z = temp;
                 } else if (!yi) {
+                    // Swap x and z
                     coords_t temp = x;
                     x = z, z = temp;
                 }
@@ -60,6 +66,7 @@ namespace PointEncoding {
             return key;
         }
 
+        /// @brief Decodes the given key and puts the coordinates into x, y, z
         static inline void decode(key_t code, coords_t &x, coords_t &y, coords_t &z) {
             // Initialize the coords values
             x = 0, y = 0, z = 0;
@@ -72,7 +79,7 @@ namespace PointEncoding {
                 const coords_t zi = octant & 1u;
 
                 if(yi ^ zi) {
-                    // Cylic rotation x, y, z -> z, x, y
+                    // Cylic clockwise rotation x, y, z -> z, x, y
                     coords_t temp = x;
                     x = z, z = y, y = temp;
                 } else if((!xi & !yi & !zi) || (xi & yi & zi)) {
@@ -83,7 +90,7 @@ namespace PointEncoding {
 
                 // Turn x, y, z (Karnaugh mapped operations, check citation and Lam and Shapiro paperdetailing 2D case 
                 // for understanding how this works)
-                unsigned mask = (1u << level) - 1u;
+                const coords_t mask = (1u << level) - 1u;
                 x ^= mask & (-(xi & (yi | zi)));
                 y ^= mask & (-((xi & ((!yi) | (!zi))) | ((!xi) & yi & zi)));
                 z ^= mask & (-((xi & (!yi) & (!zi)) | (yi & zi)));

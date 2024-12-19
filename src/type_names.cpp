@@ -33,19 +33,14 @@ namespace PointEncoding {
     std::string getEncoderName<PointEncoding::NoEncoder>() {
         return "Unencoded";
     }
-
+    
     template <>
-    std::string getEncoderName<PointEncoding::MortonEncoder32>() {
-        return "MortonEncoder32";
+    std::string getEncoderName<PointEncoding::MortonEncoder3D>() {
+        return "MortonEncoder3D";
     }
 
     template <>
-    std::string getEncoderName<PointEncoding::MortonEncoder64>() {
-        return "MortonEncoder64";
-    }
-
-    template <>
-    std::string getEncoderName<PointEncoding::HilbertEncoder64>() {
-        return "HilbertEncoder64";
+    std::string getEncoderName<PointEncoding::HilbertEncoder3D>() {
+        return "HilbertEncoder3D";
     }
 }

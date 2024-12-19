@@ -1,4 +1,5 @@
 #include "util.hpp"
+#include "type_names.hpp"
 #include "TimeWatcher.hpp"
 #include "handlers.hpp"
 #include "main_options.hpp"
@@ -22,7 +23,7 @@ namespace fs = std::filesystem;
 // Global benchmark parameters
 const std::vector<float> BENCHMARK_RADII = {0.5, 1.0, 2.5, 5.0};
 constexpr size_t REPEATS = 5;
-constexpr size_t NUM_SEARCHES = 100;
+constexpr size_t NUM_SEARCHES = 1000;
 constexpr bool CHECK_RESULTS = true;
 
 template <typename T>
@@ -83,7 +84,7 @@ void octreeComparisonBenchmark(std::ofstream &outputFile) {
 
 
 // To test different implementations of the same methods (i.e. numNeighbors vs numNeighborsOld)
-template <PointType Point_t, typename Encoder_t = PointEncoding::MortonEncoder64>
+template <PointType Point_t, typename Encoder_t = PointEncoding::MortonEncoder3D>
 void algorithmComparisonBenchmark(std::ofstream &outputFile) {
   // TODO: maybe a better idea is to choose radii based on point cloud density
   TimeWatcher tw;
@@ -131,7 +132,7 @@ int main(int argc, char *argv[]) {
   // Print three decimals
   std::cout << std::fixed;
   std::cout << std::setprecision(3);
-  
+
   // Open the benchmark output file
   std::string csvFilename = mainOptions.inputFileName + "-" + getCurrentDate() + ".csv";
   std::filesystem::path csvPath = mainOptions.outputDirName / csvFilename;
@@ -140,70 +141,8 @@ int main(int argc, char *argv[]) {
       throw std::ios_base::failure(std::string("Failed to open benchmark output file: ") + csvPath.string());
   }
 
-  octreeComparisonBenchmark<Lpoint64, PointEncoding::HilbertEncoder64>(outputFile);
-  octreeComparisonBenchmark<Lpoint64, PointEncoding::MortonEncoder64>(outputFile);
-
-  // Grid 16x16x16 with some modifications, save its encoding to file for visualization
-  // constexpr int GRID_SIZE = 2;
-  // std::vector<Point_t> points;
-  // std::vector<std::pair<Encoder_t::key_t, Point_t>> codes;
-  // for(int i = -GRID_SIZE; i<=GRID_SIZE; i++) {
-  // for(int j = -GRID_SIZE; j<=GRID_SIZE; j++) {
-  // for(int k = -GRID_SIZE; k<=GRID_SIZE; k++) {
-  //   Point_t p = Point_t(i*GRID_SIZE*GRID_SIZE + j*GRID_SIZE + k, k, j, i);
-  //   points.push_back(p);
-  // }}}
-  // Vector radii;
-  // Point p = mbb(points, radii);
-  // Box bbox = Box(p, radii);
-  // for(int i = 0; i<points.size(); i++){
-  //   Encoder_t::coords_t x, y, z;
-  //   PointEncoding::getAnchorCoords<Encoder_t>(points[i], bbox, x, y, z);
-  //   codes.push_back({Encoder_t::encode(x, y, z), points[i]});
-  // }
-
-  // std::sort(codes.begin(), codes.end(),
-  //   [](const auto& a, const auto& b) {
-  //       return a.first < b.first;  // Compare only the codes
-  //   }
-  // );
-
-  // std::ofstream pointsFile("points.txt",  std::ios::out);
-  // for(int i = 0; i<codes.size();i++)
-  //   pointsFile << codes[i].second << std::endl;
-  // pointsFile.close();
-
-  // auto searchSet = std::make_shared<const SearchSet>(NUM_SEARCHES, points);
-
-  // auto pointerOct = Octree<Point_t, PointEncoding::NoEncoder>(points);
-  // auto resPointer = pointerOct.numNeighbors(kernelFactory<Kernel_t::sphere>(searchSet.get()->searchPoints[4], BENCHMARK_RADII[0]));
-
-  // auto octHilbert = LinearOctree<Point_t, PointEncoding::HilbertEncoder64>(points);
-  // auto resHilbert = octHilbert.numNeighbors(kernelFactory<Kernel_t::sphere>(searchSet.get()->searchPoints[4], BENCHMARK_RADII[0]));
-  // std::ofstream hilbertFile("hilbert.txt", std::ios::out);
-  // octHilbert.writeOctree(hilbertFile);
-  // hilbertFile.close();
-
-
+  octreeComparisonBenchmark<Lpoint64, PointEncoding::HilbertEncoder3D>(outputFile);
+  octreeComparisonBenchmark<Lpoint64, PointEncoding::MortonEncoder3D>(outputFile);
   
-  // auto octMorton = LinearOctree<Point_t, PointEncoding::MortonEncoder64>(points);
-  // auto resMorton = octMorton.numNeighbors(kernelFactory<Kernel_t::sphere>(searchSet.get()->searchPoints[4], BENCHMARK_RADII[0]));
-  // std::ofstream mortonFile("morton.txt", std::ios::out);
-  // octMorton.writeOctree(mortonFile);
-  // mortonFile.close();
-  // std::cout << "Searched for point: " << searchSet.get()->searchPoints[4] << " with radius " << BENCHMARK_RADII[0] << std::endl;
-  // std::cout << "Hilbert: " << resHilbert << ", Morton: " << resMorton << ", Pointer: " << resPointer << std::endl;
-
-  // uint64_t key = 05;
-  // key <<= 20*3;
-  // uint32_t x, y, z;
-  // std::cout << "key ";
-  // printKey(key);
-  // PointEncoding::HilbertEncoder64::decode(key, x, y, z);
-  // std::cout << "hilbert coords:\n" << std::bitset<32>(x) << "\n" << std::bitset<32>(y) << "\n" << std::bitset<32>(z) << std::endl;
-  // std::cout << ((1 << 21) - x) << std::endl;
-  // PointEncoding::MortonEncoder64::decode(key, x, y, z);
-  // std::cout << "morton coords:\n" << std::bitset<32>(x) << "\n" << std::bitset<32>(y) << "\n" << std::bitset<32>(z) << std::endl;
-
   return EXIT_SUCCESS;
 }

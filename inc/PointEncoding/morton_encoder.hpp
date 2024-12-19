@@ -7,7 +7,7 @@
 
 namespace PointEncoding {
     /**
-    * @struct MortonEncoder64
+    * @struct MortonEncoder3D
     * 
     * @brief A front-end for libmorton for getting adequate encodings needed on the linear octree. The keys are 64 bit unsigned integers.
     * 
@@ -18,7 +18,7 @@ namespace PointEncoding {
     * @date 16/11/2024
     * 
     */
-    struct MortonEncoder64 {
+    struct MortonEncoder3D {
         using key_t = uint_fast64_t;
         using coords_t = uint_fast32_t;
         
@@ -34,42 +34,13 @@ namespace PointEncoding {
         /// @brief The amount of bits that are not used, in Morton encodings this is the MSB of the key
         static constexpr uint32_t UNUSED_BITS = 1;
 
-        // This methods should not be called from the outside, as they use geometric information computed here
-        // (radii and center) of the point cloud
+        
         static inline key_t encode(coords_t x, coords_t y, coords_t z) {
             return libmorton::morton3D_64_encode(x, y, z);
         }
 
         static inline void decode(key_t code, coords_t &x, coords_t &y, coords_t &z) {
             libmorton::morton3D_64_decode(code, x, y, z);
-        }
-    };
-
-    // TODO: this needs heavy testing since coordinates are 16 bits instead of 32 and that might break a lot of stuff
-    struct MortonEncoder32 {
-        using key_t = uint_fast32_t;
-        using coords_t = uint_fast16_t;
-        
-        /// @brief The maximum depth that this encoding allows (in Morton 32 bit integers, we need 3 bits for each level, so 10)
-        static constexpr unsigned MAX_DEPTH = 10;
-
-        /// @brief The minimum unit of length of the encoded coordinates
-        static constexpr double EPS = 1.0f / (1 << MAX_DEPTH);
-
-        /// @brief The minimum (strict) upper bound for every Morton code. Equal to the unused bit followed by 30 zeros.
-        static constexpr key_t UPPER_BOUND = 0x40000000;
-
-        /// @brief The amount of bits that are not used, in Morton encodings this is the MSB of the key
-        static constexpr uint32_t UNUSED_BITS = 2;
-
-        // This methods should not be called from the outside, as they use geometric information computed here
-        // (radii and center) of the point cloud
-        static inline key_t encode(coords_t x, coords_t y, coords_t z) {
-            return libmorton::morton3D_32_encode(x, y, z);
-        }
-
-        static inline void decode(key_t code, coords_t &x, coords_t &y, coords_t &z) {
-            libmorton::morton3D_32_decode(code, x, y, z);
         }
     };
 };

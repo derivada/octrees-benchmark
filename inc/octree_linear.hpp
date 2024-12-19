@@ -28,16 +28,16 @@
 * @date 16/11/2024
 * 
 */
-template <PointType Point_t, typename Encoder_t = PointEncoding::NoEncoder>
+template <PointType Point_t = Lpoint64, typename Encoder_t = PointEncoding::NoEncoder>
 class LinearOctree {
 private:
     using key_t = typename Encoder_t::key_t;
     using coords_t = typename Encoder_t::coords_t;
 
     /// @brief The maximum number of points in a leaf
-    static constexpr unsigned int MAX_POINTS        = 100;
+    static constexpr unsigned int MAX_POINTS        = 128;
 
-    /// @brief The minimum octant radius to have in a leaf (TODO: this is still not implemented, and may not be needed)
+    /// @brief The minimum octant radius to have in a leaf (TODO: this could be implemented in halfLength compuutation, but do we really need it?)
 	static constexpr float        MIN_OCTANT_RADIUS = 0.1;
 
 	/// @brief The default size of the search set in KNN
@@ -99,7 +99,7 @@ private:
     std::vector<uint32_t> parents; // TODO: this may not be needed
 
     /// @brief First node index of every tree level (L+2 elements where L is MAX_DEPTH)
-    std::vector<uint32_t> levelRange = std::vector<uint32_t>(Encoder_t::MAX_DEPTH + 2);
+    std::vector<size_t> levelRange = std::vector<size_t>(Encoder_t::MAX_DEPTH + 2);
 
     /// @brief A map between the internal representation at offsets and the one in cornerstone format in leaves
     std::vector<int32_t> internalToLeaf;
@@ -130,8 +130,9 @@ private:
     Vector precomputedRadii[Encoder_t::MAX_DEPTH + 1];
 
     /// @brief A vector containing the half-lengths of the minimum measure of the encoding.
-    float halfLengths[3];
+    double halfLengths[3];
     
+    /// @brief The maximum depth seen in the octree
     uint32_t maxDepthSeen = 0;
 
     /**
@@ -142,7 +143,7 @@ private:
      * 
      * @param nodeOps The output array of decisions, of length leaves.size()-1
      */
-    bool rebalanceDecision(std::vector<uint32_t> &nodeOps) {
+    bool rebalanceDecision(std::vector<size_t> &nodeOps) {
         bool converged = true;
         for(int i = 0; i<leaves.size()-1; i++) {
             nodeOps[i] = calculateNodeOp(i);
@@ -179,8 +180,7 @@ private:
         }
         
         uint32_t nodeCount = counts[index];
-        // Decide if we split or not
-        // TODO: check MIN_OCTANT_RADIUS
+        // Decide if we split this leaf or not
         // split into 4 layers
         if (nodeCount > MAX_POINTS * 512 && level + 3 < Encoder_t::MAX_DEPTH) { 
             maxDepthSeen = std::max(maxDepthSeen, level + 4);
@@ -201,7 +201,8 @@ private:
             maxDepthSeen = std::max(maxDepthSeen, level + 1);
             return 8; 
         }
-        return 1; // dont do anything
+        // Don't do anything with this leaf
+        return 1;
     }
 
     /**
@@ -248,8 +249,8 @@ private:
      * @param newLeaves The new leaves array that will be swapped with the current one after this function execution
      * @param nodeOps The array of operations performed in the first step (g1)
      */
-    void rebalanceTree(std::vector<key_t> &newLeaves, std::vector<uint32_t> &nodeOps) {
-        uint32_t n = leaves.size() - 1;
+    void rebalanceTree(std::vector<key_t> &newLeaves, std::vector<size_t> &nodeOps) {
+        size_t n = leaves.size() - 1;
 
         // Exclusive scan, step g2
         exclusiveScan(nodeOps.data(), n+1);
@@ -259,7 +260,7 @@ private:
         newLeaves.back() = leaves.back();
 
         // Compute the operations
-        for (uint32_t i = 0; i < n; ++i) {
+        for (size_t i = 0; i < n; ++i) {
             processNode(i, nodeOps, newLeaves);
         }
     }
@@ -275,9 +276,9 @@ private:
      * @param nodeOps The operation to be performed on the index
      * @param newLeaves The new leaves array that will be swapped with the current one after this function execution
      */
-    void processNode(uint32_t index, std::vector<uint32_t> &nodeOps, std::vector<key_t> &newLeaves) {
+    void processNode(size_t index, std::vector<size_t> &nodeOps, std::vector<key_t> &newLeaves) {
         // The original value of the opCode (before exclusive scan)
-        uint32_t opCode = nodeOps[index + 1] - nodeOps[index]; 
+        size_t opCode = nodeOps[index + 1] - nodeOps[index]; 
         if(opCode == 0)
             return;
     
@@ -286,7 +287,7 @@ private:
         uint32_t level = PointEncoding::getLevel<Encoder_t>(range);
 
         // The new position to put the node into (nodeOps value after exclusive scan)
-        uint32_t newNodeIndex = nodeOps[index]; 
+        size_t newNodeIndex = nodeOps[index]; 
 
         // Copy the old node into the new position
         newLeaves[newNodeIndex] = node;
@@ -294,7 +295,7 @@ private:
             // Split the node into 8^L as marked by the opCode, add the adequate codes to the new leaves
             uint32_t levelDiff = PointEncoding::log8ceil<Encoder_t>(opCode);
             key_t gap = PointEncoding::nodeRange<Encoder_t>(level + levelDiff);
-            for (uint32_t sibling = 1; sibling < opCode; sibling++) {
+            for (size_t sibling = 1; sibling < opCode; sibling++) {
                 newLeaves[newNodeIndex + sibling] = newLeaves[newNodeIndex + sibling - 1] + gap;
             }
         }
@@ -307,10 +308,10 @@ private:
      * between leaves[i] and leaves[i+1]
      */
     void computeNodeCounts() {
-        uint32_t n = leaves.size() - 1;
-        uint32_t codes_size = codes.size();
-        uint32_t firstNode = 0;
-        uint32_t lastNode = n;
+        size_t n = leaves.size() - 1;
+        size_t codes_size = codes.size();
+        size_t firstNode = 0;
+        size_t lastNode = n;
 
         // Find general bounds for the codes array
         if(codes.size() > 0) {
@@ -322,14 +323,14 @@ private:
         }
 
         // Fill non-populated parts of the octree with zeros
-        for(uint32_t i = 0; i<firstNode; i++)
+        for(size_t i = 0; i<firstNode; i++)
             counts[i] = 0;
-        for(uint32_t i = lastNode; i<lastNode; i++)
+        for(size_t i = lastNode; i<lastNode; i++)
             counts[i] = 0;
 
         // TODO: Can try using the count guessing algorithm provided in cornerstone code
         size_t nNonZeroNodes = lastNode - firstNode;
-        for(uint32_t i = 0; i<nNonZeroNodes; i++) {
+        for(size_t i = 0; i<nNonZeroNodes; i++) {
             counts[i + firstNode] = calculateNodeCount(leaves[i+firstNode], leaves[i+firstNode+1]);
         }
     }
@@ -353,8 +354,8 @@ private:
         }
     }
 
-    constexpr uint32_t binaryKeyWeight(key_t key, unsigned level){
-        uint32_t ret = 0;
+    constexpr int32_t binaryKeyWeight(key_t key, unsigned level){
+        int32_t ret = 0;
         for (uint32_t l = 1; l <= level + 1; ++l)
         {
             uint32_t digit = PointEncoding::octalDigit<Encoder_t>(key, l);
@@ -370,16 +371,16 @@ private:
 
     void createUnsortedLayout() {
         // Create the prefixesand internaltoleaf arrays for the leafs
-        for(int i = 0; i<nLeaf; i++) {
+        for(size_t i = 0; i<nLeaf; i++) {
             key_t key = leaves[i];
             uint32_t level = PointEncoding::getLevel<Encoder_t>(leaves[i+1] - key);
-            prefixes[i + nInternal] = PointEncoding::encodePlaceholderBit<Encoder_t>(key, 3*level);
+            prefixes[i + nInternal] = PointEncoding::encodePlaceholderBit<Encoder_t>(key, level);
             internalToLeaf[i + nInternal] = i + nInternal;
 
             uint32_t prefixLength = PointEncoding::commonPrefix<Encoder_t>(key, leaves[i+1]);
             if(prefixLength % 3 == 0 && i < nLeaf - 1) {
                 uint32_t octIndex = (i + binaryKeyWeight(key, prefixLength / 3)) / 7;
-                prefixes[octIndex] = PointEncoding::encodePlaceholderBit<Encoder_t>(key, prefixLength);
+                prefixes[octIndex] = PointEncoding::encodePlaceholderBit<Encoder_t>(key, prefixLength / 3);
                 internalToLeaf[octIndex] = octIndex;
             }
         }
@@ -388,7 +389,7 @@ private:
     // Determine octree subdivision level boundaries
     void getLevelRange() {
         for(uint32_t level = 0; level <= Encoder_t::MAX_DEPTH; level++) {
-            auto it = std::lower_bound(prefixes.begin(), prefixes.end(), PointEncoding::encodePlaceholderBit<Encoder_t>(0, 3 * level));
+            auto it = std::lower_bound(prefixes.begin(), prefixes.end(), PointEncoding::encodePlaceholderBit<Encoder_t>(0, level));
             levelRange[level] = std::distance(prefixes.begin(), it);
         }
         levelRange[Encoder_t::MAX_DEPTH + 1] = nTotal;
@@ -397,17 +398,17 @@ private:
     // Extract parent/child relationships from binary tree and translate to sorted order
     void linkTree() {
         for(int i = 0; i<nInternal; i++) {
-            uint32_t idxA = leafToInternal[i];
+            size_t idxA = leafToInternal[i];
             key_t prefix = prefixes[idxA];
             key_t nodeKey = PointEncoding::decodePlaceholderBit<Encoder_t>(prefix);
             unsigned prefixLength = PointEncoding::decodePrefixLength<Encoder_t>(prefix);
             unsigned level = prefixLength / 3;
             assert(level < Encoder_t::MAX_DEPTH);
 
-            key_t childPrefix = PointEncoding::encodePlaceholderBit<Encoder_t>(nodeKey, prefixLength + 3);
+            key_t childPrefix = PointEncoding::encodePlaceholderBit<Encoder_t>(nodeKey, level + 1);
 
-            uint32_t leafSearchStart = levelRange[level + 1];
-            uint32_t leafSearchEnd   = levelRange[level + 2];
+            size_t leafSearchStart = levelRange[level + 1];
+            size_t leafSearchEnd   = levelRange[level + 2];
             auto childIdx = std::distance(prefixes.begin(), 
                 std::lower_bound(prefixes.begin() + leafSearchStart, prefixes.begin() + leafSearchEnd, childPrefix));
 
@@ -421,66 +422,45 @@ private:
         } 
     }
     
-    // TODO: generalize postOrderTraversals and make iterative
-    size_t computeInternalNodeCountsAux(uint32_t node) {
+    /// @brief Computes the amount of points under an internal or leaf node
+    size_t computeInternalNodeCounts(uint32_t node = 0) {
         // If node is a leaf, get its count from the array using itL mapping
         if(offsets[node] == 0) {
             internalCounts[node] = counts[internalToLeaf[node]];
             return counts[internalToLeaf[node]];
         }
 
-        // Compute recursively (post-order DFS) the count of the internal node
+        // Compute recursively (post-order DFS) the count of the internal node. It will be the sum of the counts of its children.
         size_t count = 0;
-        for(int octant = 0; octant < OCTANTS_PER_NODE; octant++) {
+        for(uint8_t octant = 0; octant < OCTANTS_PER_NODE; octant++) {
             uint32_t child = offsets[node] + octant;
-            count += computeInternalNodeCountsAux(child);   
+            count += computeInternalNodeCounts(child);   
         }
         internalCounts[node] = count;
         return count;
     }
 
-    // Computes the internal node counts array
-    void computeInternalNodeCounts() {
-        if (nInternal == 0) return;
-        internalCounts[0] = computeInternalNodeCountsAux(0);
-        // At the root, every point should have been counted
-        assert(internalCounts[0] == points.size());
-    }
-
-    // TODO: generalize postOrderTraversals and make iterative
-    std::pair<size_t, size_t> computeInternalNodeLayoutsAux(uint32_t node) {
+    /// @brief Computes the ranges of point indexes covered by internal or leafs nodes
+    std::pair<size_t, size_t> computeInternalNodeLayouts(uint32_t node = 0) {
         // If node is a leaf, get its internal layout from the two consecutive leafs on the layout array
         if(offsets[node] == 0) {
             internalLayoutRanges[node] = std::make_pair(layout[internalToLeaf[node]], layout[internalToLeaf[node] + 1]);
             return internalLayoutRanges[node];
         }
 
-        // Compute recursively (post-order DFS) the count of the internal node
-        size_t first, last;
-        for(int octant = 0; octant < OCTANTS_PER_NODE; octant++) {
+        // Compute recursively (post-order DFS) the count of the internal node. It will be the total range spanned by its children.
+        for(uint8_t octant = 0; octant < OCTANTS_PER_NODE; octant++) {
             uint32_t child = offsets[node] + octant;
-            auto childLayout = computeInternalNodeLayoutsAux(child);
+            auto childLayout = computeInternalNodeLayouts(child);
             if(octant == 0)
-                first = childLayout.first;
+                internalLayoutRanges[node].first = childLayout.first;
             else if(octant == OCTANTS_PER_NODE-1)
-                last = childLayout.second;
+                internalLayoutRanges[node].second = childLayout.second;
         }
-        internalLayoutRanges[node] = std::make_pair(first, last);
-        // Check the range is correct by comparing its span to internalCounts
-        assert(internalCounts[node] == last - first);
         return internalLayoutRanges[node];
     }
 
-    // Computes the internal node counts array
-    void computeInternalNodeLayouts() {
-        if (nInternal == 0) return;
-        internalLayoutRanges[0] = computeInternalNodeLayoutsAux(0);
-    }
-
-public:
-    using PointType = Point_t;
-    LinearOctree() = default;
-    
+public:    
     /**
      * @brief Builds the linear octree given an array of points, also reporting how much time each step takes
      * 
@@ -502,13 +482,13 @@ public:
         };
 
         buildStep([&] { setupBbox(); }, "find bounding box");
-        buildStep([&] { sortPoints(); }, "sort the points by their Morton codes");
+        buildStep([&] { sortPoints(); }, "encode and sort the points");
         buildStep([&] { buildOctreeLeaves(); }, "build the octree leaves");
         buildStep([&] { resize(); }, "allocate space for internal variables");
         buildStep([&] { buildOctreeInternal(); }, "build internal part of the octree and link it");
         buildStep([&] { computeGeometry(); }, "compute octree geometry");
         if(printLog) {
-            std::cout << "Total time to build linear octree: " << total_time << " seconds\n";
+            std::cout << "Total time to build: " << total_time << " seconds\n";
             std::cout << "Total number of nodes in the octree: " << nTotal << std::endl;
             std::cout << "  Number of leafs: " << nLeaf << std::endl;
             std::cout << "  Number of internal nodes: " << nInternal << std::endl;
@@ -553,13 +533,15 @@ public:
      */
     void sortPoints() {
         // Temporal vector of pairs
-        std::vector<std::pair<key_t, Point_t>> encoded_points;
-        encoded_points.reserve(points.size());
-        for(size_t i = 0; i < points.size(); i++) {
-            coords_t x, y, z;
-            PointEncoding::getAnchorCoords<Encoder_t>(points[i], bbox, x, y, z);
-            encoded_points.emplace_back(Encoder_t::encode(x, y, z), points[i]);
-        }
+        std::vector<std::pair<key_t, Point_t>> encoded_points(points.size());
+
+        // Compute encodings in parallel
+        #pragma omp parallel for
+            for(size_t i = 0; i < points.size(); i++) {
+                coords_t x, y, z;
+                PointEncoding::getAnchorCoords<Encoder_t>(points[i], bbox, x, y, z);
+                encoded_points[i] = std::make_pair(Encoder_t::encode(x, y, z), points[i]);
+            }
 
         // TODO: implement parallel radix sort
         std::sort(encoded_points.begin(), encoded_points.end(),
@@ -567,21 +549,21 @@ public:
                 return a.first < b.first;  // Compare only the morton codes
         });
         
-        // Copy back sorted codes and points
+        // Copy back sorted codes and points in parallel
         codes.resize(points.size());
-        for(size_t i = 0; i < points.size(); i++) {
-            codes[i] = encoded_points[i].first;
-            points[i] = encoded_points[i].second;
-        }
+        #pragma omp parallel for
+            for(size_t i = 0; i < points.size(); i++) {
+                codes[i] = encoded_points[i].first;
+                points[i] = encoded_points[i].second;
+            }
     }
 
     /// @brief Builds the octeee leaves array by repeatingly calling @ref updateOctreeLeaves()
     void buildOctreeLeaves() {
         // Builds the octree sequentially using the cornerstone algorithm
-
-        // We start with 0, 7777...777 (in octal)
+        // We start with 0, UPPER_BOUND on the leaves. Remember that UPPER_BOUND is 100000...000 with as many 0s as MAX_DEPTH, and it can never be reached by a code
         leaves = {0, Encoder_t::UPPER_BOUND};
-        counts = {(uint32_t) codes.size()};
+        counts = {codes.size()};
 
         while(!updateOctreeLeaves())
             ;
@@ -593,7 +575,7 @@ public:
      * @details Convergence is achieved when all the node operations to be done are equal to 1
      */
     bool updateOctreeLeaves() {
-        std::vector<uint32_t> nodeOps(leaves.size());
+        std::vector<size_t> nodeOps(leaves.size());
         bool converged = rebalanceDecision(nodeOps);
         if(!converged) {
             std::vector<key_t> newTree;
