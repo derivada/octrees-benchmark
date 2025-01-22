@@ -44,7 +44,6 @@ std::shared_ptr<ResultSet<Point_t>> buildAndRunAlgoComparisonBenchmark(std::ofst
 
 template <PointType Point_t, typename Encoder_t>
 void octreeComparisonBenchmark(std::ofstream &outputFile) {
-  // TODO: maybe a better idea is to choose radii based on point cloud density
   TimeWatcher tw;
   tw.start();
   auto points = readPointCloud<Point_t>(mainOptions.inputFile);
@@ -54,20 +53,18 @@ void octreeComparisonBenchmark(std::ofstream &outputFile) {
   std::cout << "Time to read points: " << tw.getElapsedDecimalSeconds()
             << " seconds\n";
   checkVectorMemory(points);
-
-  // Generate a shared search set for each benchmark execution
   std::shared_ptr<const SearchSet> searchSet = std::make_shared<const SearchSet>(NUM_SEARCHES, points);
 
-  buildAndRunBenchmark<Octree, Point_t, PointEncoding::NoEncoder>(outputFile, points, searchSet);
-  auto resultsLinearMorton = buildAndRunBenchmark<LinearOctree, Point_t, PointEncoding::MortonEncoder3D>(outputFile, points, searchSet);
-  auto resultsPointerMorton = buildAndRunBenchmark<Octree, Point_t, PointEncoding::MortonEncoder3D>(outputFile, points, searchSet);
-  auto resultsLinearHilbert = buildAndRunBenchmark<LinearOctree, Point_t, PointEncoding::HilbertEncoder3D>(outputFile, points, searchSet);
-  auto resultsPointerHilbert = buildAndRunBenchmark<Octree, Point_t, PointEncoding::HilbertEncoder3D>(outputFile, points, searchSet);
-
-  // Check the results if needed
-  if(CHECK_RESULTS) {
-    resultsLinearMorton->checkResults(resultsPointerMorton);
-    resultsLinearHilbert->checkResults(resultsPointerHilbert);
+  if constexpr (std::is_same_v<Encoder_t, PointEncoding::NoEncoder>) {
+    // Only do pointer octree, since we are not encoding the points
+    buildAndRunBenchmark<Octree, Point_t, PointEncoding::NoEncoder>(outputFile, points, searchSet);
+  } else {
+    // Do both linear (which encodes and sorts the points) and pointer octree after it
+    auto resultsLinear = buildAndRunBenchmark<LinearOctree, Point_t, Encoder_t>(outputFile, points, searchSet);
+    auto resultsPointer = buildAndRunBenchmark<Octree, Point_t, Encoder_t>(outputFile, points, searchSet);
+    if(CHECK_RESULTS) {
+      resultsLinear->checkResults(resultsPointer);
+    }
   }
 }
 
@@ -122,8 +119,11 @@ int main(int argc, char *argv[]) {
       throw std::ios_base::failure(std::string("Failed to open benchmark output file: ") + csvPath.string());
   }
 
-  // octreeComparisonBenchmark<Lpoint64, PointEncoding::HilbertEncoder3D>(outputFile);
-  // octreeComparisonBenchmark<Lpoint64, PointEncoding::MortonEncoder3D>(outputFile);
-  algorithmComparisonBenchmark<Lpoint64, PointEncoding::HilbertEncoder3D>(outputFile);
+  // Compare linear and pointer octree, both encoded with Hilbert and Morton SFC order
+  octreeComparisonBenchmark<Lpoint64, PointEncoding::HilbertEncoder3D>(outputFile);
+  octreeComparisonBenchmark<Lpoint64, PointEncoding::MortonEncoder3D>(outputFile);
+
+  // Baseline with no encoder (only pointer-based octree)
+  octreeComparisonBenchmark<Lpoint64, PointEncoding::NoEncoder>(outputFile);
   return EXIT_SUCCESS;
 }

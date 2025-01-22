@@ -28,7 +28,7 @@ datasets_algo_comp=(
 )
 
 
-for dataset in "${datasets_algo_comp[@]}"; do
+for dataset in "${datasets_3[@]}"; do
     if [[ ! -f "$dataset" ]]; then
         echo "Error: File not found - $dataset"
         exit 1

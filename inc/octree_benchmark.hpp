@@ -303,7 +303,7 @@ class OctreeBenchmark {
                 << stats.stdev() << ','
                 << stats.usedWarmup() << ','
                 << stats.warmupValue() << ','
-                << averageResultSize << '\n';
+                << averageResultSize << std::endl;
         }
 
     public:
