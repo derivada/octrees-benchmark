@@ -21,10 +21,17 @@ datasets_3=(
     "data/dales_las/train/5110_54320.las"
 )
 
-for dataset in "${datasets_1[@]}"; do
+datasets_algo_comp=(
+    "data/paris_lille/Lille_0.las"
+    "data/paris_lille/Paris_Luxembourg_6.las"
+    "data/dales_las/test/5135_54435.las"
+)
+
+
+for dataset in "${datasets_algo_comp[@]}"; do
     if [[ ! -f "$dataset" ]]; then
         echo "Error: File not found - $dataset"
         exit 1
     fi
-    ./build/rule-based-classifier-cpp -i "$dataset"
+    ./build/rule-based-classifier-cpp -i "$dataset" -o "out/algo_comp"
 done

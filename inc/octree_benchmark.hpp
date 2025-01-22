@@ -191,13 +191,10 @@ class OctreeBenchmark {
             size_t averageResultSize = 0;
             #pragma omp parallel for schedule(static) reduction(+:averageResultSize)
                 for(size_t i = 0; i<searchSet->numSearches; i++) {
-                    if(check){
-                        resultSet->resultsNeigh[i] = oct->template searchNeighbors<kernel>(searchSet->searchPoints[i], radii);
-                        averageResultSize += resultSet->resultsNeigh[i].size();
-                    } else{
-                        auto result = oct->template searchNeighbors<kernel>(searchSet->searchPoints[i], radii);
-                        averageResultSize += result.size();
-                    }
+                    auto result = oct->template searchNeighbors<kernel>(searchSet->searchPoints[i], radii);
+                    averageResultSize += result.size();
+                    if(check)
+                        resultSet->resultsNeigh[i] = result;
                 }
             
             averageResultSize = averageResultSize / searchSet->numSearches;
@@ -211,13 +208,10 @@ class OctreeBenchmark {
             size_t averageResultSize = 0;
             #pragma omp parallel for schedule(static) reduction(+:averageResultSize)
                 for(size_t i = 0; i<searchSet->numSearches; i++) {
-                    if(check){
-                        resultSet->resultsNeighOld[i] = oct->template searchNeighborsOld<kernel>(searchSet->searchPoints[i], radii);
-                        averageResultSize += resultSet->resultsNeigh[i].size();
-                    } else{
-                        auto result = oct->template searchNeighborsOld<kernel>(searchSet->searchPoints[i], radii);
-                        averageResultSize += resultSet->resultsNeigh[i].size();
-                    }
+                    auto result = oct->template searchNeighborsOld<kernel>(searchSet->searchPoints[i], radii);
+                    averageResultSize += result.size();
+                    if(check)
+                        resultSet->resultsNeighOld[i] = result;
                 }
             averageResultSize = averageResultSize / searchSet->numSearches;
             return averageResultSize;
@@ -230,12 +224,10 @@ class OctreeBenchmark {
             size_t averageResultSize = 0;
             #pragma omp parallel for schedule(static) reduction(+:averageResultSize)
                 for(size_t i = 0; i<searchSet->numSearches; i++) {
-                    if(check) {
-                        resultSet->resultsNumNeigh[i] = oct->template numNeighbors<kernel>(searchSet->searchPoints[i], radii);
-                        averageResultSize += resultSet->resultsNumNeigh[i];
-                    } else {
-                        averageResultSize += oct->template numNeighbors<kernel>(searchSet->searchPoints[i], radii);
-                    }
+                    auto result = oct->template numNeighbors<kernel>(searchSet->searchPoints[i], radii);
+                    averageResultSize += result;
+                    if(check)
+                        resultSet->resultsNumNeigh[i] = result;
                 }
             averageResultSize = averageResultSize / searchSet->numSearches;
             return averageResultSize;
@@ -248,12 +240,10 @@ class OctreeBenchmark {
             size_t averageResultSize = 0;
             #pragma omp parallel for schedule(static) reduction(+:averageResultSize)
                 for(size_t i = 0; i<searchSet->numSearches; i++) {
-                    if(check) {
-                        resultSet->resultsNumNeighOld[i] = oct->template numNeighborsOld<kernel>(searchSet->searchPoints[i], radii);
-                        averageResultSize += resultSet->resultsNumNeigh[i];
-                    } else {
-                        preventOptimization(oct->template numNeighborsOld<kernel>(searchSet->searchPoints[i], radii));
-                    }
+                    auto result = oct->template numNeighborsOld<kernel>(searchSet->searchPoints[i], radii);
+                    averageResultSize += result;
+                    if(check)
+                        resultSet->resultsNumNeighOld[i] = result;
                 }
             averageResultSize = averageResultSize / searchSet->numSearches;
             return averageResultSize;
@@ -267,7 +257,7 @@ class OctreeBenchmark {
                     if(check) {
                         resultSet->resultsKNN[i] = oct->template KNN(searchSet->searchPoints[i], searchSet->searchKNNLimits[i], searchSet->searchKNNLimits[i]);
                     } else {
-                        auto result = oct->template KNN(searchSet->searchPoints[i], searchSet->searchKNNLimits[i], searchSet->searchKNNLimits[i]);
+                        preventOptimization(oct->template KNN(searchSet->searchPoints[i], searchSet->searchKNNLimits[i], searchSet->searchKNNLimits[i]));
                     }
                 }
         }
@@ -278,15 +268,10 @@ class OctreeBenchmark {
             size_t averageResultSize = 0;
             #pragma omp parallel for schedule(static) reduction(+:averageResultSize)
                 for(size_t i = 0; i<searchSet->numSearches; i++) {
-                    if(check) {    
-                        resultSet->resultsRingNeigh[i] = oct->template searchNeighborsRing(searchSet->searchPoints[i], 
-                            innerRadii, outerRadii);
-                        averageResultSize += resultSet->resultsRingNeigh[i].size();
-                    } else {
-                        auto result = oct->template searchNeighborsRing(searchSet->searchPoints[i], 
-                            innerRadii, outerRadii);
-                        averageResultSize += result.size();
-                    }
+                    auto result = oct->template searchNeighborsRing(searchSet->searchPoints[i], innerRadii, outerRadii);
+                    averageResultSize += result.size();
+                    if(check)
+                        resultSet->resultsRingNeigh[i] = result;
                 }
             averageResultSize = averageResultSize / searchSet->numSearches;
             return averageResultSize;

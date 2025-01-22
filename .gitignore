@@ -8,3 +8,4 @@ debug
 out
 data
 *.log
+*.out
