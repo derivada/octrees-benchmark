@@ -26,10 +26,6 @@ datasets_algo_comp=(
     "data/dales_las/test/5135_54435.las"
 )
 
-datasets_seq=(
-    "data/paris_lille/Lille_0.las"
-)
-
 ##### REGULAR BENCHMARK
 # for dataset in "${datasets_search_1[@]}"; do
 #     if [[ ! -f "$dataset" ]]; then
