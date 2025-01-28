@@ -371,26 +371,42 @@ class OctreeBenchmark {
         }
 
         void printBenchmarkLog(const std::string &bench_name, const std::vector<float> &benchmarkRadii, const size_t repeats, const size_t numSearches) {
-            std::cout << "Running " << bench_name << " benchmark on " << getOctreeName<Octree_t>() << " with points " << getPointName<Point_t>() << 
-                " and encoder " << PointEncoding::getEncoderName<Encoder_t>() << "\nParameters:\n";
-            std::cout << "  Radii: {";
-            for(int i = 0; i<benchmarkRadii.size(); i++) {
+            // Displaying the basic information with formatting
+            std::cout << std::fixed << std::setprecision(3);
+
+            std::cout << std::left << std::setw(LOG_FIELD_WIDTH) << "Running benchmark:"        << std::setw(LOG_FIELD_WIDTH) << bench_name                      << "\n";
+            std::cout << std::left << std::setw(LOG_FIELD_WIDTH) << "Octree used:"              << std::setw(LOG_FIELD_WIDTH) << getOctreeName<Octree_t>()        << "\n";
+            std::cout << std::left << std::setw(LOG_FIELD_WIDTH) << "Point type:"               << std::setw(LOG_FIELD_WIDTH) << getPointName<Point_t>()           << "\n";
+            std::cout << std::left << std::setw(LOG_FIELD_WIDTH) << "Encoder:"                  << std::setw(LOG_FIELD_WIDTH) << PointEncoding::getEncoderName<Encoder_t>() << "\n";
+            std::cout << std::left << std::setw(LOG_FIELD_WIDTH) << "Radii:";
+
+            // Outputting radii values in a similar structured format
+            for (size_t i = 0; i < benchmarkRadii.size(); ++i) {
+                if(i == 0)
+                    std::cout << "{";
                 std::cout << benchmarkRadii[i];
-                if(i != benchmarkRadii.size()-1) {
+                if (i != benchmarkRadii.size() - 1) {
                     std::cout << ", ";
                 }
             }
-            std::cout << "}\n";
-            std::cout << "  Number of searches: " << numSearches << "\n";
-            std::cout << "  Repeats: " << repeats << "\n";
-            std::cout << "  Warmup: " << (useWarmup ? "enabled" : "disabled") << "\n";
-            std::cout << "  Parallel execution: " << (useParallel ? "enabled" : "disabled") << "\n";
-            std::cout << "  Search set point distribution: " << (searchSet->isSequential ? "sequential" : "random") << "\n";
+            std::cout << "}" << std::endl;
+
+            // Showing other parameters
+            std::cout << std::left << std::setw(LOG_FIELD_WIDTH) << "Number of searches:"       << std::setw(LOG_FIELD_WIDTH) << numSearches                      << "\n";
+            std::cout << std::left << std::setw(LOG_FIELD_WIDTH) << "Repeats:"                  << std::setw(LOG_FIELD_WIDTH) << repeats                           << "\n";
+            std::cout << std::left << std::setw(LOG_FIELD_WIDTH) << "Warmup:"                   << std::setw(LOG_FIELD_WIDTH) << (useWarmup ? "enabled" : "disabled") << "\n";
+            std::cout << std::left << std::setw(LOG_FIELD_WIDTH) << "Parallel execution:"       << std::setw(LOG_FIELD_WIDTH) << (useParallel ? "enabled" : "disabled") << "\n";
+            std::cout << std::left << std::setw(LOG_FIELD_WIDTH) << "Search set distribution:"  << std::setw(LOG_FIELD_WIDTH) << (searchSet->isSequential ? "sequential" : "random") << "\n";
+            
             std::cout << std::endl;
+            std::cout << std::left << std::setw(LOG_FIELD_WIDTH/2) << "Progress"    << std::setw(LOG_FIELD_WIDTH/2) << "Completed at" 
+                                   << std::setw(LOG_FIELD_WIDTH) << "Method"      << std::setw(LOG_FIELD_WIDTH/2) << "Radius" << std::endl;
         }
 
         static void printBenchmarkUpdate(const std::string &method, const size_t totalExecutions, size_t &currentExecution, const float radius) {
-            std::cout << getCurrentDate("[%H:%M:%S]") << " (" << currentExecution << "/" << totalExecutions << ") " << method << " with radius " << radius << " done" << std::endl;
+            const std::string progress_str = "(" + std::to_string(currentExecution) + "/" + std::to_string(totalExecutions) + ")";
+            std::cout << std::left << std::setw(LOG_FIELD_WIDTH/2) << progress_str  << std::setw(LOG_FIELD_WIDTH/2) << getCurrentDate("[%H:%M:%S]") 
+                                   << std::setw(LOG_FIELD_WIDTH) << method        << std::setw(LOG_FIELD_WIDTH/2) << radius << std::endl;
             currentExecution++;
         }
 
@@ -423,6 +439,7 @@ class OctreeBenchmark {
                 benchmarkNumNeigh<Kernel_t::square>(repeats, benchmarkRadii[i]);
                 printBenchmarkUpdate("Num. neighbor search - new impl.", total, current, benchmarkRadii[i]);
             }
+            std::cout << std::endl;
         }
 
         void searchBench(const std::vector<float> &benchmarkRadii, const size_t repeats, const size_t numSearches) {
@@ -442,6 +459,7 @@ class OctreeBenchmark {
                 benchmarkNumNeigh<Kernel_t::square>(repeats, benchmarkRadii[i]);
                 printBenchmarkUpdate("Num. neighbor search", total, current, benchmarkRadii[i]);
             }
+            std::cout << std::endl;
         }
 
         std::shared_ptr<const SearchSet> getSearchSet() const { return searchSet; }

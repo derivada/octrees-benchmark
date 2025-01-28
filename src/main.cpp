@@ -22,6 +22,23 @@
 
 namespace fs = std::filesystem;
 
+template<PointType Point_t>
+void pointCloudReadLog(const std::vector<Point_t> &points, TimeWatcher &tw) {
+    auto mem_size = (sizeof(std::vector<Point_t>) + (sizeof(Point_t) * points.size())) / (1024.0 * 1024.0);
+    const std::string mem_size_str = std::to_string(mem_size) + " MB";
+    const std::string point_size_str =  std::to_string(sizeof(Point_t)) + " bytes";
+    const std::string time_elapsed_str = std::to_string(tw.getElapsedDecimalSeconds()) + " seconds";
+    std::cout << std::fixed << std::setprecision(3); 
+    std::cout << std::left << std::setw(LOG_FIELD_WIDTH) << "Point cloud read:"           << std::setw(LOG_FIELD_WIDTH) << mainOptions.inputFile.stem()                   << "\n";
+    std::cout << std::left << std::setw(LOG_FIELD_WIDTH) << "Time to read:"               << std::setw(LOG_FIELD_WIDTH) << time_elapsed_str                               << "\n";
+    std::cout << std::left << std::setw(LOG_FIELD_WIDTH) << "Number of read points:"      << std::setw(LOG_FIELD_WIDTH) << points.size()                                  << "\n";
+    std::cout << std::left << std::setw(LOG_FIELD_WIDTH) << "Read into point type:"       << std::setw(LOG_FIELD_WIDTH) << getPointName<Point_t>()                        << "\n";
+    std::cout << std::left << std::setw(LOG_FIELD_WIDTH) << "Size of point type:"         << std::setw(LOG_FIELD_WIDTH) << point_size_str                                 << "\n";
+    std::cout << std::left << std::setw(LOG_FIELD_WIDTH) << "Points vector size:"         << std::setw(LOG_FIELD_WIDTH) << mem_size_str                                   << "\n";
+    std::cout << std::left << std::setw(LOG_FIELD_WIDTH) << "Alligned to cache lines?:"  	<< std::setw(LOG_FIELD_WIDTH) << (checkMemoryAlligned(points) ? "Yes" : "No")   << "\n";
+    std::cout << std::endl;
+}
+
 template <template <typename, typename> class Octree_t, PointType Point_t, typename Encoder_t>
 std::shared_ptr<ResultSet<Point_t>> runSearchBenchmark(std::ofstream &outputFile, std::vector<Point_t>& points,
   std::shared_ptr<const SearchSet> searchSet, std::optional<std::vector<PointMetadata>> &metadata = std::nullopt,
@@ -60,11 +77,7 @@ void searchBenchmark(std::ofstream &outputFile) {
       points = readPointCloud<Point_t>(mainOptions.inputFile);
   }
   tw.stop();
-
-  std::cout << "Number of read points: " << points.size() << "\n";
-  std::cout << "Time to read points: " << tw.getElapsedDecimalSeconds()
-            << " seconds\n";
-  checkVectorMemory(points);
+  pointCloudReadLog(points, tw);
   std::shared_ptr<const SearchSet> searchSet = std::make_shared<const SearchSet>(mainOptions.numSearches, points);
 
   if constexpr (std::is_same_v<Encoder_t, PointEncoding::NoEncoder>) {
@@ -92,11 +105,7 @@ void searchImplComparisonBenchmark(std::ofstream &outputFile) {
   tw.start();
   auto points = readPointCloud<Point_t>(mainOptions.inputFile);
   tw.stop();
-
-  std::cout << "Number of read points: " << points.size() << "\n";
-  std::cout << "Time to read points: " << tw.getElapsedDecimalSeconds()
-            << " seconds\n";
-  checkVectorMemory(points);
+  pointCloudReadLog(points, tw);
 
   // Generate a shared search set for each benchmark execution
   std::shared_ptr<const SearchSet> searchSet = std::make_shared<const SearchSet>(mainOptions.numSearches, points);
@@ -120,11 +129,7 @@ void sequentialVsShuffleBenchmark(std::ofstream &outputFile) {
   tw.start();
   auto points = readPointCloud<Point_t>(mainOptions.inputFile);
   tw.stop();
-
-  std::cout << "Number of read points: " << points.size() << "\n";
-  std::cout << "Time to read points: " << tw.getElapsedDecimalSeconds()
-            << " seconds\n";
-  checkVectorMemory(points);
+  pointCloudReadLog(points, tw);
 
   /**
    * We do shuffle searchSet first since points are chosen at random and we don't care if they are already ordered
@@ -143,19 +148,16 @@ void sequentialVsShuffleBenchmark(std::ofstream &outputFile) {
 int main(int argc, char *argv[]) {
   setDefaults();
   processArgs(argc, argv);
+  std::cout << std::fixed << std::setprecision(3); 
   fs::path inputFile = mainOptions.inputFile;
   std::string fileName = inputFile.stem();
-  
+
   if (!mainOptions.outputDirName.empty()) {
     mainOptions.outputDirName = mainOptions.outputDirName / fileName;
   }
 
   // Handling Directories
   createDirectory(mainOptions.outputDirName);
-
-  // Print three decimals
-  std::cout << std::fixed;
-  std::cout << std::setprecision(3);
 
   // Open the benchmark output file
   std::string csvFilename = mainOptions.inputFileName + "-" + getCurrentDate() + ".csv";

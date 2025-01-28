@@ -140,6 +140,36 @@ private:
     /// @brief The maximum depth seen in the octree
     uint32_t maxDepthSeen = 0;
 
+    size_t vectorMemorySize(const auto& vec) {
+        return sizeof(vec) + vec.size() * sizeof(typename std::decay_t<decltype(vec)>::value_type);
+    }
+
+    size_t computeMemorySize() {
+        size_t total_size = 0;
+        total_size += vectorMemorySize(leaves);
+        total_size += vectorMemorySize(counts);
+        total_size += vectorMemorySize(internalCounts);
+        total_size += vectorMemorySize(layout);
+        total_size += vectorMemorySize(internalLayoutRanges);
+        total_size += vectorMemorySize(prefixes);
+        total_size += vectorMemorySize(offsets);
+        total_size += vectorMemorySize(parents);
+        total_size += vectorMemorySize(levelRange);
+        total_size += vectorMemorySize(internalToLeaf);
+        total_size += vectorMemorySize(leafToInternal);
+        total_size += vectorMemorySize(codes);
+        total_size += vectorMemorySize(centers);
+        total_size += vectorMemorySize(radii);
+        total_size += sizeof(precomputedRadii) + sizeof(halfLengths) + sizeof(bbox) + sizeof(maxDepthSeen) + sizeof(points) + sizeof(metadata);
+
+        // dont take into account the contents of the points or metadata array, as it is not owned by the octree
+        // total_size += points.size() * sizeof(Point_t);
+        // if (metadata.has_value()) {
+        //     total_size += sizeof(metadata.value()) + metadata->size() * sizeof(PointMetadata);
+        // }
+        return total_size;
+    }
+
     /**
      * @brief Computes the rebalacing decisions as the first process in the subdivision of the leaves array
      * 
@@ -474,8 +504,6 @@ public:
      */
     explicit LinearOctree(std::vector<Point_t> &points, std::optional<std::vector<PointMetadata>>& metadata = std::nullopt, 
         bool printLog = true): points(points), metadata(metadata) {
-        if(printLog)
-            std::cout << "Linear octree build summary:\n";
         double total_time = 0.0;
         TimeWatcher tw;
         auto buildStep = [&](auto &&step, const std::string action) {
@@ -483,22 +511,37 @@ public:
             step();
             tw.stop();
             total_time += tw.getElapsedDecimalSeconds();
-            if(printLog)
-                std::cout << "  Time to " << action << ": " << tw.getElapsedDecimalSeconds() << " seconds\n";
+            if(printLog) {
+                const std::string time_ellapsed_str = std::to_string(tw.getElapsedDecimalSeconds()) + " seconds";
+                std::cout   << std::left << std::setw(LOG_FIELD_WIDTH) << action
+                            << std::setw(LOG_FIELD_WIDTH) << time_ellapsed_str << "\n";
+            }
         };
 
-        buildStep([&] { setupBbox(); }, "find bounding box");
-        buildStep([&] { sortPoints(); }, "encode and sort the points");
-        buildStep([&] { buildOctreeLeaves(); }, "build the octree leaves");
-        buildStep([&] { resize(); }, "allocate space for internal variables");
-        buildStep([&] { buildOctreeInternal(); }, "build internal part of the octree and link it");
-        buildStep([&] { computeGeometry(); }, "compute octree geometry");
+        if(printLog){
+            std::cout << std::fixed << std::setprecision(3); 
+            std::cout << "Linear octree build steps summary:\n";
+        }
+        buildStep([&] { setupBbox(); }, "Finding bounding box:");
+        buildStep([&] { sortPoints(); }, "Point encoding and sorting:");
+        buildStep([&] { buildOctreeLeaves(); }, "Leaf construction:");
+        buildStep([&] { resize(); }, "Memory allocation:");
+        buildStep([&] { buildOctreeInternal(); }, "Internal part and linking:");
+        buildStep([&] { computeGeometry(); }, "Geometry computing:");
+        std::cout << std::endl;
+
         if(printLog) {
-            std::cout << "Total time to build: " << total_time << " seconds\n";
-            std::cout << "Total number of nodes in the octree: " << nTotal << std::endl;
-            std::cout << "  Number of leafs: " << nLeaf << std::endl;
-            std::cout << "  Number of internal nodes: " << nInternal << std::endl;
-            std::cout << "Max depth seen " << maxDepthSeen << " with leafs of radii: " << precomputedRadii[maxDepthSeen] << std::endl;
+            const std::string total_build_time_str = std::to_string(tw.getElapsedDecimalSeconds()) + " seconds";
+            const std::string memory_str = std::to_string(computeMemorySize() / (1024*1024)) + " MB";
+            std::cout << "Linear octree statistics:\n";
+            std::cout << std::left << std::setw(LOG_FIELD_WIDTH) << "Total time to build:"                  << std::setw(LOG_FIELD_WIDTH) << total_build_time_str << "\n";
+            std::cout << std::left << std::setw(LOG_FIELD_WIDTH) << "Extra memory used:"                    << std::setw(LOG_FIELD_WIDTH) << memory_str << "\n";
+            std::cout << std::left << std::setw(LOG_FIELD_WIDTH) << "Total number of nodes:"                << std::setw(LOG_FIELD_WIDTH) << nTotal << "\n";
+            std::cout << std::left << std::setw(LOG_FIELD_WIDTH) << "  Leafs:"                              << std::setw(LOG_FIELD_WIDTH) << nLeaf << "\n";
+            std::cout << std::left << std::setw(LOG_FIELD_WIDTH) << "  Internal nodes:"                     << std::setw(LOG_FIELD_WIDTH) << nInternal << "\n";
+            std::cout << std::left << std::setw(LOG_FIELD_WIDTH) << "Max. depth seen:"                      << std::setw(LOG_FIELD_WIDTH) << maxDepthSeen << "\n";
+            std::cout << std::left << std::setw(LOG_FIELD_WIDTH) << "Min. radii seen:"                      << std::setw(LOG_FIELD_WIDTH) << precomputedRadii[maxDepthSeen].getX() << "\n";
+            std::cout << std::endl;
         }
     }
 

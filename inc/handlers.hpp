@@ -74,9 +74,6 @@ std::vector<Point_t> readPointCloud(const fs::path& fileName)
 	std::shared_ptr<FileReader<Point_t>> fileReader = FileReaderFactory::makeReader<Point_t>(readerType, fileName);
 
 	std::vector<Point_t> points = fileReader->read();
-	// Decimation. Implemented here because, tbh, I don't want to implement it for each reader type.
-	std::cout << "Point cloud size: " << points.size() << std::endl;
-
 	return points;
 }
 
@@ -96,7 +93,6 @@ std::pair<std::vector<Point_t>, std::vector<PointMetadata>> readPointCloudMeta(c
 
 	auto points_meta = fileReader->readMeta();
 	// Decimation. Implemented here because, tbh, I don't want to implement it for each reader type.
-	std::cout << "Point cloud size: " << points_meta.first.size() << std::endl;
 
 	return points_meta;
 }

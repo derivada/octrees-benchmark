@@ -23,16 +23,9 @@
 #include <numeric>
 #include <iomanip>
 
-// Memory Handling
-namespace mem
-{
-template<class C>
-void free(C& c)
-{
-	c.clear();
-	c.shrink_to_fit();
-}
-} // namespace mem
+
+constexpr size_t LOG_FIELD_WIDTH = 32;
+
 
 // Utility to check if a type is a subclass of Point
 template <typename T>
@@ -45,19 +38,26 @@ concept OctreeType = requires {
 	requires PointType<typename T::PointType>;  // PointType should satisfy the PointType concept
 };
 
-template <typename Time_t>
-void checkVectorMemory(std::vector<Time_t> vec) {
-    std::cout << "Size in memory: " << (sizeof(std::vector<Time_t>) + (sizeof(Time_t) * vec.size())) / (1024.0 * 1024.0) << "MB" << std::endl;
 
-    void* data = vec.data();
-    // Check if the data is aligned to cache liens
+template<typename T>
+bool checkMemoryAlligned(std::vector<T> vec) {
+  void* data = vec.data();
 	constexpr std::size_t CACHE_LINE_SIZE = 64; // Typical cache line size
-    if (reinterpret_cast<std::uintptr_t>(data) % CACHE_LINE_SIZE == 0) {
-        std::cout << "The vector's data is aligned to a cache line!" << std::endl;
-    } else {
-        std::cout << "The vector's data is NOT aligned to a cache line." << std::endl;
-    }
+  return (reinterpret_cast<std::uintptr_t>(data) % CACHE_LINE_SIZE == 0);
 }
+
+
+
+// Memory Handling
+namespace mem
+{
+template<class C>
+void free(C& c)
+{
+	c.clear();
+	c.shrink_to_fit();
+}
+} // namespace mem
 
 template<typename... Time_t>
 inline bool are_the_same(const std::vector<Time_t...>& v1_, const std::vector<Time_t...>& v2_)
