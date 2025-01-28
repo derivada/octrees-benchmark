@@ -24,7 +24,7 @@ namespace fs = std::filesystem;
 
 template <template <typename, typename> class Octree_t, PointType Point_t, typename Encoder_t>
 std::shared_ptr<ResultSet<Point_t>> runSearchBenchmark(std::ofstream &outputFile, std::vector<Point_t>& points,
-  std::shared_ptr<const SearchSet> searchSet, std::optional<std::reference_wrapper<std::vector<PointMetadata>>> metadata = std::nullopt,
+  std::shared_ptr<const SearchSet> searchSet, std::optional<std::vector<PointMetadata>> &metadata = std::nullopt,
   std::string comment = "", bool useParallel = true) {
   OctreeBenchmark<Octree_t, Point_t, Encoder_t> ob(points, metadata, mainOptions.numSearches, searchSet, outputFile, 
      comment, mainOptions.checkResults, mainOptions.useWarmup, useParallel);
@@ -34,8 +34,8 @@ std::shared_ptr<ResultSet<Point_t>> runSearchBenchmark(std::ofstream &outputFile
 
 template <template <typename, typename> class Octree_t, PointType Point_t, typename Encoder_t>
 std::shared_ptr<ResultSet<Point_t>> runSearchImplComparisonBenchmark(std::ofstream &outputFile, std::vector<Point_t>& points,
-  std::shared_ptr<const SearchSet> searchSet, std::string comment = "", bool useParallel = true) {
-  OctreeBenchmark<Octree_t, Point_t, Encoder_t> ob(points, std::nullopt, mainOptions.numSearches, searchSet, outputFile, 
+  std::shared_ptr<const SearchSet> searchSet, std::optional<std::vector<PointMetadata>> &metadata = std::nullopt, std::string comment = "", bool useParallel = true) {
+  OctreeBenchmark<Octree_t, Point_t, Encoder_t> ob(points, metadata, mainOptions.numSearches, searchSet, outputFile, 
      comment, mainOptions.checkResults, mainOptions.useWarmup, useParallel);
   ob.searchImplComparisonBench(mainOptions.benchmarkRadii, mainOptions.repeats, mainOptions.numSearches);
   return ob.getResultSet();
@@ -51,11 +51,11 @@ void searchBenchmark(std::ofstream &outputFile) {
   tw.start();
   // if Point_t == Point, we run readPointCloudMeta
   std::vector<Point_t> points;
-  std::optional<std::reference_wrapper<std::vector<PointMetadata>>> metadata = std::nullopt;
+  std::optional<std::vector<PointMetadata>> metadata = std::nullopt;
   if (std::is_same<Point_t, Point>::value) {
       auto pointMetaPair = readPointCloudMeta<Point_t>(mainOptions.inputFile);
       points = std::move(pointMetaPair.first);
-      metadata = pointMetaPair.second;
+      metadata = std::move(pointMetaPair.second);
   } else {
       points = readPointCloud<Point_t>(mainOptions.inputFile);
   }
@@ -101,7 +101,8 @@ void searchImplComparisonBenchmark(std::ofstream &outputFile) {
   // Generate a shared search set for each benchmark execution
   std::shared_ptr<const SearchSet> searchSet = std::make_shared<const SearchSet>(mainOptions.numSearches, points);
 
-  auto results = runSearchImplComparisonBenchmark<LinearOctree, Point_t, Encoder_t>(outputFile, points, searchSet);
+  std::optional<std::vector<PointMetadata>> metadata = std::nullopt;
+  auto results = runSearchImplComparisonBenchmark<LinearOctree, Point_t, Encoder_t>(outputFile, points, searchSet, metadata);
 
   // Check the results if needed
   if(mainOptions.checkResults) {
@@ -131,11 +132,12 @@ void sequentialVsShuffleBenchmark(std::ofstream &outputFile) {
    * have the spatial locality, which is what we want to test.
    */
   std::shared_ptr<SearchSet> searchSetShuffle = std::make_shared<SearchSet>(mainOptions.numSearches, points);
-  runSearchBenchmark<LinearOctree, Point_t, Encoder_t>(outputFile, points, searchSetShuffle, std::nullopt, "shuffled");
+  std::optional<std::vector<PointMetadata>> metadata = std::nullopt;
+  runSearchBenchmark<LinearOctree, Point_t, Encoder_t>(outputFile, points, searchSetShuffle, metadata, "shuffled");
   searchSetShuffle->searchPoints.clear();
   searchSetShuffle->searchKNNLimits.clear();
   std::shared_ptr<SearchSet> searchSetSeq = std::make_shared<SearchSet>(mainOptions.numSearches, points, true);
-  runSearchBenchmark<LinearOctree, Point_t, Encoder_t>(outputFile, points, searchSetSeq, std::nullopt, "sequential");
+  runSearchBenchmark<LinearOctree, Point_t, Encoder_t>(outputFile, points, searchSetSeq, metadata, "sequential");
 }
 
 int main(int argc, char *argv[]) {

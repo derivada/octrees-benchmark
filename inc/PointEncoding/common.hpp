@@ -239,8 +239,7 @@ namespace PointEncoding {
                 PointEncoding::getAnchorCoords<Encoder>(points[i], bbox, x, y, z);
                 encoded_points[i] = std::make_tuple(Encoder::encode(x, y, z), points[i], metadata[i]);
             }
-
-
+        
         // TODO: implement parallel radix sort
         std::sort(encoded_points.begin(), encoded_points.end(),
             [](const auto& a, const auto& b) {
@@ -251,9 +250,7 @@ namespace PointEncoding {
         codes.resize(points.size());
         #pragma omp parallel for
             for(size_t i = 0; i < points.size(); i++) {
-                codes[i] = std::get<0>(encoded_points[i]);
-                points[i] = std::get<1>(encoded_points[i]);
-                metadata[i] = std::get<2>(encoded_points[i]);
+                std::tie(codes[i], points[i], metadata[i]) = encoded_points[i];
             }
     }
 

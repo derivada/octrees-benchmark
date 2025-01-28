@@ -317,7 +317,7 @@ class OctreeBenchmark {
         }
 
     public:
-        OctreeBenchmark(std::vector<Point_t>& points, std::optional<std::reference_wrapper<std::vector<PointMetadata>>> metadata = std::nullopt,
+        OctreeBenchmark(std::vector<Point_t>& points, std::optional<std::vector<PointMetadata>>& metadata = std::nullopt,
             size_t numSearches = 100, std::shared_ptr<const SearchSet> searchSet = nullptr, std::ofstream &file = std::ofstream(),
             std::string comment = "", bool checkResults = false, bool useWarmup = mainOptions.useWarmup, bool useParallel = true) :
             points(points), 

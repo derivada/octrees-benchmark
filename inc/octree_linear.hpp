@@ -117,7 +117,7 @@ private:
     std::vector<Point_t> &points;
     
     /// @brief LAS metadata in case it is separate from the Point_t array. It will be sorted parallel to points.
-    std::optional<std::reference_wrapper<std::vector<PointMetadata>>> metadata;
+    std::optional<std::vector<PointMetadata>>& metadata;
 
     /// @brief The encodings of the points in the octree
     std::vector<key_t> codes;
@@ -472,7 +472,7 @@ public:
      * @details The points will be sorted in-place by the order given by the encoding to allow
      * spatial data locality
      */
-    explicit LinearOctree(std::vector<Point_t> &points, std::optional<std::reference_wrapper<std::vector<PointMetadata>>> metadata = std::nullopt, 
+    explicit LinearOctree(std::vector<Point_t> &points, std::optional<std::vector<PointMetadata>>& metadata = std::nullopt, 
         bool printLog = true): points(points), metadata(metadata) {
         if(printLog)
             std::cout << "Linear octree build summary:\n";
@@ -539,7 +539,7 @@ public:
      */
     void sortPoints() {
         if (metadata.has_value()) {
-            PointEncoding::sortPointsMetadata<Encoder_t, Point_t>(points, codes, metadata.value().get(), bbox);    
+            PointEncoding::sortPointsMetadata<Encoder_t, Point_t>(points, codes, metadata.value(), bbox);    
         } else {
             PointEncoding::sortPoints<Encoder_t, Point_t>(points, codes, bbox);    
         }

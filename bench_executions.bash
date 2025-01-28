@@ -30,7 +30,7 @@ datasets_seq=(
     "data/paris_lille/Lille_0.las"
 )
 
-# Neigh and numNeigh searches
+##### REGULAR BENCHMARK
 # for dataset in "${datasets_search_1[@]}"; do
 #     if [[ ! -f "$dataset" ]]; then
 #         echo "Error: File not found - $dataset"
@@ -55,7 +55,7 @@ datasets_seq=(
 #     ./build/rule-based-classifier-cpp -i "$dataset" -o "out" -r "1.0,2.5,5.0,7.5,10.0"
 # done
 
-# Algo comparison searches
+#### IMPLEMENTATION COMPARISONS
 # for dataset in "${datasets_algo_comp[@]}"; do
 #     if [[ ! -f "$dataset" ]]; then
 #         echo "Error: File not found - $dataset"
@@ -65,31 +65,33 @@ datasets_seq=(
 # done
 
 
+###### TIME PER POINT COMPARISONS
 # For time per point comparisons, trying to get a closer avg_result_size to the other datasets
-for dataset in "${datasets_search_1[@]}"; do
-    if [[ ! -f "$dataset" ]]; then
-        echo "Error: File not found - $dataset"
-        exit 1
-    fi
-    ./build/rule-based-classifier-cpp -i "$dataset" -o "out/tpp_comp" -r "0.5,0.75,1.0"
-done
+# for dataset in "${datasets_search_1[@]}"; do
+#     if [[ ! -f "$dataset" ]]; then
+#         echo "Error: File not found - $dataset"
+#         exit 1
+#     fi
+#     ./build/rule-based-classifier-cpp -i "$dataset" -o "out/tpp_comp" -r "0.5,0.75,1.0"
+# done
 
-for dataset in "${datasets_search_2[@]}"; do
-    if [[ ! -f "$dataset" ]]; then
-        echo "Error: File not found - $dataset"
-        exit 1
-    fi
-    ./build/rule-based-classifier-cpp -i "$dataset" -o "out/tpp_comp" -r "0.05, 0.1"
-done
+# for dataset in "${datasets_search_2[@]}"; do
+#     if [[ ! -f "$dataset" ]]; then
+#         echo "Error: File not found - $dataset"
+#         exit 1
+#     fi
+#     ./build/rule-based-classifier-cpp -i "$dataset" -o "out/tpp_comp" -r "0.05, 0.1"
+# done
 
-for dataset in "${datasets_search_3[@]}"; do
-    if [[ ! -f "$dataset" ]]; then
-        echo "Error: File not found - $dataset"
-        exit 1
-    fi
-    ./build/rule-based-classifier-cpp -i "$dataset" -o "out/tpp_comp" -r "10.0, 12.0"
-done
+# for dataset in "${datasets_search_3[@]}"; do
+#     if [[ ! -f "$dataset" ]]; then
+#         echo "Error: File not found - $dataset"
+#         exit 1
+#     fi
+#     ./build/rule-based-classifier-cpp -i "$dataset" -o "out/tpp_comp" -r "10.0, 12.0"
+# done
 
+#### SEQ VS SHUFFLE COMPARISONS
 # for dataset in "${datasets_seq[@]}"; do
 #     if [[ ! -f "$dataset" ]]; then
 #         echo "Error: File not found - $dataset"
@@ -105,3 +107,12 @@ done
 #     fi
 #     ./build/rule-based-classifier-cpp -i "$dataset" -o "out/seq_vs_shuffle" -b "seq" -r "0.5,1.0,2.5,5.0" -t 1 --no-warmup
 # done
+
+#### POINT TYPE COMPARISONS
+for dataset in "${datasets_search_1[@]}"; do
+    if [[ ! -f "$dataset" ]]; then
+        echo "Error: File not found - $dataset"
+        exit 1
+    fi
+    ./build/rule-based-classifier-cpp -i "$dataset" -o "out/point_comp" -r "0.5,0.75,1.0"
+done

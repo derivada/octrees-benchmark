@@ -38,8 +38,8 @@ class Octree
 	using PointType = Point_t;
 	Octree();
 
-	explicit Octree(std::vector<Point_t>& points, std::optional<std::reference_wrapper<std::vector<PointMetadata>>> metadata = std::nullopt);
-	explicit Octree(std::vector<Point_t*>& points, std::optional<std::reference_wrapper<std::vector<PointMetadata>>> metadata = std::nullopt);
+	explicit Octree(std::vector<Point_t>& points, std::optional<std::vector<PointMetadata>>& metadata = std::nullopt);
+	explicit Octree(std::vector<Point_t*>& points, std::optional<std::vector<PointMetadata>>& metadata = std::nullopt);
 
 	Octree(const Point& center, float radius);
 	Octree(Point center, float radius, std::vector<Point_t*>& points);

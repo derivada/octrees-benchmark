@@ -29,7 +29,7 @@ template <PointType Point_t, typename Encoder_t>
 Octree<Point_t, Encoder_t>::Octree() = default;
 
 template <PointType Point_t, typename Encoder_t>
-Octree<Point_t, Encoder_t>::Octree(std::vector<Point_t>& points, std::optional<std::reference_wrapper<std::vector<PointMetadata>>> metadata)
+Octree<Point_t, Encoder_t>::Octree(std::vector<Point_t>& points, std::optional<std::vector<PointMetadata>>& metadata)
 {
 	center_ = mbb(points, radius_);
 	octants_.reserve(OCTANTS_PER_NODE);
@@ -37,7 +37,7 @@ Octree<Point_t, Encoder_t>::Octree(std::vector<Point_t>& points, std::optional<s
 }
 
 template <PointType Point_t, typename Encoder_t>
-Octree<Point_t, Encoder_t>::Octree(std::vector<Point_t*>& points, std::optional<std::reference_wrapper<std::vector<PointMetadata>>> metadata)
+Octree<Point_t, Encoder_t>::Octree(std::vector<Point_t*>& points, std::optional<std::vector<PointMetadata>>& metadata)
 {
 	center_ = mbb(points, radius_);
 	octants_.reserve(OCTANTS_PER_NODE);
