@@ -21,6 +21,7 @@
 #include <filesystem>
 #include <iostream>
 #include <vector>
+#include "Geometry/PointMetadata.hpp"
 
 namespace fs = std::filesystem;
 
@@ -40,7 +41,6 @@ class FileReader
 
 	template<typename TerminationCondition, typename PointInserter>
 	void file_reading_loop(
-		std::vector<Point_t>& points, 
 		TerminationCondition&& terminationCondition, 
 		PointInserter&& pointInserter,
 		size_t total_points = -1,
@@ -51,7 +51,7 @@ class FileReader
 
 		while (terminationCondition()) {
 			// Perform the loop action (point creation)
-			pointInserter(idx, points);
+			pointInserter(idx);
 			idx++, current_count++;
 			if(show_progress) {
 				if(total_points != -1 && current_count > percent_threeshold) {
@@ -81,4 +81,5 @@ class FileReader
 	FileReader(const fs::path& path) : path(path){};
 	virtual ~FileReader(){}; // Every specialization of this class must manage its own destruction
 	virtual std::vector<Point_t> read() = 0;
+	virtual std::pair<std::vector<Point_t>, std::vector<PointMetadata>> readMeta() = 0;
 };

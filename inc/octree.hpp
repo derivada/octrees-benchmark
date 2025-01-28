@@ -5,6 +5,7 @@
 #pragma once
 
 #include "NeighborKernels/KernelFactory.hpp"
+#include "Geometry/PointMetadata.hpp"
 #include <algorithm>
 #include <array>
 #include <filesystem>
@@ -12,6 +13,8 @@
 #include <iostream>
 #include <queue>
 #include <vector>
+#include <optional>
+
 // Encoder is not used here, but points may already be sorted by the Encoder. We add it as template argument
 // for simplicity.
 template <PointType Point_t, typename Encoder_t>
@@ -35,8 +38,8 @@ class Octree
 	using PointType = Point_t;
 	Octree();
 
-	explicit Octree(std::vector<Point_t>& points);
-	explicit Octree(std::vector<Point_t*>& points);
+	explicit Octree(std::vector<Point_t>& points, std::optional<std::reference_wrapper<std::vector<PointMetadata>>> metadata = std::nullopt);
+	explicit Octree(std::vector<Point_t*>& points, std::optional<std::reference_wrapper<std::vector<PointMetadata>>> metadata = std::nullopt);
 
 	Octree(const Point& center, float radius);
 	Octree(Point center, float radius, std::vector<Point_t*>& points);

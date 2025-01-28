@@ -317,10 +317,11 @@ class OctreeBenchmark {
         }
 
     public:
-        OctreeBenchmark(std::vector<Point_t>& points, size_t numSearches = 100, std::shared_ptr<const SearchSet> searchSet = nullptr, std::ofstream &file = std::ofstream(),
+        OctreeBenchmark(std::vector<Point_t>& points, std::optional<std::reference_wrapper<std::vector<PointMetadata>>> metadata = std::nullopt,
+            size_t numSearches = 100, std::shared_ptr<const SearchSet> searchSet = nullptr, std::ofstream &file = std::ofstream(),
             std::string comment = "", bool checkResults = false, bool useWarmup = mainOptions.useWarmup, bool useParallel = true) :
             points(points), 
-            oct(std::make_unique<Octree_t<Point_t, Encoder_t>>(points)),
+            oct(std::make_unique<Octree_t<Point_t, Encoder_t>>(points, metadata)),
             searchSet(searchSet ? searchSet : std::make_shared<const SearchSet>(numSearches, points)),
             outputFile(file),
             comment(comment),

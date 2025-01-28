@@ -74,7 +74,7 @@ class TxtFileReader : public FileReader<Point_t>
 			}
 		 };
 
-		auto pointInserter = [&](size_t& idx, std::vector<Point_t>& points) { 
+		auto pointInserter = [&](size_t& idx) { 
 			auto tokens = splitLine(line);
 			switch (numCols) {
 				case 3:
@@ -129,11 +129,99 @@ class TxtFileReader : public FileReader<Point_t>
 			};
 		};
 
-		this->file_reading_loop(points, terminationCondition, pointInserter, -1, false);
+		this->file_reading_loop(terminationCondition, pointInserter, -1, false);
 
 		file.close();
 		std::cout << "Read points: " << idx << "\n";
 		return points;
 	};
+
+	std::pair<std::vector<Point_t>, std::vector<PointMetadata>> readMeta()
+	{
+		std::ifstream file(this->path.string());
+		std::string   line{};
+
+		setNumberOfColumns(file);
+
+		unsigned int        idx = 0;
+		std::vector<Point_t> points;
+		std::vector<PointMetadata> metadata;
+
+		// TODO: Pensar como modularizarlo...
+		// TODO: Factory as a function of the number of columns to read different inputs!
+		auto terminationCondition = [&file, &line] { 
+			if (std::getline(file, line)) {
+				return true;
+			} else {
+				return false;
+			}
+		 };
+
+		auto pointInserter = [&](size_t& idx) { 
+			auto tokens = splitLine(line);
+			switch (numCols) {
+				case 3:
+					points.emplace_back(idx,  	// id
+						std::stod(tokens[0]),  	// x
+						std::stod(tokens[1]),  	// y
+						std::stod(tokens[2])); 	// z
+					metadata.emplace_back();
+				break;
+				case 7:
+					points.emplace_back(idx,
+						std::stod(tokens[0]),  	// x
+						std::stod(tokens[1]),  	// y
+						std::stod(tokens[2]));  // z
+					metadata.emplace_back(
+						std::stod(tokens[3]),  	// I
+						std::stod(tokens[4]),  	// rn
+						std::stod(tokens[5]),  	// nor
+						std::stoi(tokens[6])   	// classification
+					);
+				break;
+				case 9:
+					points.emplace_back(idx,
+						std::stod(tokens[0]),  	// x
+						std::stod(tokens[1]),  	// y
+						std::stod(tokens[2]));  // z
+					metadata.emplace_back(
+						std::stod(tokens[3]),  	// I
+						std::stoi(tokens[4]),  	// rn
+						std::stoi(tokens[5]),  	// nor
+						std::stoi(tokens[6]),  	// dir
+						std::stoi(tokens[7]),  	// edge
+						std::stoi(tokens[8])   	// classification
+					);
+				break;
+				case 12:
+					points.emplace_back(idx,
+						std::stod(tokens[0]),   // x
+						std::stod(tokens[1]),   // y
+						std::stod(tokens[2]));  // z
+					metadata.emplace_back(
+						std::stod(tokens[3]),   // I
+						std::stoi(tokens[4]),   // rn
+						std::stoi(tokens[5]),   // nor
+						std::stoi(tokens[6]),   // dir
+						std::stoi(tokens[7]),   // edge
+						std::stoi(tokens[8]),   // classification
+						std::stoi(tokens[9]),   // r
+						std::stoi(tokens[10]),  // g
+						std::stoi(tokens[11])   // b
+					);
+				break;
+				default:
+					std::cout << "Unrecognized format\n";
+					exit(1);
+			};
+		};
+
+		this->file_reading_loop(terminationCondition, pointInserter, -1, false);
+
+		file.close();
+		std::cout << "Read points: " << idx << "\n";
+		return std::pair(points, metadata);
+	};
+
 };
 

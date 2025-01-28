@@ -14,7 +14,7 @@ void printHelp()
 		   "-s, --searches: Number of searches\n"
 		   "-t, --repeats: Number of repeats\n"
 		   "-c, --check: Enable result checking\n"
-		   "-b, --benchmark: Benchmark to run: 'srch' for search (default), 'comp' for comparison, 'seq' for sequential vs shuffled points\n"
+		   "-b, --benchmark: Benchmark to run: 'srch' for search (default), 'comp' for comparison, 'seq' for sequential vs shuffled points, 'pt' for point type comparison\n"
 		   "    --no-warmup: Disable warmup phase\n";
 	exit(1);
 }
@@ -90,6 +90,8 @@ void processArgs(int argc, char** argv)
 					mainOptions.benchmarkMode = COMPARE;
 				} else if (std::string(optarg) == "seq") {
 					mainOptions.benchmarkMode = SEQUENTIAL;
+				} else if(std::string(optarg) == "pt") {
+					mainOptions.benchmarkMode = POINT_TYPE;
 				} else {
 					std::cerr << "Invalid benchmark mode: " << optarg << "\n";
 					printHelp();

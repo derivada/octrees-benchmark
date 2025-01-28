@@ -37,6 +37,29 @@ class Point
 	// 3D Geometric constructor with ID
 	Point(unsigned int id, double x, double y, double z) : id_(id), x_(x), y_(y), z_(z) {}
 
+
+	// Reading points ISPRS format
+	Point(size_t id, double x, double y, double z, double I, double rn, double nor, unsigned int classification) :
+	  Point(id, x, y, z){};
+
+	// Reading standard classified cloud
+	Point(size_t id, double x, double y, double z, double I, unsigned short rn, unsigned short nor, unsigned char dir,
+	       unsigned char edge, unsigned short classification) :
+	  Point(id, x, y, z){};
+
+	// Reading classified cloud with RGB
+	Point(size_t id, double x, double y, double z, double I, unsigned short rn, unsigned short nor, unsigned char dir,
+	       unsigned char edge, unsigned short classification, unsigned int r, unsigned int g, unsigned int b) :
+	  Point(id, x, y, z){};
+
+
+	// Reading Point Data Record Format 2 (Babcock / Coremain request)
+	Point(size_t id, double x, double y, double z, double I, unsigned short rn, unsigned short nor, unsigned char dir,
+	       unsigned char edge, unsigned short classification, char sar, unsigned char ud, unsigned short psId,
+	       unsigned int r, unsigned int g, unsigned int b) :
+	  Point(id, x, y, z){};
+
+
 	// Point Methods
 	/* 2D distance between two points */
 	[[nodiscard]] inline double distance2D(const Point& p) const

@@ -2,6 +2,7 @@
 
 #include "Geometry/Box.hpp"
 #include <stack>
+#include <optional>
 #include <bitset>
 #include <unordered_map>
 #include <unordered_set>
@@ -10,6 +11,7 @@
 #include "NeighborKernels/KernelFactory.hpp"
 #include "TimeWatcher.hpp"
 #include "Geometry/Box.hpp"
+#include "Geometry/PointMetadata.hpp"
 
 /**
 * @class LinearOctree
@@ -113,6 +115,9 @@ private:
      * encodings. Therefore, this array is altered inside this class. This is done to  locality that Morton/Hilbert
      */
     std::vector<Point_t> &points;
+    
+    /// @brief LAS metadata in case it is separate from the Point_t array. It will be sorted parallel to points.
+    std::optional<std::reference_wrapper<std::vector<PointMetadata>>> metadata;
 
     /// @brief The encodings of the points in the octree
     std::vector<key_t> codes;
@@ -467,7 +472,8 @@ public:
      * @details The points will be sorted in-place by the order given by the encoding to allow
      * spatial data locality
      */
-    explicit LinearOctree(std::vector<Point_t> &points, bool printLog = true): points(points) {
+    explicit LinearOctree(std::vector<Point_t> &points, std::optional<std::reference_wrapper<std::vector<PointMetadata>>> metadata = std::nullopt, 
+        bool printLog = true): points(points), metadata(metadata) {
         if(printLog)
             std::cout << "Linear octree build summary:\n";
         double total_time = 0.0;
@@ -532,30 +538,11 @@ public:
      * @details The points array is changed after this step
      */
     void sortPoints() {
-        // Temporal vector of pairs
-        std::vector<std::pair<key_t, Point_t>> encoded_points(points.size());
-
-        // Compute encodings in parallel
-        #pragma omp parallel for
-            for(size_t i = 0; i < points.size(); i++) {
-                coords_t x, y, z;
-                PointEncoding::getAnchorCoords<Encoder_t>(points[i], bbox, x, y, z);
-                encoded_points[i] = std::make_pair(Encoder_t::encode(x, y, z), points[i]);
-            }
-
-        // TODO: implement parallel radix sort
-        std::sort(encoded_points.begin(), encoded_points.end(),
-            [](const auto& a, const auto& b) {
-                return a.first < b.first;  // Compare only the morton codes
-        });
-        
-        // Copy back sorted codes and points in parallel
-        codes.resize(points.size());
-        #pragma omp parallel for
-            for(size_t i = 0; i < points.size(); i++) {
-                codes[i] = encoded_points[i].first;
-                points[i] = encoded_points[i].second;
-            }
+        if (metadata.has_value()) {
+            PointEncoding::sortPointsMetadata<Encoder_t, Point_t>(points, codes, metadata.value().get(), bbox);    
+        } else {
+            PointEncoding::sortPoints<Encoder_t, Point_t>(points, codes, bbox);    
+        }
     }
 
     /// @brief Builds the octeee leaves array by repeatingly calling @ref updateOctreeLeaves()

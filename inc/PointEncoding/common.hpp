@@ -4,7 +4,10 @@
 #include "libmorton/morton.h"
 #include <bitset>
 #include "Geometry/point.hpp"
+#include "Geometry/PointMetadata.hpp"
 #include "Geometry/Box.hpp"
+#include <vector>
+#include <tuple>
 
 /**
  * @namespace PointEncoding
@@ -189,4 +192,69 @@ namespace PointEncoding {
         uint32_t lz = countLeadingZeros<Encoder>(n - typename Encoder::key_t(1));
         return Encoder::MAX_DEPTH - (lz - Encoder::UNUSED_BITS) / 3;
     }
+
+    /**
+     * @brief This function computes the morton encodings of the points and sorts them in
+     * the given order
+     * 
+     * @details The points array is changed after this step
+     */
+    template <typename Encoder, typename Point_t>
+    void sortPoints(std::vector<Point_t> &points, std::vector<typename Encoder::key_t> &codes, const Box &bbox) {
+        // Temporal vector of pairs
+        std::vector<std::pair<typename Encoder::key_t, Point_t>> encoded_points(points.size());
+
+        // Compute encodings in parallel
+        #pragma omp parallel for
+            for(size_t i = 0; i < points.size(); i++) {
+                typename Encoder::coords_t x, y, z;
+                PointEncoding::getAnchorCoords<Encoder>(points[i], bbox, x, y, z);
+                encoded_points[i] = std::make_pair(Encoder::encode(x, y, z), points[i]);
+            }
+
+        // TODO: implement parallel radix sort
+        std::sort(encoded_points.begin(), encoded_points.end(),
+            [](const auto& a, const auto& b) {
+                return a.first < b.first;  // Compare only the morton codes
+        });
+        
+        // Copy back sorted codes and points in parallel
+        codes.resize(points.size());
+        #pragma omp parallel for
+            for(size_t i = 0; i < points.size(); i++) {
+                codes[i] = encoded_points[i].first;
+                points[i] = encoded_points[i].second;
+            }
+    }
+
+    template <typename Encoder, typename Point_t>
+    void sortPointsMetadata(std::vector<Point_t> &points, std::vector<typename Encoder::key_t> &codes, std::vector<PointMetadata> &metadata, const Box &bbox) {
+        // Temporal vector of pairs
+        std::vector<std::tuple<typename Encoder::key_t, Point_t, PointMetadata>> encoded_points(points.size());
+
+        // Compute encodings in parallel
+        #pragma omp parallel for
+            for(size_t i = 0; i < points.size(); i++) {
+                typename Encoder::coords_t x, y, z;
+                PointEncoding::getAnchorCoords<Encoder>(points[i], bbox, x, y, z);
+                encoded_points[i] = std::make_tuple(Encoder::encode(x, y, z), points[i], metadata[i]);
+            }
+
+
+        // TODO: implement parallel radix sort
+        std::sort(encoded_points.begin(), encoded_points.end(),
+            [](const auto& a, const auto& b) {
+                return std::get<0>(a) < std::get<0>(b);  // Compare only the morton codes
+        });
+        
+        // Copy back sorted codes, points, and metadata in parallel
+        codes.resize(points.size());
+        #pragma omp parallel for
+            for(size_t i = 0; i < points.size(); i++) {
+                codes[i] = std::get<0>(encoded_points[i]);
+                points[i] = std::get<1>(encoded_points[i]);
+                metadata[i] = std::get<2>(encoded_points[i]);
+            }
+    }
+
 }

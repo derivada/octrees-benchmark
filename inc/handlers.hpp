@@ -24,6 +24,8 @@
 #include <fstream>
 #include <lasreader.hpp>
 #include <random>
+#include "Geometry/point.hpp"
+#include "Geometry/PointMetadata.hpp"
 
 namespace fs = std::filesystem;
 
@@ -63,7 +65,6 @@ std::vector<Point_t> readPointCloud(const fs::path& fileName)
 
 	FileReader_t readerType = chooseReaderType(fExt);
 
-	// asdf
 	if (readerType == err_t)
 	{
 		std::cout << "Uncompatible file format\n";
@@ -78,5 +79,27 @@ std::vector<Point_t> readPointCloud(const fs::path& fileName)
 
 	return points;
 }
+
+// Only put x, y, z, id in the point array, the rest goes to PointMetadata
+template <typename Point_t>
+std::pair<std::vector<Point_t>, std::vector<PointMetadata>> readPointCloudMeta(const fs::path& fileName) {
+	auto fExt = fileName.extension();
+	FileReader_t readerType = chooseReaderType(fExt);
+
+	if (readerType == err_t)
+	{
+		std::cout << "Uncompatible file format\n";
+		exit(-1);
+	}
+
+	std::shared_ptr<FileReader<Point_t>> fileReader = FileReaderFactory::makeReader<Point_t>(readerType, fileName);
+
+	auto points_meta = fileReader->readMeta();
+	// Decimation. Implemented here because, tbh, I don't want to implement it for each reader type.
+	std::cout << "Point cloud size: " << points_meta.first.size() << std::endl;
+
+	return points_meta;
+}
+
 
 #endif //CPP_HANDLERS_H

@@ -6,10 +6,7 @@
 
 class Region; // Region forward declaration
 
-/**
- * 64-byte-aligned adaptation of the Lpoint class
- */
-class alignas(64) Lpoint64 : public Point
+class PointMetadata
 {
 	protected:
 	double         I_{};             		// Intensity
@@ -40,40 +37,34 @@ class alignas(64) Lpoint64 : public Point
 
 	public:
 	// Default constructor
-	Lpoint64() : Point(){};
-	Lpoint64(size_t id, double x, double y, double z) : Point(id, x, y, z){};
-	Lpoint64(double x, double y) : Point(x, y){};
-	Lpoint64(double x, double y, double z) : Point(x, y, z){};
-	explicit Lpoint64(Point p) : Point(p.getX(), p.getY(), p.getZ()){};
-
+	PointMetadata() = default;
 
 	// Reading points ISPRS format
-	Lpoint64(size_t id, double x, double y, double z, double I, uint8_t rn, uint8_t nor, unsigned int classification) :
-	  Point(id, x, y, z), I_(I), classification_(classification) {
+	PointMetadata(double I, uint8_t rn, uint8_t nor, unsigned int classification) :
+	    I_(I), classification_(classification) {
 		setPackedFields(rn, nor, 0, 0);
 	  };
 
 	// Reading standard classified cloud
-	Lpoint64(size_t id, double x, double y, double z, double I, uint8_t rn, uint8_t nor, bool dir,
+	PointMetadata(double I, uint8_t rn, uint8_t nor, bool dir,
 	       bool edge, unsigned short classification) :
-	  Point(id, x, y, z),
 	  I_(I), classification_(classification) {
 		setPackedFields(rn, nor, dir, edge);
 	  };
 
 	// Reading classified cloud with RGB
-	Lpoint64(size_t id, double x, double y, double z, double I, uint8_t rn, uint8_t nor, bool dir,
+	PointMetadata(double I, uint8_t rn, uint8_t nor, bool dir,
 	       bool edge, unsigned short classification, unsigned int r, unsigned int g, unsigned int b) :
-	  Point(id, x, y, z), I_(I), classification_(classification), r_(r), g_(g), b_(b) {
+	  I_(I), classification_(classification), r_(r), g_(g), b_(b) {
 		setPackedFields(rn, nor, dir, edge);
 	  };
 
 
 	// Reading Point Data Record Format 2 (Babcock / Coremain request)
-	Lpoint64(size_t id, double x, double y, double z, double I, uint8_t rn, uint8_t nor, bool dir,
+	PointMetadata( double I, uint8_t rn, uint8_t nor, bool dir,
 	       bool edge, unsigned short classification, char sar, unsigned char ud, unsigned short psId,
 	       unsigned int r, unsigned int g, unsigned int b) :
-	  Point(id, x, y, z), I_(I), classification_(classification), 
+	  I_(I), classification_(classification), 
 	  sar_(sar), ud_(ud), psId_(psId), r_(r), g_(g), b_(b) {
 		setPackedFields(rn, nor, dir, edge);
 	  };

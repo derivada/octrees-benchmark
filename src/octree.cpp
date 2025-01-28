@@ -15,10 +15,13 @@
 #include "Geometry/Lpoint64.hpp"
 
 // TODO: move this implementations to octree.hpp so we dont need to predefine all possible pointer octrees
+template class Octree<Point, PointEncoding::NoEncoder>;
 template class Octree<Lpoint, PointEncoding::NoEncoder>;
 template class Octree<Lpoint64, PointEncoding::NoEncoder>;
+template class Octree<Point, PointEncoding::HilbertEncoder3D>;
 template class Octree<Lpoint, PointEncoding::HilbertEncoder3D>;
 template class Octree<Lpoint64, PointEncoding::HilbertEncoder3D>;
+template class Octree<Point, PointEncoding::MortonEncoder3D>;
 template class Octree<Lpoint, PointEncoding::MortonEncoder3D>;
 template class Octree<Lpoint64, PointEncoding::MortonEncoder3D>;
 
@@ -26,7 +29,7 @@ template <PointType Point_t, typename Encoder_t>
 Octree<Point_t, Encoder_t>::Octree() = default;
 
 template <PointType Point_t, typename Encoder_t>
-Octree<Point_t, Encoder_t>::Octree(std::vector<Point_t>& points)
+Octree<Point_t, Encoder_t>::Octree(std::vector<Point_t>& points, std::optional<std::reference_wrapper<std::vector<PointMetadata>>> metadata)
 {
 	center_ = mbb(points, radius_);
 	octants_.reserve(OCTANTS_PER_NODE);
@@ -34,7 +37,7 @@ Octree<Point_t, Encoder_t>::Octree(std::vector<Point_t>& points)
 }
 
 template <PointType Point_t, typename Encoder_t>
-Octree<Point_t, Encoder_t>::Octree(std::vector<Point_t*>& points)
+Octree<Point_t, Encoder_t>::Octree(std::vector<Point_t*>& points, std::optional<std::reference_wrapper<std::vector<PointMetadata>>> metadata)
 {
 	center_ = mbb(points, radius_);
 	octants_.reserve(OCTANTS_PER_NODE);
@@ -363,7 +366,8 @@ void Octree<Point_t, Encoder_t>::writeOctree(std::ofstream& f, size_t index) con
 	{
 		for (const auto& p : points_)
 		{
-			f << "\t " << *p << " " << p->getClass() << " at: " << p << "\n";
+			// f << "\t " << *p << " " << p->getClass() << " at: " << p << "\n";
+			f << "\t " << *p << " "  << " at: " << p << "\n";
 		}
 	}
 	else

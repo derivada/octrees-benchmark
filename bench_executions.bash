@@ -66,28 +66,36 @@ datasets_seq=(
 
 
 # For time per point comparisons, trying to get a closer avg_result_size to the other datasets
-# for dataset in "${datasets_1[@]}"; do
-#     if [[ ! -f "$dataset" ]]; then
-#         echo "Error: File not found - $dataset"
-#         exit 1
-#     fi
-#     ./build/rule-based-classifier-cpp -i "$dataset" -o "out/tpp_comp" -r "0.5,0.75,1.0" -s 1000
-# done
+for dataset in "${datasets_search_1[@]}"; do
+    if [[ ! -f "$dataset" ]]; then
+        echo "Error: File not found - $dataset"
+        exit 1
+    fi
+    ./build/rule-based-classifier-cpp -i "$dataset" -o "out/tpp_comp" -r "0.5,0.75,1.0"
+done
 
-# for dataset in "${datasets_2[@]}"; do
-#     if [[ ! -f "$dataset" ]]; then
-#         echo "Error: File not found - $dataset"
-#         exit 1
-#     fi
-#     ./build/rule-based-classifier-cpp -i "$dataset" -o "out/tpp_comp" -r "0.05, 0.1" -s 1000
-# done
+for dataset in "${datasets_search_2[@]}"; do
+    if [[ ! -f "$dataset" ]]; then
+        echo "Error: File not found - $dataset"
+        exit 1
+    fi
+    ./build/rule-based-classifier-cpp -i "$dataset" -o "out/tpp_comp" -r "0.05, 0.1"
+done
 
-# for dataset in "${datasets_3[@]}"; do
+for dataset in "${datasets_search_3[@]}"; do
+    if [[ ! -f "$dataset" ]]; then
+        echo "Error: File not found - $dataset"
+        exit 1
+    fi
+    ./build/rule-based-classifier-cpp -i "$dataset" -o "out/tpp_comp" -r "10.0, 12.0"
+done
+
+# for dataset in "${datasets_seq[@]}"; do
 #     if [[ ! -f "$dataset" ]]; then
 #         echo "Error: File not found - $dataset"
 #         exit 1
 #     fi
-#     ./build/rule-based-classifier-cpp -i "$dataset" -o "out/tpp_comp" -r "10.0, 12.0" -s 1000
+#     ./build/rule-based-classifier-cpp -i "$dataset" -o "out/tpp_comp" -r "10.0,15.0" -s 1000 -t 1
 # done
 
 # for dataset in "${datasets_seq[@]}"; do
@@ -95,13 +103,5 @@ datasets_seq=(
 #         echo "Error: File not found - $dataset"
 #         exit 1
 #     fi
-# ./build/rule-based-classifier-cpp -i "$dataset" -o "out/tpp_comp" -r "10.0,15.0" -s 1000
-
-
-for dataset in "${datasets_seq[@]}"; do
-    if [[ ! -f "$dataset" ]]; then
-        echo "Error: File not found - $dataset"
-        exit 1
-    fi
-    ./build/rule-based-classifier-cpp -i "$dataset" -o "out/seq_vs_shuffle" -b "seq" -r "0.5,1.0,2.5,5.0" -t 1 --no-warmup
-done
+#     ./build/rule-based-classifier-cpp -i "$dataset" -o "out/seq_vs_shuffle" -b "seq" -r "0.5,1.0,2.5,5.0" -t 1 --no-warmup
+# done
