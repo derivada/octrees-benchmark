@@ -12,12 +12,10 @@
 #include "TimeWatcher.hpp"
 #include "Geometry/Box.hpp"
 #include "Geometry/PointMetadata.hpp"
+#include "type_names.hpp"
 
 /**
 * @class LinearOctree
-* 
-* @brief Another (more correct) linear octree based on the excellent implementation done 
-* for the cornerstone octree project: https://github.com/sekelle/cornerstone-octree/tree/master
 * 
 * @details This linear octree is built by storing offsets to the positions of an array of points sorted by their morton codes. 
 * For each leaf of the octree, there is an element in this array listthat points to the index of the first point in that leaf.
@@ -144,6 +142,7 @@ private:
         return sizeof(vec) + vec.size() * sizeof(typename std::decay_t<decltype(vec)>::value_type);
     }
 
+    /// @brief Returns the memory footprint of the octree (without counting points or metadata memory)
     size_t computeMemorySize() {
         size_t total_size = 0;
         total_size += vectorMemorySize(leaves);
@@ -205,7 +204,6 @@ private:
         if(sibling > 0) {
             // We have 8 siblings next to each other, could merge this node if the count of all siblings is less MAX_COUNT
             uint32_t parentIndex = index - sibling;
-            // Should not be bigger than 2^32
             size_t parentCount =    counts[parentIndex]   + counts[parentIndex+1]+ 
                                     counts[parentIndex+2] + counts[parentIndex+3]+ 
                                     counts[parentIndex+4] + counts[parentIndex+5]+
@@ -363,7 +361,6 @@ private:
         for(size_t i = lastNode; i<lastNode; i++)
             counts[i] = 0;
 
-        // TODO: Can try using the count guessing algorithm provided in cornerstone code
         size_t nNonZeroNodes = lastNode - firstNode;
         for(size_t i = 0; i<nNonZeroNodes; i++) {
             counts[i + firstNode] = calculateNodeCount(leaves[i+firstNode], leaves[i+firstNode+1]);
@@ -405,7 +402,7 @@ private:
     }
 
     void createUnsortedLayout() {
-        // Create the prefixesand internaltoleaf arrays for the leafs
+        // Create the prefixes and internaltoleaf arrays for the leafs
         for(size_t i = 0; i<nLeaf; i++) {
             key_t key = leaves[i];
             uint32_t level = PointEncoding::getLevel<Encoder_t>(leaves[i+1] - key);
@@ -502,7 +499,7 @@ public:
      * @details The points will be sorted in-place by the order given by the encoding to allow
      * spatial data locality
      */
-    explicit LinearOctree(std::vector<Point_t> &points, std::optional<std::vector<PointMetadata>>& metadata = std::nullopt, 
+    explicit LinearOctree(std::vector<Point_t> &points, std::optional<std::vector<PointMetadata>> &metadata = std::nullopt, 
         bool printLog = true): points(points), metadata(metadata) {
         double total_time = 0.0;
         TimeWatcher tw;
@@ -686,12 +683,15 @@ public:
         // Compute internal node layouts
         computeInternalNodeLayouts();
     }
+
     void printKey(uint64_t key) {
-    for(int i=20; i>=0; i--) {
-        std::cout << std::bitset<3>(key >> (3*i)) << " ";
+        for(int i=20; i>=0; i--) {
+            std::cout << std::bitset<3>(key >> (3*i)) << " ";
+        }
+
+        std::cout << std::endl;
     }
-    std::cout << std::endl;
-    }
+
     /**
      * @brief Computes the octree geometry (the centers and radii of each internal node and leaf)
      * 
@@ -782,6 +782,8 @@ public:
                     // Completely inside, all add points except center and prune
                     size_t startIndex = this->internalLayoutRanges[nodeIndex].first;
                     size_t endIndex = this->internalLayoutRanges[nodeIndex].second;
+                    // Reserve memory for insertion, there can be a lot of points here. This didn't work well
+                    // ptsInside.reserve(ptsInside.size() + endIndex - startIndex);
                     for (auto it = points.begin() + startIndex; it != points.begin() + endIndex; ++it) {
                         if ((*it).id() != center_id) {
                             ptsInside.push_back(&(*it));
@@ -804,6 +806,7 @@ public:
             uint32_t leafIdx = this->internalToLeaf[nodeIndex];
             auto start = this->points.begin() + this->layout[leafIdx];
             auto end = this->points.begin() + this->layout[leafIdx+1];
+            // Amount of points in a leave should be small and only some of them will be inserted, so we don't need to reserve memory to iterate over them
             for (auto it = start; it != end; ++it) {
                 if (k.isInside(*it) && (*it).id() != center_id) {
                     ptsInside.push_back(&(*it));
@@ -1138,29 +1141,44 @@ public:
 
     // Misc. functions for debugging
     template <typename Time_t>
-    inline void writeVector(std::ofstream &file, std::vector<Time_t> &v, std::string name = "v") {
-        file << "Size of " << name << " = " << v.size() << "\n";
+    void writeVector(std::ofstream &file, std::vector<Time_t> &v, std::string name = "v") {
+        file << "Printing vector " << name << " with " << v.size() << "elements\n";
         for(size_t i = 0; i<v.size(); i++)
             file << name << "[" << i << "] = " << v[i] << "\n";
     }
 
     template <typename U, typename V>
-    inline void writeVectorPairs(std::ofstream &file, std::vector<std::pair<U, V>> &v, std::string name = "v") {
-        file << "Size of " << name << " = " << v.size() << "\n";
+    void writeVectorPairs(std::ofstream &file, std::vector<std::pair<U, V>> &v, std::string name = "v") {
+        file << "Printing vector " << name << " with " << v.size() << "elements\n";
         for(size_t i = 0; i<v.size(); i++)
             file << name << "[" << i << "] = " << v[i].first << ", " << v[i].second << "\n";
     }
 
     template <typename Time_t>
-    inline void writeVectorBinary(std::ofstream &file, std::vector<Time_t> &v, std::string name = "v") {
-        file << "Size of " << name << " = " << v.size() << "\n";
+    void writeVectorBinary(std::ofstream &file, std::vector<Time_t> &v, std::string name = "v") {
+        file << "Printing vector " << name << " with " << v.size() << "elements\n";
         for(size_t i = 0; i<v.size(); i++)
-            file << name << "[" << i << "] = 0b" << std::bitset<64>(v[i]) << "\n";
+            file << name << "[" << i << "] = " << std::bitset<64>(v[i]) << "\n";
     }
     
-    void writeOctree(std::ofstream &file) {
-        file << "MAX_POINTS = " << MAX_POINTS << "\n";
-        file << "n = " << nTotal << "  leafs = " << nLeaf << " internal = " << nInternal << "\n";
+    void writePointsAndCodes(std::ofstream &file, const std::string &encoder_name) {
+        file << std::fixed << std::setprecision(3); 
+        file << encoder_name << " " << "x y z\n";
+        assert(codes.size() == points.size());
+        for(size_t i = 0; i<codes.size(); i++) 
+            file << codes[i] << " " << points[i].getX() << " " << points[i].getY() << " " << points[i].getZ() << "\n";
+    }
+    
+    void logOctree(std::ofstream &file, std::ofstream &pointsFile) {
+        std::cout << "(1/2) Logging octree parameters and structure" << std::endl;
+        std::string pointTypeName = getPointName<Point_t>();
+        std::string encoderTypename = PointEncoding::getEncoderName<Encoder_t>();
+        file << "---- Linear octree parameters ----";
+        file << "Encoder: " << encoderTypename << "\n";
+        file << "Point type: " << pointTypeName << "\n";
+        file << "Max. points per leaf: " << MAX_POINTS << "\n";
+        file << "Total number of nodes = " << nTotal << "\n Leafs = " << nLeaf << "\n Internal nodes = " << nInternal << "\n";
+        file << "---- Full structure ----";
         writeVectorBinary(file, leaves, "leaves");
         writeVector(file, counts, "counts");
         writeVector(file, layout, "layout");
@@ -1173,5 +1191,11 @@ public:
         writeVector(file, internalCounts, "internalCounts");
         writeVectorPairs(file, internalLayoutRanges, "internalLayoutRanges");
         file << std::flush;
+        
+        // write codes and point coordinates
+        std::cout << "(2/2) Logging encoded points" << std::endl;
+        writePointsAndCodes(pointsFile, encoderTypename);
+        pointsFile << std::flush;
+        std::cout << "Done! Octree and points logged" << std::endl;
     }
 };

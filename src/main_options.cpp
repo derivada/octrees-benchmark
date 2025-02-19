@@ -14,8 +14,12 @@ void printHelp()
 		   "-s, --searches: Number of searches\n"
 		   "-t, --repeats: Number of repeats\n"
 		   "-c, --check: Enable result checking\n"
-		   "-b, --benchmark: Benchmark to run: 'srch' for search (default), 'comp' for comparison, 'seq' for sequential vs shuffled points, 'pt' for point type comparison\n"
-		   "    --no-warmup: Disable warmup phase\n";
+		   "-b, --benchmark: Benchmark to run:\n\t" 
+		   "'srch' for search (default),\n\t"
+		   "'comp' for comparison, 'seq' for sequential vs shuffled points,\n\t" 
+		   "'pt' for point type comparison,\n\t" 
+		   "'log' for logging the entire linear octree built, use for debugging\n"
+		   "--no-warmup: Disable warmup phase\n";
 	exit(1);
 }
 
@@ -92,6 +96,8 @@ void processArgs(int argc, char** argv)
 					mainOptions.benchmarkMode = SEQUENTIAL;
 				} else if(std::string(optarg) == "pt") {
 					mainOptions.benchmarkMode = POINT_TYPE;
+				} else if(std::string(optarg) == "log") {
+					mainOptions.benchmarkMode = LOG_OCTREE;
 				} else {
 					std::cerr << "Invalid benchmark mode: " << optarg << "\n";
 					printHelp();

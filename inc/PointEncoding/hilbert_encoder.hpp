@@ -1,6 +1,5 @@
 #pragma once
 
-#include "libmorton/morton.h"
 #include "Geometry/point.hpp"
 #include "Geometry/Box.hpp"
 #include "common.hpp"
@@ -14,22 +13,23 @@ namespace PointEncoding {
     * 
     * @date 11/12/2024
     * 
-    * @cite https://doi.org/10.1016/j.newast.2016.10.007
+    * @cite https://doi.org/10.1016/j.newast.2016.10.007 Appendix A
+    * @cite https://www.semanticscholar.org/paper/A-class-of-fast-algorithms-for-the-Peano-Hilbert-Lam-Shapiro/2e2987a5070f79f8a94f110a3a2862cc98c94de3 
     */
     struct HilbertEncoder3D {
         using key_t = uint64_t;
         using coords_t = uint32_t;
                 
-        /// @brief The maximum depth that this encoding allows (in Morton 64 bit integers, we need 3 bits for each level, so 21)
+        /// @brief The maximum depth that this encoding allows (in Hilbert 64 bit integers, we need 3 bits for each level, so 21)
         static constexpr uint32_t MAX_DEPTH = 21;
 
         /// @brief The minimum unit of length of the encoded coordinates
         static constexpr double EPS = 1.0f / (1 << MAX_DEPTH);
 
-        /// @brief The minimum (strict) upper bound for every Morton code. Equal to the unused bit followed by 63 zeros.
+        /// @brief The minimum (strict) upper bound for every Hilbert code. Equal to the unused bit followed by 63 zeros.
         static constexpr key_t UPPER_BOUND = 0x8000000000000000;
 
-        /// @brief The amount of bits that are not used, in Morton encodings this is the MSB of the key
+        /// @brief The amount of bits that are not used, in Hilbert encodings this is the MSB of the key
         static constexpr uint32_t UNUSED_BITS = 1;
 
         /// @brief A constant array to map adequately rotated x, y, z coordinates to their corresponding octant 
@@ -39,7 +39,7 @@ namespace PointEncoding {
         static inline key_t encode(coords_t x, coords_t y, coords_t z) {
             key_t key = 0;
             for(int level = MAX_DEPTH - 1; level >= 0; level--) {
-                // Find octant and append to the key
+                // Find octant and append to the key (same as Morton codes)
                 const coords_t xi = (x >> level) & 1u;
                 const coords_t yi = (y >> level) & 1u;
                 const coords_t zi = (z >> level) & 1u;
@@ -88,7 +88,7 @@ namespace PointEncoding {
                     x = z, z = temp;
                 }
 
-                // Turn x, y, z (Karnaugh mapped operations, check citation and Lam and Shapiro paperdetailing 2D case 
+                // Turn x, y, z (Karnaugh mapped operations, check citation and Lam and Shapiro paper detailing 2D case 
                 // for understanding how this works)
                 const coords_t mask = (1u << level) - 1u;
                 x ^= mask & (-(xi & (yi | zi)));

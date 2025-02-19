@@ -145,6 +145,62 @@ void sequentialVsShuffleBenchmark(std::ofstream &outputFile) {
   runSearchBenchmark<LinearOctree, Point_t, Encoder_t>(outputFile, points, searchSetSeq, metadata, "sequential");
 }
 
+template <PointType Point_t>
+std::vector<Point_t> generateGridCloud(size_t n) {
+  std::vector<Point_t> points;
+  points.reserve(n * n * n);
+  for (size_t i = 0; i < n; i++)  
+    for (size_t j = 0; j < n; j++)  
+      for (size_t k = 0; k < n; k++)  
+        points.push_back(Point_t(i * n * n + j * n + k, i, j, k));
+  return points;
+}
+
+/**
+ * Constructs a linear octree and logs it to two separate files
+ *  octree-structure.txt contains the structure of the octree
+ *  encoded-points.csv contains the encodings of each point and its x,y,z coordinates
+ * 
+ * Keep in mind that those files (specially the second, since it will be on the same order of magnitude as the .las file) 
+ * will be huge for big clouds, so only use this for small clouds (e.g. <5M points)
+ */
+template <PointType Point_t, typename Encoder_t>
+void linearOctreeLog(std::ofstream &outputFile, bool useGridCloud = false, size_t gridCloudSize = 16) {
+  TimeWatcher tw;
+  tw.start();
+  std::vector<Point_t> points;
+  std::string cloudName;
+  if(useGridCloud) {
+    points = generateGridCloud<Point_t>(gridCloudSize);
+    cloudName = "regular-grid-" + std::to_string(gridCloudSize);
+  } else {
+    points = readPointCloud<Point_t>(mainOptions.inputFile);
+    cloudName = mainOptions.inputFileName;
+  }
+  tw.stop();
+  pointCloudReadLog(points, tw);
+  std::string encoderTypename = PointEncoding::getShortEncoderName<Encoder_t>();
+  
+  // Open the files for outputting the octree structure and the encoded points
+  // Dont put the timestamp on this file to not occupy a lot of memory if we forget to remove them after user
+  std::string octreeOutputFilename = cloudName + "-" + encoderTypename + "-octree-structure.txt";
+  std::string encodedPointsFilename = cloudName + "-" + encoderTypename + "-encoded-points.csv";
+  std::filesystem::path octreeOutputPath = mainOptions.outputDirName / octreeOutputFilename;
+  std::filesystem::path encodedPointsPath = mainOptions.outputDirName / encodedPointsFilename;
+  std::ofstream octreeOutputFile(octreeOutputPath, std::ios::out);
+  std::ofstream encodedPointsFile(encodedPointsPath, std::ios::out);
+  if (!octreeOutputFile.is_open() || !encodedPointsFile.is_open()) {
+    throw std::ios_base::failure(std::string("Failed to open octree log output files"));
+  }
+  std::optional<std::vector<PointMetadata>> metadata = std::nullopt;
+  LinearOctree<Point_t, Encoder_t> linearOctree(points, metadata, true);
+  std::cout << "OCTREE LOGGING MODE -- Outputting linear octree structure built from point cloud " << cloudName << " to " 
+    << octreeOutputFilename << " and encoded points to " << encodedPointsFilename << std::endl;
+  linearOctree.logOctree(octreeOutputFile, encodedPointsFile);
+  octreeOutputFile.close();
+  encodedPointsFile.close();
+}
+
 int main(int argc, char *argv[]) {
   setDefaults();
   processArgs(argc, argv);
@@ -186,6 +242,11 @@ int main(int argc, char *argv[]) {
       searchBenchmark<Lpoint64, PointEncoding::HilbertEncoder3D>(outputFile);
       searchBenchmark<Lpoint, PointEncoding::HilbertEncoder3D>(outputFile);
     break;
+    case BenchmarkMode::LOG_OCTREE:
+      linearOctreeLog<Lpoint64, PointEncoding::MortonEncoder3D>(outputFile);
+      linearOctreeLog<Lpoint64, PointEncoding::MortonEncoder3D>(outputFile, true, 16);
+      linearOctreeLog<Lpoint64, PointEncoding::HilbertEncoder3D>(outputFile);
+      linearOctreeLog<Lpoint64, PointEncoding::HilbertEncoder3D>(outputFile, true, 16);
   }
 
   return EXIT_SUCCESS;

@@ -27,7 +27,7 @@ datasets_algo_comp=(
 )
 
 # Some quick benchmarks with a single radius
-./build/rule-based-classifier-cpp -i "data/speulderbos/Speulderbos_2017_TLS.las"                    -o "out" -r "1.0"    -b "srch" -t 3 
+# ./build/rule-based-classifier-cpp -i "data/speulderbos/Speulderbos_2017_TLS.las"                    -o "out" -r "1.0"    -b "srch" -t 3 
 # ./build/rule-based-classifier-cpp -i "data/paris_lille/Lille_0.las"                    -o "out" -r "2.5"    -b "srch" -t 3 
 # ./build/rule-based-classifier-cpp -i "data/dales_las/test/5135_54435.las"              -o "out" -r "10.0"   -b "srch" -t 3 
 # ./build/rule-based-classifier-cpp -i "data/semantic3d/sg27_station8_intensity_rgb.txt" -o "out" -r "0.5"    -b "srch" -t 3 

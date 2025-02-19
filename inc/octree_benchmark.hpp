@@ -292,7 +292,13 @@ class OctreeBenchmark {
                 outputFile << "date,octree,point_type,encoder,npoints,operation,kernel,radius,num_searches,repeats,accumulated,mean,median,stdev,used_warmup,warmup_time,avg_result_size\n";
             }
             // append the comment to the octree name if needed
-            std::string octreeName = getOctreeName<Octree_t>();
+            std::string octreeName;
+            if constexpr (std::is_same_v<Octree_t<Point_t, Encoder_t>, LinearOctree<Point_t, Encoder_t>>) {
+                octreeName = "LinearOctree";
+            } else if constexpr (std::is_same_v<Octree_t<Point_t, Encoder_t>, Octree<Point_t, Encoder_t>>) {
+                octreeName = "Octree";
+            }
+
             std::string pointTypeName = getPointName<Point_t>();
             std::string encoderTypename = PointEncoding::getEncoderName<Encoder_t>();
             // if the comment, exists, append it to the op. name
@@ -373,9 +379,14 @@ class OctreeBenchmark {
         void printBenchmarkLog(const std::string &bench_name, const std::vector<float> &benchmarkRadii, const size_t repeats, const size_t numSearches) {
             // Displaying the basic information with formatting
             std::cout << std::fixed << std::setprecision(3);
-
+            std::string octreeName;
+            if constexpr (std::is_same_v<Octree_t<Point_t, Encoder_t>, LinearOctree<Point_t, Encoder_t>>) {
+                octreeName = "LinearOctree";
+            } else if constexpr (std::is_same_v<Octree_t<Point_t, Encoder_t>, Octree<Point_t, Encoder_t>>) {
+                octreeName = "Octree";
+            }
             std::cout << std::left << std::setw(LOG_FIELD_WIDTH) << "Running benchmark:"        << std::setw(LOG_FIELD_WIDTH) << bench_name                      << "\n";
-            std::cout << std::left << std::setw(LOG_FIELD_WIDTH) << "Octree used:"              << std::setw(LOG_FIELD_WIDTH) << getOctreeName<Octree_t>()        << "\n";
+            std::cout << std::left << std::setw(LOG_FIELD_WIDTH) << "Octree used:"              << std::setw(LOG_FIELD_WIDTH) << octreeName        << "\n";
             std::cout << std::left << std::setw(LOG_FIELD_WIDTH) << "Point type:"               << std::setw(LOG_FIELD_WIDTH) << getPointName<Point_t>()           << "\n";
             std::cout << std::left << std::setw(LOG_FIELD_WIDTH) << "Encoder:"                  << std::setw(LOG_FIELD_WIDTH) << PointEncoding::getEncoderName<Encoder_t>() << "\n";
             std::cout << std::left << std::setw(LOG_FIELD_WIDTH) << "Radii:";

@@ -8,7 +8,7 @@
 
 namespace fs = std::filesystem;
 
-enum BenchmarkMode { SEARCH, COMPARE, SEQUENTIAL, POINT_TYPE };
+enum BenchmarkMode { SEARCH, COMPARE, SEQUENTIAL, POINT_TYPE, LOG_OCTREE };
 
 class main_options
 {
