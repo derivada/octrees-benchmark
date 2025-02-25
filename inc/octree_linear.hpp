@@ -684,7 +684,7 @@ public:
         computeInternalNodeLayouts();
     }
 
-    void printKey(uint64_t key) {
+    void printKey(uint64_t key) const {
         for(int i=20; i>=0; i--) {
             std::cout << std::bitset<3>(key >> (3*i)) << " ";
         }
@@ -763,6 +763,57 @@ public:
     }
 
     /**
+     * @deprecated
+     * DONT USE, THIS WAS SLOWER THAN REGULAR NEIGHBORS() AND JUST ADDED FOR BENCHMARKING
+     * 
+     * 
+     * @brief Search neighbors function. Copies the result into a new array of Points, instead of an array of references.
+     * @param k specific kernel that contains the data of the region (center and radius)
+     * @param condition function that takes a candidate neighbor point and imposes an additional condition (should return a boolean).
+     * The signature of the function should be equivalent to `bool cnd(const PointType &p);`
+     * @param root The morton code for the node to start (usually the tree root which is 0)
+     * @return Points inside the given kernel type.
+     */
+    template<typename Kernel>
+    [[nodiscard]] std::vector<Point_t> neighborsCopy(const Kernel& k) const {
+        std::vector<Point_t> ptsInside;
+        auto checkBoxIntersect = [&](uint32_t nodeIndex) {
+            auto nodeCenter = this->centers[nodeIndex];
+            auto nodeRadii = this->radii[nodeIndex];
+            switch (k.boxIntersect(nodeCenter, nodeRadii)) {
+                case KernelAbstract::IntersectionJudgement::INSIDE: {
+                    // Octant completely inside kernel, all add points inside this internal node and prune
+                    auto start = points.begin() + this->internalLayoutRanges[nodeIndex].first;
+                    auto end = points.begin() + this->internalLayoutRanges[nodeIndex].second;
+                    ptsInside.insert(ptsInside.end(), start, end);
+                    return false;
+                }
+                case KernelAbstract::IntersectionJudgement::OVERLAP:
+                    // Octant overlaps kernel but not inside, keep descending
+                    return true;
+                case  KernelAbstract::IntersectionJudgement::OUTSIDE:
+                    // Octant completely ouside kernel, prune
+                    return false;
+                default:
+                    return false;
+            }
+        };
+        
+        auto findAndInsertPoints = [&](uint32_t nodeIndex) {
+            uint32_t leafIdx = this->internalToLeaf[nodeIndex];
+            auto start = this->points.begin() + this->layout[leafIdx];
+            auto end = this->points.begin() + this->layout[leafIdx+1];
+            // Copy all points that are inside the kernel
+            std::copy_if(start, end, std::back_inserter(ptsInside), [&](const Point_t& point) {
+                return k.isInside(point);
+            });
+        };
+        
+        singleTraversal(checkBoxIntersect, findAndInsertPoints);
+        return ptsInside;
+	}
+
+    /**
      * @brief Search neighbors function. Given kernel that already contains a point and a radius, return the points inside the region.
      * @param k specific kernel that contains the data of the region (center and radius)
      * @param condition function that takes a candidate neighbor point and imposes an additional condition (should return a boolean).
@@ -774,7 +825,6 @@ public:
     [[nodiscard]] std::vector<Point_t*> neighbors(const Kernel& k) const {
         std::vector<Point_t*> ptsInside;
         auto center_id = k.center().id();
-        auto kernel_bounds = k.template encodeBounds<Encoder_t>(bbox);
         auto checkBoxIntersect = [&](uint32_t nodeIndex) {
             auto nodeCenter = this->centers[nodeIndex];
             auto nodeRadii = this->radii[nodeIndex];
@@ -786,9 +836,7 @@ public:
                     // Reserve memory for insertion, there can be a lot of points here. This didn't work well
                     // ptsInside.reserve(ptsInside.size() + endIndex - startIndex);
                     for (auto it = points.begin() + startIndex; it != points.begin() + endIndex; ++it) {
-                        if ((*it).id() != center_id) {
                             ptsInside.push_back(&(*it));
-                        }
                     }
                     return false;
                 }
@@ -805,11 +853,14 @@ public:
         
         auto findAndInsertPoints = [&](uint32_t nodeIndex) {
             uint32_t leafIdx = this->internalToLeaf[nodeIndex];
+            key_t nodeKey = this->leaves[leafIdx];
+            // std::cout << "visiting leaf node with key: \n";
+            // printKey(nodeKey);
             auto start = this->points.begin() + this->layout[leafIdx];
             auto end = this->points.begin() + this->layout[leafIdx+1];
             // Amount of points in a leave should be small and only some of them will be inserted, so we don't need to reserve memory to iterate over them
             for (auto it = start; it != end; ++it) {
-                if (k.isInside(*it) && (*it).id() != center_id) {
+                if (k.isInside(*it)) {
                     ptsInside.push_back(&(*it));
                 }
             }
@@ -868,10 +919,6 @@ public:
             }
         };
         singleTraversal(checkBoxIntersect, findAndIncrementPointsCount);
-
-        // Subtract the center from the final count
-        if(ptsInside)
-            ptsInside--;
         // std::cout << "numNeighbors done, final result " << ptsInside << std::endl;
         return ptsInside;
 	}
@@ -922,9 +969,6 @@ public:
 	template<Kernel_t kernel_type = Kernel_t::square>
 	[[nodiscard]] inline std::vector<Point_t*> searchNeighbors(const Point& p, double radius) const {
 		const auto kernel = kernelFactory<kernel_type>(p, radius);
-		// Dummy condition that always returns true, so we can use the same function for all cases
-		// The compiler should optimize this away
-		// constexpr auto dummyCondition = [](const Point_t&) { return true; };
 		return neighbors(kernel);
 	}
 	/**
@@ -936,10 +980,18 @@ public:
 	template<Kernel_t kernel_type = Kernel_t::cube>
 	[[nodiscard]] inline std::vector<Point_t*> searchNeighbors(const Point& p, const Vector& radii) const {
 		const auto kernel = kernelFactory<kernel_type>(p, radii);
-		// Dummy condition that always returns true, so we can use the same function for all cases
-		// The compiler should optimize this away
-		// constexpr auto dummyCondition = [](const Point_t&) { return true; };
 		return neighbors(kernel);
+	}
+
+	template<Kernel_t kernel_type = Kernel_t::square>
+	[[nodiscard]] inline std::vector<Point_t> searchNeighborsCopy(const Point& p, double radius) const {
+		const auto kernel = kernelFactory<kernel_type>(p, radius);
+		return neighborsCopy(kernel);
+	}
+	template<Kernel_t kernel_type = Kernel_t::cube>
+	[[nodiscard]] inline std::vector<Point_t> searchNeighborsCopy(const Point& p, const Vector& radii) const {
+		const auto kernel = kernelFactory<kernel_type>(p, radii);
+		return neighborsCopy(kernel);
 	}
 
 	/**
@@ -1025,7 +1077,6 @@ public:
     template<typename Kernel, typename Function>
     [[nodiscard]] std::vector<Point_t*> neighborsOld(const Kernel& k, Function&& condition) const {
         std::vector<Point_t*> ptsInside;
-        auto center_id = k.center().id();
 
         auto intersectsKernel = [&](uint32_t nodeIndex) {
             return k.boxOverlap(this->centers[nodeIndex], this->radii[nodeIndex]);
@@ -1036,7 +1087,7 @@ public:
             auto pointsStart = this->layout[leafIdx], pointsEnd = this->layout[leafIdx+1];
             for (int32_t j = pointsStart; j < pointsEnd; j++) {
                 Point_t& p = this->points[j];  // Now we can get a non-const reference
-                if (k.isInside(p) && center_id != p.id() && condition(p)) {
+                if (p.id() && condition(p)) {
                     ptsInside.push_back(&p);
                 }
             }
@@ -1107,7 +1158,6 @@ public:
     template<typename Kernel, typename Function>
 	[[nodiscard]] size_t numNeighborsOld(const Kernel& k, Function&& condition) const {
         size_t ptsInside = 0;
-        auto center_id = k.center().id();
 
         auto intersectsKernel = [&](uint32_t nodeIndex) {
             return k.boxOverlap(this->centers[nodeIndex], this->radii[nodeIndex]);
@@ -1118,7 +1168,7 @@ public:
             auto pointsStart = this->layout[leafIdx], pointsEnd = this->layout[leafIdx+1];
             for (int32_t j = pointsStart; j < pointsEnd; j++) {
                 Point_t& p = this->points[j];
-                if (k.isInside(p) && center_id != p.id() && condition(p)) {
+                if (p.id() && condition(p)) {
                     ptsInside++;
                 }
             }

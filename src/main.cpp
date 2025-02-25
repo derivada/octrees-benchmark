@@ -54,7 +54,7 @@ std::shared_ptr<ResultSet<Point_t>> runSearchImplComparisonBenchmark(std::ofstre
   std::shared_ptr<const SearchSet> searchSet, std::optional<std::vector<PointMetadata>> &metadata = std::nullopt, std::string comment = "", bool useParallel = true) {
   OctreeBenchmark<Octree_t, Point_t, Encoder_t> ob(points, metadata, mainOptions.numSearches, searchSet, outputFile, 
      comment, mainOptions.checkResults, mainOptions.useWarmup, useParallel);
-  ob.searchImplComparisonBench(mainOptions.benchmarkRadii, mainOptions.repeats, mainOptions.numSearches);
+  ob.searchPtrVsCopyBench(mainOptions.benchmarkRadii, mainOptions.repeats, mainOptions.numSearches);
   return ob.getResultSet();
 }
 
@@ -103,19 +103,25 @@ template <PointType Point_t, typename Encoder_t>
 void searchImplComparisonBenchmark(std::ofstream &outputFile) {
   TimeWatcher tw;
   tw.start();
-  auto points = readPointCloud<Point_t>(mainOptions.inputFile);
+  std::vector<Point_t> points;
+  std::optional<std::vector<PointMetadata>> metadata = std::nullopt;
+  if (std::is_same<Point_t, Point>::value) {
+      auto pointMetaPair = readPointCloudMeta<Point_t>(mainOptions.inputFile);
+      points = std::move(pointMetaPair.first);
+      metadata = std::move(pointMetaPair.second);
+  } else {
+      points = readPointCloud<Point_t>(mainOptions.inputFile);
+  }
   tw.stop();
-  pointCloudReadLog(points, tw);
 
   // Generate a shared search set for each benchmark execution
   std::shared_ptr<const SearchSet> searchSet = std::make_shared<const SearchSet>(mainOptions.numSearches, points);
 
-  std::optional<std::vector<PointMetadata>> metadata = std::nullopt;
-  auto results = runSearchImplComparisonBenchmark<LinearOctree, Point_t, Encoder_t>(outputFile, points, searchSet, metadata);
+  auto results = runSearchImplComparisonBenchmark<LinearOctree, Point_t, Encoder_t>(outputFile, points, searchSet, metadata, "", false);
 
   // Check the results if needed
   if(mainOptions.checkResults) {
-    results->checkResultsAlgo();
+    results->checkResultsPtrVsCopy();
   }
 }
 
@@ -231,7 +237,7 @@ int main(int argc, char *argv[]) {
       searchBenchmark<Point, PointEncoding::HilbertEncoder3D>(outputFile);
     break;
     case BenchmarkMode::COMPARE:
-      searchImplComparisonBenchmark<Lpoint64, PointEncoding::HilbertEncoder3D>(outputFile);
+      searchImplComparisonBenchmark<Point, PointEncoding::HilbertEncoder3D>(outputFile);
       // searchImplComparisonBenchmark<Lpoint64, PointEncoding::MortonEncoder3D>(outputFile);
     break;
     case BenchmarkMode::SEQUENTIAL:

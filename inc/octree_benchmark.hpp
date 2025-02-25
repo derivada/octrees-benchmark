@@ -5,6 +5,7 @@
 #include <omp.h>
 #include "NeighborKernels/KernelFactory.hpp"
 #include "type_names.hpp"
+#include "TimeWatcher.hpp"
 
 struct SearchSet {
     const size_t numSearches;
@@ -44,6 +45,7 @@ template <PointType Point_t>
 struct ResultSet {
     const std::shared_ptr<const SearchSet> searchSet;
     std::vector<std::vector<Point_t*>> resultsNeigh;
+    std::vector<std::vector<Point_t>> resultsNeighCopy;
     std::vector<std::vector<Point_t*>> resultsNeighOld;
     std::vector<size_t> resultsNumNeigh;
     std::vector<size_t> resultsNumNeighOld;
@@ -88,6 +90,33 @@ struct ResultSet {
             auto n2 = results2[i];
             if (n1 != n2) {
                 wrongSearches.push_back(i);
+            }
+        }
+        return wrongSearches;
+    }
+
+    // Generic check for neighbor results
+    std::vector<size_t> checkNeighResultsPtrVsCopy(std::vector<std::vector<Point_t*>> &resultsPtr, std::vector<std::vector<Point_t>> &resultsCopy)
+    {
+        std::vector<size_t> wrongSearches;
+        for (size_t i = 0; i < resultsPtr.size(); i++) {
+            auto vPtr = resultsPtr[i];
+            auto vCopy = resultsCopy[i];
+            if (vPtr.size() != vCopy.size()) {
+                wrongSearches.push_back(i);
+            } else {
+                std::sort(vPtr.begin(), vPtr.end(), [](Point_t *p, Point_t* q) -> bool {
+                    return p->id() < q->id();
+                });
+                std::sort(vCopy.begin(), vCopy.end(), [](Point_t p, Point_t q) -> bool {
+                    return p.id() < q.id();
+                });
+                for (size_t j = 0; j < vPtr.size(); j++) {
+                    if (vPtr[j]->id() != vCopy[j].id()) {
+                        wrongSearches.push_back(i);
+                        break;
+                    }
+                }
             }
         }
         return wrongSearches;
@@ -140,7 +169,31 @@ struct ResultSet {
             std::cout << "All results are right!" << std::endl;
         }
     }
-    
+
+    // Operation for checking neighbor results
+    void checkOperationNeighPtrVsCopy(
+        std::vector<std::vector<Point_t*>> &results1,
+        std::vector<std::vector<Point_t>> &results2,
+        size_t printingLimit = 10)
+    {
+        std::vector<size_t> wrongSearches = checkNeighResultsPtrVsCopy(results1, results2);
+        if (wrongSearches.size() > 0) {
+            std::cout << "Wrong results at " << wrongSearches.size() << " search sets" << std::endl;
+            for (size_t i = 0; i < std::min(wrongSearches.size(), printingLimit); i++) {
+                size_t idx = wrongSearches[i];
+                size_t nPoints1 = results1[idx].size(), nPoints2 = results2[idx].size();
+                std::cout << "\tAt set " << idx << " with "
+                        << nPoints1 << " VS " << nPoints2 << " points found" << std::endl;
+            }
+
+            if (wrongSearches.size() > printingLimit) {
+                std::cout << "\tAnd at " << (wrongSearches.size() - printingLimit) << " other search instances..." << std::endl;
+            }
+        } else {
+            std::cout << "All results are right!" << std::endl;
+        }
+    }
+
     void checkResults(std::shared_ptr<ResultSet<Point_t>> other, size_t printingLimit = 10) {
         // Ensure the search sets are the same
         assert(searchSet == other->searchSet && "The search sets of the benchmarks are not the same");
@@ -166,6 +219,40 @@ struct ResultSet {
         if(!resultsNumNeigh.empty() && !resultsNumNeighOld.empty()) {
             std::cout << "Checking search results on both implementations of number of neighbors searches..." << std::endl;
             checkOperationNumNeigh(resultsNumNeigh, resultsNumNeighOld, printingLimit);
+        }
+    }
+
+    void checkResultsPtrVsCopy(size_t printingLimit = 10) { 
+        if(!resultsNeigh.empty() && !resultsNeighCopy.empty()) {
+            std::cout << "Checking search results on pointer result vs copy result variants..." << std::endl;
+            checkOperationNeighPtrVsCopy(resultsNeigh, resultsNeighCopy, printingLimit);
+            TimeWatcher twPtr, twCpy;
+            twPtr.start();
+            double acc = 0.0;
+            auto startPtr = std::chrono::high_resolution_clock::now();
+            for (const auto& neighVec : resultsNeigh) {
+                for (const auto* point : neighVec) {
+                    acc += point->getX();
+                }
+            }
+            auto endPtr = std::chrono::high_resolution_clock::now();
+            std::cout << acc << std::endl;
+            
+            acc = 0.0;
+            auto startCpy = std::chrono::high_resolution_clock::now();
+            for (const auto& neighVec : resultsNeighCopy) {
+                for (const auto& point : neighVec) {
+                    acc += point.getX();
+                }
+            }
+            auto endCpy = std::chrono::high_resolution_clock::now();
+            std::cout << acc << std::endl;
+            
+            auto durationPtr = std::chrono::duration_cast<std::chrono::nanoseconds>(endPtr - startPtr).count();
+            auto durationCpy = std::chrono::duration_cast<std::chrono::nanoseconds>(endCpy - startCpy).count();
+            
+            std::cout << "time to traverse ptr: " << durationPtr << " nanoseconds\n";
+            std::cout << "time to traverse cpy: " << durationCpy << " nanoseconds\n";
         }
     }
 };
@@ -203,6 +290,23 @@ class OctreeBenchmark {
                     averageResultSize += result.size();
                     if(checkResults)
                         resultSet->resultsNeigh[i] = result;
+                }
+            
+            averageResultSize = averageResultSize / searchSet->numSearches;
+            return averageResultSize;
+        }
+
+        template<Kernel_t kernel>
+        size_t searchNeighCopy(float radii) {
+            if(checkResults && resultSet->resultsNeighCopy.empty())
+                resultSet->resultsNeighCopy.resize(searchSet->numSearches);
+            size_t averageResultSize = 0;
+            #pragma omp parallel for if (useParallel) schedule(static) reduction(+:averageResultSize)
+                for(size_t i = 0; i<searchSet->numSearches; i++) {
+                    auto result = oct->template searchNeighborsCopy<kernel>(searchSet->searchPoints[i], radii);
+                    averageResultSize += result.size();
+                    if(checkResults)
+                        resultSet->resultsNeighCopy[i] = result;
                 }
             
             averageResultSize = averageResultSize / searchSet->numSearches;
@@ -345,6 +449,13 @@ class OctreeBenchmark {
         }
 
         template<Kernel_t kernel>
+        void benchmarkSearchNeighCopy(size_t repeats, float radius) {
+            const auto kernelStr = kernelToString(kernel);
+            auto [stats, averageResultSize] = benchmarking::benchmark<size_t>(repeats, [&]() { return searchNeighCopy<kernel>(radius); }, useWarmup);
+            appendToCsv("neighSearchCopy", kernelStr, radius, stats, averageResultSize);
+        }
+
+        template<Kernel_t kernel>
         void benchmarkSearchNeighOld(size_t repeats, float radius) {
             const auto kernelStr = kernelToString(kernel);
             auto [stats, averageResultSize] = benchmarking::benchmark<size_t>(repeats, [&]() { return searchNeighOld<kernel>(radius); }, useWarmup);
@@ -452,6 +563,26 @@ class OctreeBenchmark {
             }
             std::cout << std::endl;
         }
+
+        void searchPtrVsCopyBench(const std::vector<float> &benchmarkRadii, const size_t repeats, const size_t numSearches) {
+            printBenchmarkLog("neighbors vs copyNeighbors comparison", benchmarkRadii, repeats, numSearches);
+            size_t total = benchmarkRadii.size() * 2;
+            size_t current = 1;
+            for(size_t i = 0; i<benchmarkRadii.size(); i++) {
+                benchmarkSearchNeigh<Kernel_t::sphere>(repeats, benchmarkRadii[i]);
+                benchmarkSearchNeigh<Kernel_t::circle>(repeats, benchmarkRadii[i]);
+                benchmarkSearchNeigh<Kernel_t::cube>(repeats, benchmarkRadii[i]);
+                benchmarkSearchNeigh<Kernel_t::square>(repeats, benchmarkRadii[i]);
+                printBenchmarkUpdate("Neighbor search - pointer", total, current, benchmarkRadii[i]);
+                benchmarkSearchNeighCopy<Kernel_t::sphere>(repeats, benchmarkRadii[i]);
+                benchmarkSearchNeighCopy<Kernel_t::circle>(repeats, benchmarkRadii[i]);
+                benchmarkSearchNeighCopy<Kernel_t::cube>(repeats, benchmarkRadii[i]);
+                benchmarkSearchNeighCopy<Kernel_t::square>(repeats, benchmarkRadii[i]);
+                printBenchmarkUpdate("Neighbor search - copy", total, current, benchmarkRadii[i]);
+            }
+            std::cout << std::endl;
+        }
+
 
         void searchBench(const std::vector<float> &benchmarkRadii, const size_t repeats, const size_t numSearches) {
             printBenchmarkLog("neighSearch and numNeighSearch", benchmarkRadii, repeats, numSearches);

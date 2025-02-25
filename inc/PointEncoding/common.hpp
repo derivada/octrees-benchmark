@@ -42,6 +42,13 @@ namespace PointEncoding {
         z = std::min((typename Encoder::coords_t) (z_transf * (1 << (Encoder::MAX_DEPTH))), maxCoord);
     }
 
+    template <typename Encoder>
+    inline typename Encoder::key_t encodeFromPoint(const Point& p, const Box &bbox) {
+        typename Encoder::coords_t x, y, z;
+        getAnchorCoords<Encoder>(p, bbox, x, y, z);
+		return Encoder::encode(x, y, z);
+    }
+
     /**
      * @brief Get the center and radii of an octant at a given octree level.
      * 

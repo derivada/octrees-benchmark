@@ -188,7 +188,7 @@ class Octree
 			{
 				for (Point_t* point_ptr : octree.points_)
 				{
-					if (k.isInside(*point_ptr) && k.center().id() != point_ptr->id() && condition(*point_ptr))
+					if (k.isInside(*point_ptr) && condition(*point_ptr))
 					{
 						ptsInside.emplace_back(point_ptr);
 					}
@@ -298,7 +298,7 @@ class Octree
 			{
 				for (Point_t* point_ptr : octree.points_)
 				{
-					if (k.isInside(*point_ptr) && k.center().id() != point_ptr->id()) { ++ptsInside; }
+					if (k.isInside(*point_ptr)) { ++ptsInside; }
 				}
 			}
 			else
