@@ -8,7 +8,7 @@
 
 namespace fs = std::filesystem;
 
-enum BenchmarkMode { SEARCH, COMPARE, SEQUENTIAL, POINT_TYPE, LOG_OCTREE };
+enum BenchmarkMode { SEARCH, COMPARE, SEQUENTIAL, POINT_TYPE, APPROX, LOG_OCTREE };
 
 class main_options
 {
@@ -25,6 +25,7 @@ public:
 	bool checkResults{false};
 	bool useWarmup{true};
 	BenchmarkMode benchmarkMode{SEARCH};
+	double approximateTolerance = 50.0;
 };
 
 extern main_options mainOptions;
@@ -37,7 +38,8 @@ enum LongOptions : int
 	SEARCHES,
 	CHECK,
 	BENCHMARK,
-	NO_WARMUP
+	NO_WARMUP,
+	APPROXIMATE_TOLERANCE
 };
 
 // Define short options
@@ -52,6 +54,7 @@ const option long_opts[] = {
 	{ "check", no_argument, nullptr, LongOptions::CHECK },
 	{ "benchmark", required_argument, nullptr, LongOptions::BENCHMARK },
 	{ "no-warmup", no_argument, nullptr, LongOptions::NO_WARMUP },
+	{ "approx-tol", required_argument, nullptr, LongOptions::APPROXIMATE_TOLERANCE },
 	{ nullptr, 0, nullptr, 0 }
 };
 

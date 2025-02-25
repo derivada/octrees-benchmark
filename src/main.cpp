@@ -50,6 +50,16 @@ std::shared_ptr<ResultSet<Point_t>> runSearchBenchmark(std::ofstream &outputFile
 }
 
 template <template <typename, typename> class Octree_t, PointType Point_t, typename Encoder_t>
+std::shared_ptr<ResultSet<Point_t>> runApproximateSearchBenchmark(std::ofstream &outputFile, std::vector<Point_t>& points,
+  std::shared_ptr<const SearchSet> searchSet, std::optional<std::vector<PointMetadata>> &metadata = std::nullopt, double tolerancePercentage = 0.1,
+  std::string comment = "", bool useParallel = true) {
+  OctreeBenchmark<Octree_t, Point_t, Encoder_t> ob(points, metadata, mainOptions.numSearches, searchSet, outputFile, 
+     comment, mainOptions.checkResults, mainOptions.useWarmup, useParallel);
+  ob.approximateSearchesBench(mainOptions.benchmarkRadii, mainOptions.repeats, mainOptions.numSearches, tolerancePercentage);
+  return ob.getResultSet();
+}
+
+template <template <typename, typename> class Octree_t, PointType Point_t, typename Encoder_t>
 std::shared_ptr<ResultSet<Point_t>> runSearchImplComparisonBenchmark(std::ofstream &outputFile, std::vector<Point_t>& points,
   std::shared_ptr<const SearchSet> searchSet, std::optional<std::vector<PointMetadata>> &metadata = std::nullopt, std::string comment = "", bool useParallel = true) {
   OctreeBenchmark<Octree_t, Point_t, Encoder_t> ob(points, metadata, mainOptions.numSearches, searchSet, outputFile, 
@@ -151,6 +161,29 @@ void sequentialVsShuffleBenchmark(std::ofstream &outputFile) {
   runSearchBenchmark<LinearOctree, Point_t, Encoder_t>(outputFile, points, searchSetSeq, metadata, "sequential");
 }
 
+template <PointType Point_t, typename Encoder_t>
+void approximateSearchBenchmark(std::ofstream &outputFile) {
+  TimeWatcher tw;
+  tw.start();
+  // if Point_t == Point, we run readPointCloudMeta
+  std::vector<Point_t> points;
+  std::optional<std::vector<PointMetadata>> metadata = std::nullopt;
+  if (std::is_same<Point_t, Point>::value) {
+      auto pointMetaPair = readPointCloudMeta<Point_t>(mainOptions.inputFile);
+      points = std::move(pointMetaPair.first);
+      metadata = std::move(pointMetaPair.second);
+  } else {
+      points = readPointCloud<Point_t>(mainOptions.inputFile);
+  }
+  tw.stop();
+  pointCloudReadLog(points, tw);
+
+  std::shared_ptr<const SearchSet> searchSet = std::make_shared<const SearchSet>(mainOptions.numSearches, points);
+  auto results = runApproximateSearchBenchmark<LinearOctree, Point_t, Encoder_t>(outputFile, points, searchSet, metadata, mainOptions.approximateTolerance);
+  if(mainOptions.checkResults)
+    results->checkResultsApproximateSearches();
+}
+
 template <PointType Point_t>
 std::vector<Point_t> generateGridCloud(size_t n) {
   std::vector<Point_t> points;
@@ -246,6 +279,9 @@ int main(int argc, char *argv[]) {
       searchBenchmark<Point, PointEncoding::HilbertEncoder3D>(outputFile);
       searchBenchmark<Lpoint64, PointEncoding::HilbertEncoder3D>(outputFile);
       searchBenchmark<Lpoint, PointEncoding::HilbertEncoder3D>(outputFile);
+    break;
+    case BenchmarkMode::APPROX:
+      approximateSearchBenchmark<Lpoint64, PointEncoding::HilbertEncoder3D>(outputFile);
     break;
     case BenchmarkMode::LOG_OCTREE:
       linearOctreeLog<Lpoint64, PointEncoding::MortonEncoder3D>(outputFile);

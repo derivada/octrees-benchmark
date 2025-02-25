@@ -18,8 +18,10 @@ void printHelp()
 		   "'srch' for search (default),\n\t"
 		   "'comp' for comparison, 'seq' for sequential vs shuffled points,\n\t" 
 		   "'pt' for point type comparison,\n\t" 
+		   "'approx' for approximate searches comparison\n\t"
 		   "'log' for logging the entire linear octree built, use for debugging\n"
-		   "--no-warmup: Disable warmup phase\n";
+		   "--no-warmup: Disable warmup phase\n"
+		   "--approx-tol: For specifying tolerance percentage in approximate searches (e.g. 80.0 = 80% tolerance on kernel size)\n";
 	exit(1);
 }
 
@@ -98,16 +100,20 @@ void processArgs(int argc, char** argv)
 					mainOptions.benchmarkMode = POINT_TYPE;
 				} else if(std::string(optarg) == "log") {
 					mainOptions.benchmarkMode = LOG_OCTREE;
+				} else if(std::string(optarg) == "approx") {
+					mainOptions.benchmarkMode = APPROX;
 				} else {
 					std::cerr << "Invalid benchmark mode: " << optarg << "\n";
 					printHelp();
 				}
 				break;
-
+			
 			case LongOptions::NO_WARMUP:
 				mainOptions.useWarmup = false;
 				break;
-
+			case LongOptions::APPROXIMATE_TOLERANCE:
+				mainOptions.approximateTolerance = std::stod(std::string(optarg));
+				break;
 			case '?': // Unrecognized option
 			default:
 				printHelp();

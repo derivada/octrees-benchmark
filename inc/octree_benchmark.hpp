@@ -51,7 +51,10 @@ struct ResultSet {
     std::vector<size_t> resultsNumNeighOld;
     std::vector<std::vector<Point_t*>> resultsKNN;
     std::vector<std::vector<Point_t*>> resultsRingNeigh;
-
+    std::vector<std::vector<Point_t*>> resultsSearchApproxUpper;
+    std::vector<std::vector<Point_t*>> resultsSearchApproxLower;
+    double tolerancePercentageUsed;
+    
     ResultSet(const std::shared_ptr<const SearchSet> searchSet): searchSet(searchSet) {  }
 
     // Generic check for neighbor results
@@ -255,6 +258,52 @@ struct ResultSet {
             std::cout << "time to traverse cpy: " << durationCpy << " nanoseconds\n";
         }
     }
+    
+    void checkResultsApproximateSearches(size_t printingLimit = 10) {
+        if (resultsSearchApproxLower.empty() || resultsSearchApproxUpper.empty() || resultsNeigh.empty()) {
+            std::cout << "Approximate searches results were not computed! Not checking approximation results.\n";
+            return;
+        }
+    
+        size_t printingOn = std::min(searchSet->numSearches, printingLimit);
+        std::cout << "Approximate searches results (printing " << printingOn 
+                  << " searches of a total of " << searchSet->numSearches << " searches performed):\n";
+        std::cout << "Tolerance percentage used: " << tolerancePercentageUsed << "%\n";
+    
+        // Corrected column headers
+        std::cout << std::left 
+                  << std::setw(10) << "Search #" 
+                  << std::setw(15) << "Lower bound" 
+                  << std::setw(15) << "Exact search" 
+                  << std::setw(15) << "Upper bound"
+                  << "\n";
+    
+        for (size_t i = 0; i < printingOn; i++) {
+            std::cout << std::left 
+                      << std::setw(10) << (i + 1) 
+                      << std::setw(15) << resultsSearchApproxLower[i].size() 
+                      << std::setw(15) << resultsNeigh[i].size() 
+                      << std::setw(15) << resultsSearchApproxUpper[i].size() 
+                      << "\n";
+        }
+    
+        double totalDiffLower = 0.0, totalDiffUpper = 0.0;
+        size_t nnzSearches = searchSet->numSearches;
+    
+        for (size_t i = 0; i < searchSet->numSearches; i++) {
+            if (resultsNeigh[i].size() > 0) {  // Prevent division by zero
+                totalDiffLower += (static_cast<double>(resultsNeigh[i].size() - resultsSearchApproxLower[i].size()) / resultsNeigh[i].size()) * 100.0;
+                totalDiffUpper += (static_cast<double>(resultsSearchApproxUpper[i].size() - resultsNeigh[i].size()) / resultsNeigh[i].size()) * 100.0;
+            } else {
+                nnzSearches--;
+            }
+        }
+    
+        std::cout << "On average over all searches done, lower bound searches found " 
+                  << (totalDiffLower / nnzSearches) << "% less points\n";
+        std::cout << "On average over all searches done, upper bound searches found " 
+                  << (totalDiffUpper / nnzSearches) << "% more points\n";
+    }    
 };
 
 
@@ -307,6 +356,31 @@ class OctreeBenchmark {
                     averageResultSize += result.size();
                     if(checkResults)
                         resultSet->resultsNeighCopy[i] = result;
+                }
+            
+            averageResultSize = averageResultSize / searchSet->numSearches;
+            return averageResultSize;
+        }
+
+        template<Kernel_t kernel>
+        size_t searchNeighApprox(float radii, double tolerancePercentage, bool upperBound) {
+            if(checkResults && upperBound && resultSet->resultsSearchApproxUpper.empty())
+                resultSet->resultsSearchApproxUpper.resize(searchSet->numSearches);
+            if(checkResults && !upperBound && resultSet->resultsSearchApproxLower.empty())
+                resultSet->resultsSearchApproxLower.resize(searchSet->numSearches);
+            resultSet->tolerancePercentageUsed = tolerancePercentage;
+
+            size_t averageResultSize = 0;
+            #pragma omp parallel for if (useParallel) schedule(static) reduction(+:averageResultSize)
+                for(size_t i = 0; i<searchSet->numSearches; i++) {
+                    auto result = oct->template searchNeighborsApprox<kernel>(searchSet->searchPoints[i], radii, tolerancePercentage, upperBound);
+                    averageResultSize += result.size();
+                    if(checkResults) {
+                        if(upperBound)
+                            resultSet->resultsSearchApproxUpper[i] = result;
+                        else
+                            resultSet->resultsSearchApproxLower[i] = result;
+                    }
                 }
             
             averageResultSize = averageResultSize / searchSet->numSearches;
@@ -456,6 +530,13 @@ class OctreeBenchmark {
         }
 
         template<Kernel_t kernel>
+        void benchmarkSearchNeighApproximate(size_t repeats, float radius, double tolerancePercentage, bool upperBound) {
+            const auto kernelStr = kernelToString(kernel);
+            auto [stats, averageResultSize] = benchmarking::benchmark<size_t>(repeats, [&]() { return searchNeighApprox<kernel>(radius, tolerancePercentage, upperBound); }, useWarmup);
+            appendToCsv(std::string("neighSearchApprox") + (upperBound ? "Upper" : "Lower"), kernelStr, radius, stats, averageResultSize);
+        }
+
+        template<Kernel_t kernel>
         void benchmarkSearchNeighOld(size_t repeats, float radius) {
             const auto kernelStr = kernelToString(kernel);
             auto [stats, averageResultSize] = benchmarking::benchmark<size_t>(repeats, [&]() { return searchNeighOld<kernel>(radius); }, useWarmup);
@@ -602,6 +683,19 @@ class OctreeBenchmark {
                 printBenchmarkUpdate("Num. neighbor search", total, current, benchmarkRadii[i]);
             }
             std::cout << std::endl;
+        }
+
+        void approximateSearchesBench(const std::vector<float> &benchmarkRadii, const size_t repeats, const size_t numSearches, double tolerancePercentage) {
+            printBenchmarkLog(std::string("Approximate searches with low and high bounds, with ") + std::to_string(tolerancePercentage) + std::string(" % tolerance"), 
+                benchmarkRadii, repeats, numSearches);
+            size_t total = benchmarkRadii.size();
+            size_t current = 1;
+            for(size_t i = 0; i<benchmarkRadii.size(); i++) {
+                benchmarkSearchNeigh<Kernel_t::sphere>(repeats, benchmarkRadii[i]);
+                benchmarkSearchNeighApproximate<Kernel_t::sphere>(repeats, benchmarkRadii[i], tolerancePercentage, false);
+                benchmarkSearchNeighApproximate<Kernel_t::sphere>(repeats, benchmarkRadii[i], tolerancePercentage, true);
+                printBenchmarkUpdate("Approx. neighbor search", total, current, benchmarkRadii[i]);
+            }
         }
 
         std::shared_ptr<const SearchSet> getSearchSet() const { return searchSet; }
