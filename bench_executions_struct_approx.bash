@@ -19,6 +19,6 @@ for dataset in "${datasets[@]}"; do
         echo "Error: File not found - $dataset"
         exit 1
     fi
-    ./build/rule-based-classifier-cpp -i "$dataset" -o "out/struct_vs_vect" -r "0.5,1.0,2.5,5.0" -b "struct"
+    ./build/rule-based-classifier-cpp -i "$dataset" -o "out/struct_vs_vect" -r "0.5,1.0,1.5,3.0" -b "struct" -s 100
 done
 

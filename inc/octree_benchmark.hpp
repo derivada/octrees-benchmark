@@ -222,6 +222,41 @@ struct ResultSet {
         } else {
             std::cout << "All results are right!" << std::endl;
         }
+
+        // Check difference in access times
+        // Measure access times
+        auto measureAccessTime = [](auto& container, auto accessor) {
+            std::uintptr_t dummy = 0; // Prevent optimization
+            auto start = std::chrono::high_resolution_clock::now();
+            for (const auto& elem : container) {
+                for (const auto point : accessor(elem)) {
+                    dummy ^= reinterpret_cast<uintptr_t>(&point); // Prevent optimization
+                }
+            }
+            asm volatile("" : "+r" (dummy)); // Prevent optimization
+            auto end = std::chrono::high_resolution_clock::now();
+            return std::chrono::duration<double, std::milli>(end - start).count();
+        };
+        auto start = std::chrono::high_resolution_clock::now();
+        uint64_t random_stuff = 0;
+        for(const auto p: results[0]) {
+            random_stuff += (uint64_t) (p->getX() + p->getY() + p->getZ());
+        }
+        auto end = std::chrono::high_resolution_clock::now();
+        double timeVector = std::chrono::duration<double, std::milli>(end - start).count();
+
+        std::cout << random_stuff << std::endl;
+        start = std::chrono::high_resolution_clock::now();
+        uint64_t random_stuff_2 = 0;
+        for(const auto p: resultsStruct[0]) {
+            random_stuff_2 += (uint64_t) (p.getX() + p.getY() + p.getZ());
+        }
+        end = std::chrono::high_resolution_clock::now();
+        std::cout << random_stuff_2 << std::endl;
+        double timeStruct = std::chrono::duration<double, std::milli>(end - start).count();
+
+        std::cout << "Access time for std::vector<Point_t*>: " << timeVector << " ms" << std::endl;
+        std::cout << "Access time for NeighSearchResult<Point_t>: " << timeStruct << " ms" << std::endl;
     }
 
     // Operation for checking number of neighbor results

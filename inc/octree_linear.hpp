@@ -895,10 +895,8 @@ public:
         auto checkBoxIntersect = [&](uint32_t nodeIndex) {
             auto nodeCenter = this->centers[nodeIndex];
             auto nodeRadii = this->radii[nodeIndex];
-
             uint32_t nodeDepth = PointEncoding::decodePrefixLength<Encoder_t>(this->prefixes[nodeIndex]) / 3;
-            bool beyondPrecisionDepth = nodeDepth > precisionLevel;
-            if(beyondPrecisionDepth) {
+            if(nodeDepth > precisionLevel) {
                 // If we are beyond precision and in upper bound mode, add octant to the result
                 if(upperBound) {
                     result.octantIndexes.push_back(nodeIndex);
@@ -988,7 +986,6 @@ public:
         auto checkBoxIntersect = [&](uint32_t nodeIndex) {
             auto nodeCenter = this->centers[nodeIndex];
             auto nodeRadii = this->radii[nodeIndex];
-            // std::cout << " center = " << nodeCenter << " radii = " << nodeRadii;
             switch (k.boxIntersect(nodeCenter, nodeRadii)) {
                 case KernelAbstract::IntersectionJudgement::INSIDE:
                     // Completely inside, all add points except center and prune
@@ -1006,11 +1003,13 @@ public:
         };
         
         auto findAndIncrementPointsCount = [&](uint32_t nodeIndex) {
-            uint32_t leafIdx = this->internalToLeaf[nodeIndex];
-            auto start = this->points.begin() + this->layout[leafIdx];
-            auto end = this->points.begin() + this->layout[leafIdx+1];
-            for (auto it = start; it != end; ++it) {
-                if (k.isInside(*it)) {
+            // Reached a leaf, add all points inside the kernel
+            size_t startIndex = this->internalLayoutRanges[nodeIndex].first;
+            size_t endIndex = this->internalLayoutRanges[nodeIndex].second;
+            auto* startPtr = points.data() + startIndex;
+            auto* endPtr = points.data() + endIndex;
+            for (; startPtr != endPtr; ++startPtr) {
+                if (k.isInside(*startPtr)) {
                     ptsInside++;
                 }
             }
