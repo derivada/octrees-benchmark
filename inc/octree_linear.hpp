@@ -773,8 +773,10 @@ public:
                     // Completely inside, all add points and prune
                     size_t startIndex = this->internalLayoutRanges[nodeIndex].first;
                     size_t endIndex = this->internalLayoutRanges[nodeIndex].second;
-                    for (auto it = points.begin() + startIndex; it != points.begin() + endIndex; ++it) {
-                        ptsInside.push_back(&(*it));
+                    auto* startPtr = points.data() + startIndex;
+                    auto* endPtr = points.data() + endIndex;
+                    for (; startPtr != endPtr; ++startPtr) {
+                        ptsInside.push_back(startPtr);
                     }
                     return false;
                 }
@@ -887,9 +889,9 @@ public:
     }
 
     template<typename Kernel>
-    [[nodiscard]] std::vector<Point_t*> neighborsApprox(const Kernel& k, uint32_t precisionLevel, bool upperBound) const {
+    [[nodiscard]] NeighSearchResult<Point_t> neighborsApprox(const Kernel& k, uint32_t precisionLevel, bool upperBound) {
         // std::cout << "approximate neigh search with max precision level " << precisionLevel << "and mode " << (upperBound ? "upper bound": "lower bound") << std::endl;
-        std::vector<Point_t*> ptsInside;
+        NeighSearchResult<Point_t> result(points, internalLayoutRanges);
         auto checkBoxIntersect = [&](uint32_t nodeIndex) {
             auto nodeCenter = this->centers[nodeIndex];
             auto nodeRadii = this->radii[nodeIndex];
@@ -897,31 +899,20 @@ public:
             uint32_t nodeDepth = PointEncoding::decodePrefixLength<Encoder_t>(this->prefixes[nodeIndex]) / 3;
             bool beyondPrecisionDepth = nodeDepth > precisionLevel;
             if(beyondPrecisionDepth) {
-                // If we are beyond precision and in upper bound mode, insert every points
+                // If we are beyond precision and in upper bound mode, add octant to the result
                 if(upperBound) {
-                     // Reached maximum depth in the approximate search and we are doing upper bound, insert all points!
-                     size_t startIndex = this->internalLayoutRanges[nodeIndex].first;
-                     size_t endIndex = this->internalLayoutRanges[nodeIndex].second;
-                     // Reserve memory for insertion, there can be a lot of points here. This didn't work well!
-                     // ptsInside.reserve(ptsInside.size() + endIndex - startIndex);
-                     for (auto it = points.begin() + startIndex; it != points.begin() + endIndex; ++it) {
-                         ptsInside.push_back(&(*it));
-                     }
+                    result.octantIndexes.push_back(nodeIndex);
+                    result.numberOfPoints += internalLayoutRanges[nodeIndex].second - internalLayoutRanges[nodeIndex].first;
                 }
-                // Prune either way, precision up to this point
+                // Prune either way
                 return false;
             } 
 
             switch (k.boxIntersect(nodeCenter, nodeRadii)) {
                 case KernelAbstract::IntersectionJudgement::INSIDE: {
-                    // Completely inside, all add points except center and prune
-                    size_t startIndex = this->internalLayoutRanges[nodeIndex].first;
-                    size_t endIndex = this->internalLayoutRanges[nodeIndex].second;
-                    // Reserve memory for insertion, there can be a lot of points here. This didn't work well!
-                    // ptsInside.reserve(ptsInside.size() + endIndex - startIndex);
-                    for (auto it = points.begin() + startIndex; it != points.begin() + endIndex; ++it) {
-                        ptsInside.push_back(&(*it));
-                    }
+                    // Completely inside, add octant to the result
+                    result.octantIndexes.push_back(nodeIndex);
+                    result.numberOfPoints += internalLayoutRanges[nodeIndex].second - internalLayoutRanges[nodeIndex].first;
                     return false;
                 }
                 case KernelAbstract::IntersectionJudgement::OVERLAP:
@@ -934,56 +925,52 @@ public:
         };
         
         auto findAndInsertPoints = [&](uint32_t nodeIndex) {
-            uint32_t leafIdx = this->internalToLeaf[nodeIndex];
-            key_t nodeKey = this->leaves[leafIdx];
-            auto nodeDepth = PointEncoding::getLevel<Encoder_t>(this->leaves[leafIdx + 1] - nodeKey);
-            auto start = this->points.begin() + this->layout[leafIdx];
-            auto end = this->points.begin() + this->layout[leafIdx+1];
-            bool beyondPrecisionDepth = nodeDepth > precisionLevel;
-            // If we are on lowerBound mode and beyond precision, return
-            if(beyondPrecisionDepth && !upperBound)
-                return;
-            // Amount of points in a leave should be small and only some of them will be inserted, so we don't need to reserve memory to iterate over them
-            for (auto it = start; it != end; ++it) {
-                // If we are on upperBound mode and beyond precision, always insert
-                if (beyondPrecisionDepth || k.isInside(*it)) {
-                    ptsInside.push_back(&(*it));
+            // Reached a leaf, add all points inside the kernel
+            size_t startIndex = this->internalLayoutRanges[nodeIndex].first;
+            size_t endIndex = this->internalLayoutRanges[nodeIndex].second;
+            auto* startPtr = points.data() + startIndex;
+            auto* endPtr = points.data() + endIndex;
+        
+            for (; startPtr != endPtr; ++startPtr) {
+                if (k.isInside(*startPtr)) {
+                    result.extraPoints.push_back(startPtr);
+                    result.numberOfPoints++;
                 }
             }
         };
         
         singleTraversal(checkBoxIntersect, findAndInsertPoints);
-        return ptsInside;
+        return result;
 	}
     
     template<typename Kernel>
-    [[nodiscard]] std::vector<Point_t*> neighborsApprox(const Kernel& k, const Vector &toleranceVector, bool upperBound) const {
+    [[nodiscard]] NeighSearchResult<Point_t> neighborsApprox(const Kernel& k, const Vector &toleranceVector, bool upperBound) {
         return neighborsApprox(k, getPrecisionLevel(toleranceVector), upperBound);
     }
 
     template<Kernel_t kernel_type = Kernel_t::square>
-	[[nodiscard]] inline std::vector<Point_t*> searchNeighborsApprox(const Point& p, double radius, const Vector &toleranceVector, bool upperBound) const {
+	[[nodiscard]] inline NeighSearchResult<Point_t> searchNeighborsApprox(const Point& p, double radius, const Vector &toleranceVector, bool upperBound) {
 		const auto kernel = kernelFactory<kernel_type>(p, radius);
 		return neighborsApprox(kernel, toleranceVector, upperBound);
 	}
 	template<Kernel_t kernel_type = Kernel_t::cube>
-	[[nodiscard]] inline std::vector<Point_t*> searchNeighborsApprox(const Point& p, const Vector& radii, const Vector &toleranceVector, bool upperBound) const {
+	[[nodiscard]] inline NeighSearchResult<Point_t> searchNeighborsApprox(const Point& p, const Vector& radii, const Vector &toleranceVector, bool upperBound) {
 		const auto kernel = kernelFactory<kernel_type>(p, radii);
 		return neighborsApprox(kernel, toleranceVector, upperBound);
 	}
 
     template<typename Kernel>
-    [[nodiscard]] std::vector<Point_t*> neighborsApprox(const Kernel& k, double tolerancePercentage, bool upperBound) const {
+    [[nodiscard]] NeighSearchResult<Point_t> neighborsApprox(const Kernel& k, double tolerancePercentage, bool upperBound) {
         return neighborsApprox(k, getPrecisionLevel(k.radii(), tolerancePercentage), upperBound);
     }
 
     template<Kernel_t kernel_type = Kernel_t::square>
-	[[nodiscard]] inline std::vector<Point_t*> searchNeighborsApprox(const Point& p, double radius, double tolerancePercentage, bool upperBound) const {
+	[[nodiscard]] inline NeighSearchResult<Point_t> searchNeighborsApprox(const Point& p, double radius, double tolerancePercentage, bool upperBound) {
 		const auto kernel = kernelFactory<kernel_type>(p, radius);
 		return neighborsApprox(kernel, tolerancePercentage, upperBound);
 	}
 	template<Kernel_t kernel_type = Kernel_t::cube>
-	[[nodiscard]] inline std::vector<Point_t*> searchNeighborsApprox(const Point& p, const Vector& radii, double tolerancePercentage, bool upperBound) const {
+	[[nodiscard]] inline NeighSearchResult<Point_t> searchNeighborsApprox(const Point& p, const Vector& radii, double tolerancePercentage, bool upperBound) {
 		const auto kernel = kernelFactory<kernel_type>(p, radii);
 		return neighborsApprox(kernel, tolerancePercentage, upperBound);
 	}

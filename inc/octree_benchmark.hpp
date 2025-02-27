@@ -3,6 +3,7 @@
 #include "benchmarking.hpp"
 #include <random>
 #include <omp.h>
+#include <set>
 #include "NeighborKernels/KernelFactory.hpp"
 #include "type_names.hpp"
 #include "TimeWatcher.hpp"
@@ -52,8 +53,8 @@ struct ResultSet {
     std::vector<size_t> resultsNumNeighOld;
     std::vector<std::vector<Point_t*>> resultsKNN;
     std::vector<std::vector<Point_t*>> resultsRingNeigh;
-    std::vector<std::vector<Point_t*>> resultsSearchApproxUpper;
-    std::vector<std::vector<Point_t*>> resultsSearchApproxLower;
+    std::vector<NeighSearchResult<Point_t>> resultsSearchApproxUpper;
+    std::vector<NeighSearchResult<Point_t>> resultsSearchApproxLower;
     double tolerancePercentageUsed;
     
     ResultSet(const std::shared_ptr<const SearchSet> searchSet): searchSet(searchSet) {  }
@@ -354,41 +355,73 @@ struct ResultSet {
                   << " searches of a total of " << searchSet->numSearches << " searches performed):\n";
         std::cout << "Tolerance percentage used: " << tolerancePercentageUsed << "%\n";
     
-        // Corrected column headers
+        // Column headers
         std::cout << std::left 
                   << std::setw(10) << "Search #" 
                   << std::setw(15) << "Lower bound" 
                   << std::setw(15) << "Exact search" 
                   << std::setw(15) << "Upper bound"
+                  // << std::setw(20) << "Lower ⊆ Exact ⊆ Upper?"
                   << "\n";
-    
-        for (size_t i = 0; i < printingOn; i++) {
-            std::cout << std::left 
-                      << std::setw(10) << (i + 1) 
-                      << std::setw(15) << resultsSearchApproxLower[i].size() 
-                      << std::setw(15) << resultsNeigh[i].size() 
-                      << std::setw(15) << resultsSearchApproxUpper[i].size() 
-                      << "\n";
-        }
     
         double totalDiffLower = 0.0, totalDiffUpper = 0.0;
         size_t nnzSearches = searchSet->numSearches;
     
         for (size_t i = 0; i < searchSet->numSearches; i++) {
-            if (resultsNeigh[i].size() > 0) {  // Prevent division by zero
-                totalDiffLower += (static_cast<double>(resultsNeigh[i].size() - resultsSearchApproxLower[i].size()) / resultsNeigh[i].size()) * 100.0;
-                totalDiffUpper += (static_cast<double>(resultsSearchApproxUpper[i].size() - resultsNeigh[i].size()) / resultsNeigh[i].size()) * 100.0;
-            } else {
-                nnzSearches--;
+            if (resultsNeigh[i].empty()) {
+                nnzSearches--; // Avoid division by zero
+                continue;
+            }
+    
+            // Compute percentage differences
+            totalDiffLower += (static_cast<double>(resultsNeigh[i].size() - resultsSearchApproxLower[i].size()) / resultsNeigh[i].size()) * 100.0;
+            totalDiffUpper += (static_cast<double>(resultsSearchApproxUpper[i].size() - resultsNeigh[i].size()) / resultsNeigh[i].size()) * 100.0;
+    
+            // Convert exact and upper sets to unordered sets for fast lookup
+            // std::set<Point_t> exactSet;
+            // for (const auto* p : resultsNeigh[i]) {
+            //     exactSet.insert(*p);
+            // }
+            // std::set<Point_t> upperSet(resultsSearchApproxUpper[i].begin(), resultsSearchApproxUpper[i].end());
+
+            // // Check if lower ⊆ exact
+            // bool lowerSubset = true;
+            // for (const Point_t& p : resultsSearchApproxLower[i]) {
+            //     if (exactSet.find(p) == exactSet.end()) {
+            //         lowerSubset = false;
+            //         std::cout << "point not in exact but in lower: " << p << std::endl;
+            //         break;
+            //     }
+            // }
+    
+            // // Check if exact ⊆ upper
+            // bool upperSubset = true;
+            // for (const Point_t* p : resultsNeigh[i]) {
+            //     if (upperSet.find(*p) == upperSet.end()) {
+            //         upperSubset = false;
+            //         std::cout << "point not in upper but in exact: " << *p << std::endl;
+            //         break;
+            //     }
+            // }
+    
+            // std::string subsetCheck = (lowerSubset && upperSubset) ? "Yes" : "NO";
+    
+            if (i < printingOn) {
+                std::cout << std::left 
+                          << std::setw(10) << (i + 1) 
+                          << std::setw(15) << resultsSearchApproxLower[i].size() 
+                          << std::setw(15) << resultsNeigh[i].size() 
+                          << std::setw(15) << resultsSearchApproxUpper[i].size()
+                          // << std::setw(20) << subsetCheck
+                          << "\n";
             }
         }
     
         std::cout << "On average over all searches done, lower bound searches found " 
-                  << (totalDiffLower / nnzSearches) << "% less points\n";
+                  << (totalDiffLower / nnzSearches) << "% fewer points.\n";
         std::cout << "On average over all searches done, upper bound searches found " 
-                  << (totalDiffUpper / nnzSearches) << "% more points\n";
+                  << (totalDiffUpper / nnzSearches) << "% more points.\n";
     }    
-
 };
 
 

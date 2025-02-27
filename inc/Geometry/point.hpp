@@ -294,6 +294,26 @@ class alignas(32) Point
 		x_ /= scalar, y_ /= scalar, z_ /= scalar;
 	}
 
+    // Comparison operators based on lexicographic ordering in R^3 (used in approx search checker, might delete it later)
+    bool operator<(const Point& other) const {
+        if (std::abs(this->getX() - other.getX()) >= SENSEPSILON)
+            return this->getX() < other.getX();
+        if (std::abs(this->getY() - other.getY()) >= SENSEPSILON)
+            return this->getY() < other.getY();
+        return this->getZ() < other.getZ();
+    }
+
+    bool operator>(const Point& other) const {
+        return other < *this;
+    }
+
+    bool operator<=(const Point& other) const {
+        return !(other < *this);
+    }
+
+    bool operator>=(const Point& other) const {
+        return !(*this < other);
+    }
 
 	// Getters and setters
 	[[nodiscard]] inline unsigned int id() const { return id_; }
