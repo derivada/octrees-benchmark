@@ -808,15 +808,14 @@ public:
 
     template<typename Kernel>
     [[nodiscard]] NeighSearchResult<Point_t> neighborsStruct(const Kernel& k) {
-        NeighSearchResult<Point_t> result(points, internalLayoutRanges);
+        NeighSearchResult<Point_t> result(points);
         auto checkBoxIntersect = [&](uint32_t nodeIndex) {
             auto nodeCenter = this->centers[nodeIndex];
             auto nodeRadii = this->radii[nodeIndex];
             switch (k.boxIntersect(nodeCenter, nodeRadii)) {
                 case KernelAbstract::IntersectionJudgement::INSIDE: {
                     // Completely inside, add octant to the result
-                    result.octantIndexes.push_back(nodeIndex);
-                    result.numberOfPoints += internalLayoutRanges[nodeIndex].second - internalLayoutRanges[nodeIndex].first;
+                    result.addRange(internalLayoutRanges[nodeIndex].first, internalLayoutRanges[nodeIndex].second);
                     return false;
                 }
                 case KernelAbstract::IntersectionJudgement::OVERLAP:
@@ -834,12 +833,19 @@ public:
             size_t endIndex = this->internalLayoutRanges[nodeIndex].second;
             auto* startPtr = points.data() + startIndex;
             auto* endPtr = points.data() + endIndex;
-        
-            for (; startPtr != endPtr; ++startPtr) {
-                if (k.isInside(*startPtr)) {
-                    result.extraPoints.push_back(startPtr);
-                    result.numberOfPoints++;
+            size_t rangeStart = startIndex, rangeEnd = startIndex;
+            for (; startPtr != endPtr; ++startPtr, ++rangeEnd) {
+                if (!k.isInside(*startPtr)) {
+                    if (rangeStart < rangeEnd) {
+                        // Store the last valid range. Ranges are exclusive on the right, i.e. (2,4) has points 2 and 3.
+                        result.addRange(rangeStart, rangeEnd); 
+                    }
+                    rangeStart = rangeEnd + 1; // Reset the range start to the next point
                 }
+            }
+            // Insert the last range if it was open
+            if (rangeStart < rangeEnd) {
+                result.addRange(rangeStart, rangeEnd);
             }
         };
         
@@ -891,7 +897,7 @@ public:
     template<typename Kernel>
     [[nodiscard]] NeighSearchResult<Point_t> neighborsApprox(const Kernel& k, uint32_t precisionLevel, bool upperBound) {
         // std::cout << "approximate neigh search with max precision level " << precisionLevel << "and mode " << (upperBound ? "upper bound": "lower bound") << std::endl;
-        NeighSearchResult<Point_t> result(points, internalLayoutRanges);
+        NeighSearchResult<Point_t> result(points);
         auto checkBoxIntersect = [&](uint32_t nodeIndex) {
             auto nodeCenter = this->centers[nodeIndex];
             auto nodeRadii = this->radii[nodeIndex];
@@ -899,8 +905,7 @@ public:
             if(nodeDepth > precisionLevel) {
                 // If we are beyond precision and in upper bound mode, add octant to the result
                 if(upperBound) {
-                    result.octantIndexes.push_back(nodeIndex);
-                    result.numberOfPoints += internalLayoutRanges[nodeIndex].second - internalLayoutRanges[nodeIndex].first;
+                    result.addRange(internalLayoutRanges[nodeIndex].first, internalLayoutRanges[nodeIndex].second);
                 }
                 // Prune either way
                 return false;
@@ -909,8 +914,7 @@ public:
             switch (k.boxIntersect(nodeCenter, nodeRadii)) {
                 case KernelAbstract::IntersectionJudgement::INSIDE: {
                     // Completely inside, add octant to the result
-                    result.octantIndexes.push_back(nodeIndex);
-                    result.numberOfPoints += internalLayoutRanges[nodeIndex].second - internalLayoutRanges[nodeIndex].first;
+                    result.addRange(internalLayoutRanges[nodeIndex].first, internalLayoutRanges[nodeIndex].second);
                     return false;
                 }
                 case KernelAbstract::IntersectionJudgement::OVERLAP:
@@ -928,12 +932,19 @@ public:
             size_t endIndex = this->internalLayoutRanges[nodeIndex].second;
             auto* startPtr = points.data() + startIndex;
             auto* endPtr = points.data() + endIndex;
-        
-            for (; startPtr != endPtr; ++startPtr) {
-                if (k.isInside(*startPtr)) {
-                    result.extraPoints.push_back(startPtr);
-                    result.numberOfPoints++;
+            size_t rangeStart = startIndex, rangeEnd = startIndex;
+            for (; startPtr != endPtr; ++startPtr, ++rangeEnd) {
+                if (!k.isInside(*startPtr)) {
+                    if (rangeStart < rangeEnd) {
+                        // Store the last valid range. Ranges are exclusive on the right, i.e. (2,4) has points 2 and 3.
+                        result.addRange(rangeStart, rangeEnd); 
+                    }
+                    rangeStart = rangeEnd + 1; // Reset the range start to the next point
                 }
+            }
+            // Insert the last range if it was open
+            if (rangeStart < rangeEnd) {
+                result.addRange(rangeStart, rangeEnd);
             }
         };
         

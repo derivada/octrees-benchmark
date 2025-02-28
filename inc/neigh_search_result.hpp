@@ -5,19 +5,17 @@
 template <typename Point_t>
 class NeighSearchResult {
     public:
-        std::vector<uint32_t> octantIndexes;
-        std::vector<Point_t*> extraPoints;
-        std::vector<Point_t> emptyPointCloud;
-        std::vector<std::pair<size_t, size_t>> emptyInternalLayoutRanges;
-        std::vector<Point_t>& pointCloud = emptyPointCloud;
-        std::vector<std::pair<size_t, size_t>>& internalLayoutRanges = emptyInternalLayoutRanges;
+        std::vector<Point_t> emptyPoints;
+        std::vector<Point_t>& points;
+        std::vector<std::pair<size_t, size_t>> ranges;
         size_t numberOfPoints = 0;
 
-        NeighSearchResult() = default;
+        // Empty constructor
+        NeighSearchResult() : points(emptyPoints) {}
 
-        NeighSearchResult(std::vector<Point_t>& pointCloud, 
-                          std::vector<std::pair<size_t, size_t>>& internalLayoutRanges)
-            : pointCloud(pointCloud), internalLayoutRanges(internalLayoutRanges) {}
+        // Regular constructor
+        NeighSearchResult(std::vector<Point_t>& points)
+            : points(points), ranges() {}
 
         // Copy constructor
         NeighSearchResult(const NeighSearchResult& other) = default;
@@ -28,10 +26,8 @@ class NeighSearchResult {
         // Copy assignment operator
         NeighSearchResult& operator=(const NeighSearchResult& other) {
             if (this != &other) {
-                octantIndexes = other.octantIndexes;
-                extraPoints = other.extraPoints;
-                pointCloud = other.pointCloud;
-                internalLayoutRanges = other.internalLayoutRanges;
+                points = other.points;
+                ranges = other.ranges;
                 numberOfPoints = other.numberOfPoints;
             }
             return *this;
@@ -39,6 +35,14 @@ class NeighSearchResult {
 
         // Move assignment operator
         NeighSearchResult& operator=(NeighSearchResult&& other) noexcept = default;
+
+        // Adds a new range of point cloud indexes and updates numberOfPoints
+        inline void addRange(size_t first, size_t last) {
+            if (first <= last) {
+                ranges.emplace_back(first, last);
+                numberOfPoints += (last - first + 1);
+            }
+        }
 
         class Iterator {
             public:
@@ -48,8 +52,9 @@ class NeighSearchResult {
                 using pointer = const Point_t*;
                 using reference = const Point_t&;
         
-                Iterator(const NeighSearchResult& result, size_t octant_idx, size_t point_idx)
-                    : result(result), currentOctant(octant_idx), pointIndex(point_idx) {
+                Iterator(const NeighSearchResult& result, size_t currentRange)
+                        : result(result), currentRange(currentRange), 
+                        currentIndex((currentRange < result.ranges.size()) ? result.ranges[currentRange].first : SIZE_MAX) {
                     updateCurrentPoint();
                 }
         
@@ -57,7 +62,7 @@ class NeighSearchResult {
                 pointer operator->() const { return currentPoint; }
         
                 Iterator& operator++() {
-                    ++pointIndex;
+                    ++currentIndex;
                     updateCurrentPoint();
                     return *this;
                 }
@@ -69,42 +74,45 @@ class NeighSearchResult {
                 }
         
                 bool operator==(const Iterator& other) const {
-                    return currentOctant == other.currentOctant && pointIndex == other.pointIndex;
+                    return currentIndex == other.currentIndex;
                 }
         
                 bool operator!=(const Iterator& other) const { return !(*this == other); }
         
             private:
                 const NeighSearchResult& result;
-                size_t currentOctant;
-                size_t pointIndex;
                 pointer currentPoint = nullptr;
-        
+                size_t currentRange;
+                size_t currentIndex;
+                
                 void updateCurrentPoint() {
-                    while (currentOctant < result.octantIndexes.size()) {
-                        size_t startIndex = result.internalLayoutRanges[result.octantIndexes[currentOctant]].first;
-                        size_t endIndex = result.internalLayoutRanges[result.octantIndexes[currentOctant]].second;
-                        if (startIndex + pointIndex < endIndex) {
-                            currentPoint = &result.pointCloud[startIndex + pointIndex];
-                            return;
+                    // Skip empty ranges by advancing currentRange until a valid one is found
+                    while ( currentRange < result.ranges.size() && 
+                            currentIndex >= result.ranges[currentRange].second) {
+                        ++currentRange;
+                        if (currentRange < result.ranges.size()) {
+                            currentIndex = result.ranges[currentRange].first;
                         }
-                        ++currentOctant;
-                        pointIndex = 0;
                     }
-                    if (pointIndex < result.extraPoints.size()) {
-                        currentPoint = result.extraPoints[pointIndex];
+                
+                    // If we exited the loop because we ran out of ranges, stop iteration
+                    if (currentRange >= result.ranges.size()) {
+                        currentPoint = nullptr;
+                        currentIndex = SIZE_MAX; // reset to invalid index
                         return;
                     }
-                    currentPoint = nullptr;
+                
+                    // Update current point
+                    currentPoint = &result.points[currentIndex];
                 }
             };
         
         Iterator begin() const {
-            return Iterator(*this, 0, 0);
+            return Iterator(*this, 0);
         }
 
         Iterator end() const {
-            return Iterator(*this, octantIndexes.size(), extraPoints.size());
+            return Iterator(*this, ranges.size());
         }
 
         size_t size() const {
