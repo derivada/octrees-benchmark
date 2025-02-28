@@ -2,7 +2,7 @@
 
 #include "benchmarking.hpp"
 #include "octree.hpp"
-#include "octree_linear.hpp"
+#include "linear_octree.hpp"
 #include "octree_linear_old.hpp"
 #include "morton_encoder.hpp"
 #include <random>
