@@ -20,15 +20,12 @@ class KernelCircle : public Kernel2D
 
 	[[nodiscard]] inline bool isInside(const Point& p) const override
 	/**
-	 * @brief Checks if a given point lies inside the kernel
-	 * @param p
-	 * @return
-	 */
+ * @brief Checks if a given point lies inside the kernel
+ * @param p
+ * @return
+ */
 	{
-		const double dx = p.getX() - center().getX();
-		const double dy = p.getY() - center().getY();
-		const double r = radius();
-		return (dx * dx + dy * dy) < (r * r);
+		return square(p.getX() - center().getX()) + square(p.getY() - center().getY()) < square(radius());
 	}
 
 	/**
@@ -36,7 +33,7 @@ class KernelCircle : public Kernel2D
 	 * from the kernel center and check if it is inside. We don't have to test the other corners, since
 	 * they will always be inside because of the circle definition.
 	*/
-	[[nodiscard]] inline IntersectionJudgement boxIntersect(const Point& center, const double radius) const override
+	[[nodiscard]] IntersectionJudgement boxIntersect(const Point& center, const double radius) const override
 	{
 		// Box bounds
 		const double highX = center.getX() + radius, lowX = center.getX() - radius;
@@ -51,17 +48,23 @@ class KernelCircle : public Kernel2D
 			lowX > boxMaxX 	|| lowY > boxMaxY) { 
 			return KernelAbstract::IntersectionJudgement::OUTSIDE; 
 		}
-		
-		// Get the coordinates of the furthest point in the bbox of the sphere
-		const double furthestX = (this->center().getX() > center.getX()) ? highX : lowX;
-		const double furthestY = (this->center().getY() > center.getY()) ? highY : lowY;
 	
-		return isInside(Point(furthestX, furthestY, 0.0f)) ? 
-			KernelAbstract::IntersectionJudgement::INSIDE : 
-			KernelAbstract::IntersectionJudgement::OVERLAP;
+		// Check if the furthest point from the center of the box is inside sphere -> the box is inside the
+		// sphere	
+		Point furthest = Point(
+			( this->center().getX() > center.getX() ? highX : lowX ),
+			( this->center().getY() > center.getY() ? highY : lowY ),
+			0.0f);
+		if(isInside(furthest)) {
+			return KernelAbstract::IntersectionJudgement::INSIDE;
+		}
+
+		// Otherwise, the box may overlap the sphere 
+		// (this can give false positives but that is ok for octree traversal purposes) 
+		return KernelAbstract::IntersectionJudgement::OVERLAP;
 	}
-	
-	[[nodiscard]] inline IntersectionJudgement boxIntersect(const Point& center, const Vector &radii) const override
+
+	[[nodiscard]] IntersectionJudgement boxIntersect(const Point& center, const Vector &radii) const override
 	{
 		// Box bounds
 		const double highX = center.getX() + radii.getX(), lowX = center.getX() - radii.getX();
@@ -76,15 +79,22 @@ class KernelCircle : public Kernel2D
 			lowX > boxMaxX 	|| lowY > boxMaxY) { 
 			return KernelAbstract::IntersectionJudgement::OUTSIDE; 
 		}
-
-		// Get the coordinates of the furthest point in the bbox of the sphere
-		const double furthestX = (this->center().getX() > center.getX()) ? highX : lowX;
-		const double furthestY = (this->center().getY() > center.getY()) ? highY : lowY;
 		
-		return isInside(Point(furthestX, furthestY, 0.0f)) ? 
-			KernelAbstract::IntersectionJudgement::INSIDE : 
-			KernelAbstract::IntersectionJudgement::OVERLAP;
+		// Check if the furthest point from the center of the box is inside sphere -> the box is inside the
+		// sphere
+		Point furthest = Point(
+			( this->center().getX() < center.getX() ? highX : lowX ),
+			( this->center().getY() < center.getY() ? highY : lowY ),
+			0.0f);
+		if(isInside(furthest)) {
+			return KernelAbstract::IntersectionJudgement::INSIDE;
+		}
+
+		// Otherwise, the box may overlap the sphere 
+		// (this can give false positives but that is ok for octree traversal purposes) 
+		return KernelAbstract::IntersectionJudgement::OVERLAP;
 	}
 };
 
 #endif /* end of include guard: KERNELCIRCLE_HPP */
+

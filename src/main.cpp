@@ -304,10 +304,9 @@ int main(int argc, char *argv[]) {
       searchBenchmark<Lpoint64, PointEncoding::HilbertEncoder3D>(outputFile);
       searchBenchmark<Lpoint64, PointEncoding::MortonEncoder3D>(outputFile);
       searchBenchmark<Lpoint64, PointEncoding::NoEncoder>(outputFile);
-      searchBenchmark<Point, PointEncoding::HilbertEncoder3D>(outputFile);
     break;
     case BenchmarkMode::COMPARE:
-      searchImplComparisonBenchmark<Point, PointEncoding::HilbertEncoder3D>(outputFile);
+      searchImplComparisonBenchmark<Lpoint64, PointEncoding::HilbertEncoder3D>(outputFile);
     break;
     case BenchmarkMode::SEQUENTIAL:
       sequentialVsShuffleBenchmark<Lpoint64, PointEncoding::HilbertEncoder3D, Kernel_t::sphere>(outputFile);

@@ -71,7 +71,7 @@ class NeighborSet {
         inline void addRange(size_t first, size_t last) {
             if (first <= last) {
                 ranges.emplace_back(first, last);
-                numberOfPoints += (last - first + 1);
+                numberOfPoints += (last - first);
             }
         }
 

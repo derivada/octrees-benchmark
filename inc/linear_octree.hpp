@@ -34,16 +34,16 @@ private:
     using coords_t = typename Encoder_t::coords_t;
 
     /// @brief The maximum number of points in a leaf
-    static constexpr unsigned int MAX_POINTS        = 128;
+    static constexpr size_t MAX_POINTS = 128;
 
     /// @brief The minimum octant radius to have in a leaf (TODO: this could be implemented in halfLength compuutation, but do we really need it?)
-	static constexpr float        MIN_OCTANT_RADIUS = 0.1;
+	static constexpr double MIN_OCTANT_RADIUS = 0.1;
 
 	/// @brief The default size of the search set in KNN
-	static constexpr size_t       DEFAULT_KNN       = 100;
+	static constexpr size_t DEFAULT_KNN = 100;
 
 	/// @brief The number of octants per internal node
-	static constexpr short        OCTANTS_PER_NODE  = 8;
+	static constexpr uint8_t OCTANTS_PER_NODE  = 8;
 
     /// @brief Number of leaves and internal nodes in the octree. Equal to size of the leaves vector - 1.
     uint32_t nLeaf;
