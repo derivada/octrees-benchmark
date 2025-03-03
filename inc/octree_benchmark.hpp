@@ -307,13 +307,13 @@ class OctreeBenchmark {
             
             std::cout << std::endl;
             std::cout << std::left << std::setw(LOG_FIELD_WIDTH/2) << "Progress"    << std::setw(LOG_FIELD_WIDTH/2) << "Completed at" 
-                                   << std::setw(LOG_FIELD_WIDTH*1.5) << "Method"      << std::setw(LOG_FIELD_WIDTH/2) << "Radius" << std::endl;
+                                   << std::setw(LOG_FIELD_WIDTH*2) << "Method"      << std::setw(LOG_FIELD_WIDTH/2) << "Radius" << std::endl;
         }
 
         static void printBenchmarkUpdate(const std::string &method, const size_t totalExecutions, size_t &currentExecution, const float radius) {
             const std::string progress_str = "(" + std::to_string(currentExecution) + "/" + std::to_string(totalExecutions) + ")";
             std::cout << std::left << std::setw(LOG_FIELD_WIDTH/2) << progress_str  << std::setw(LOG_FIELD_WIDTH/2) << getCurrentDate("[%H:%M:%S]") 
-                                   << std::setw(LOG_FIELD_WIDTH*1.5) << method        << std::setw(LOG_FIELD_WIDTH/2) << radius << std::endl;
+                                   << std::setw(LOG_FIELD_WIDTH*2) << method        << std::setw(LOG_FIELD_WIDTH/2) << radius << std::endl;
             currentExecution++;
         }
 
@@ -390,7 +390,7 @@ class OctreeBenchmark {
 
         void approxSearchBench(const std::vector<float> &benchmarkRadii, const size_t repeats, const size_t numSearches, const std::vector<double> tolerancePercentages) {
             printBenchmarkLog("Approximate searches with low and high bounds", benchmarkRadii, repeats, numSearches);
-            size_t total = benchmarkRadii.size() * tolerancePercentages.size();
+            size_t total = benchmarkRadii.size() * (tolerancePercentages.size() + 1);
             size_t current = 1;
             for(size_t i = 0; i<benchmarkRadii.size(); i++) {
                 benchmarkSearchNeighStruct<Kernel_t::sphere>(repeats, benchmarkRadii[i]);

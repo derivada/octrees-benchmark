@@ -536,7 +536,7 @@ public:
             std::cout << std::endl;
         }
     }
-
+    
     /**
      * @brief Computes essential geometric information about the octree
      * 
