@@ -19,45 +19,17 @@
 #include "Geometry/PointMetadata.hpp"
 #include "PointEncoding/morton_encoder.hpp"
 #include "PointEncoding/hilbert_encoder.hpp"
+#include "result_checking.hpp"
 
 namespace fs = std::filesystem;
 
 template <template <typename, typename> class Octree_t, PointType Point_t, typename Encoder_t>
-std::shared_ptr<ResultSet<Point_t>> runSearchBenchmark(std::ofstream &outputFile, std::vector<Point_t>& points,
+ResultSet<Point_t> runSearchBenchmark(std::ofstream &outputFile, std::vector<Point_t>& points,
   std::shared_ptr<const SearchSet> searchSet, std::optional<std::vector<PointMetadata>> &metadata = std::nullopt,
   std::string comment = "", bool useParallel = true) {
   OctreeBenchmark<Octree_t, Point_t, Encoder_t> ob(points, metadata, mainOptions.numSearches, searchSet, outputFile, 
      comment, mainOptions.checkResults, mainOptions.useWarmup, useParallel);
   ob.searchBench(mainOptions.benchmarkRadii, mainOptions.repeats, mainOptions.numSearches);
-  return ob.getResultSet();
-}
-
-template <template <typename, typename> class Octree_t, PointType Point_t, typename Encoder_t>
-std::shared_ptr<ResultSet<Point_t>> runStructSearchBenchmark(std::ofstream &outputFile, std::vector<Point_t>& points,
-  std::shared_ptr<const SearchSet> searchSet, std::optional<std::vector<PointMetadata>> &metadata = std::nullopt,
-  std::string comment = "", bool useParallel = true) {
-  OctreeBenchmark<Octree_t, Point_t, Encoder_t> ob(points, metadata, mainOptions.numSearches, searchSet, outputFile, 
-     comment, mainOptions.checkResults, mainOptions.useWarmup, useParallel);
-  ob.searchPtrVsStructBench(mainOptions.benchmarkRadii, mainOptions.repeats, mainOptions.numSearches);
-  return ob.getResultSet();
-}
-
-template <template <typename, typename> class Octree_t, PointType Point_t, typename Encoder_t>
-std::shared_ptr<ResultSet<Point_t>> runApproxSearchBenchmark(std::ofstream &outputFile, std::vector<Point_t>& points,
-  std::shared_ptr<const SearchSet> searchSet, std::optional<std::vector<PointMetadata>> &metadata = std::nullopt,
-  std::string comment = "", bool useParallel = true) {
-  OctreeBenchmark<Octree_t, Point_t, Encoder_t> ob(points, metadata, mainOptions.numSearches, searchSet, outputFile, 
-     comment, mainOptions.checkResults, mainOptions.useWarmup, useParallel);
-  ob.approxSearchBench(mainOptions.benchmarkRadii, mainOptions.repeats, mainOptions.numSearches, mainOptions.approximateTolerances);
-  return ob.getResultSet();
-}
-
-template <template <typename, typename> class Octree_t, PointType Point_t, typename Encoder_t>
-std::shared_ptr<ResultSet<Point_t>> runSearchImplComparisonBenchmark(std::ofstream &outputFile, std::vector<Point_t>& points,
-  std::shared_ptr<const SearchSet> searchSet, std::optional<std::vector<PointMetadata>> &metadata = std::nullopt, std::string comment = "", bool useParallel = true) {
-  OctreeBenchmark<Octree_t, Point_t, Encoder_t> ob(points, metadata, mainOptions.numSearches, searchSet, outputFile, 
-     comment, mainOptions.checkResults, mainOptions.useWarmup, useParallel);
-  ob.searchImplComparisonBench(mainOptions.benchmarkRadii, mainOptions.repeats, mainOptions.numSearches);
   return ob.getResultSet();
 }
 
@@ -74,30 +46,19 @@ void searchBenchmark(std::ofstream &outputFile) {
 
   if constexpr (std::is_same_v<Encoder_t, PointEncoding::NoEncoder>) {
     // Only do pointer octree, since we are not encoding the points
-    runSearchBenchmark<Octree, Point_t, PointEncoding::NoEncoder>(outputFile, points, searchSet, metadata);
+    OctreeBenchmark<Octree, Point_t, Encoder_t> obPointer(points, metadata, mainOptions.numSearches, searchSet, outputFile);
+    obPointer.searchBench(mainOptions.benchmarkRadii, mainOptions.repeats, mainOptions.numSearches);
   } else {
     // Do both linear (which encodes and sorts the points) and pointer octree after it
-    auto resultsLinear = runSearchBenchmark<LinearOctree, Point_t, Encoder_t>(outputFile, points, searchSet, metadata);
-    auto resultsPointer = runSearchBenchmark<Octree, Point_t, Encoder_t>(outputFile, points, searchSet, metadata);
+    OctreeBenchmark<LinearOctree, Point_t, Encoder_t> obLinear(points, metadata, mainOptions.numSearches, searchSet, outputFile);
+    obLinear.searchBench(mainOptions.benchmarkRadii, mainOptions.repeats, mainOptions.numSearches);
+    obLinear.deleteOctree();
+    OctreeBenchmark<Octree, Point_t, Encoder_t> obPointer(points, metadata, mainOptions.numSearches, searchSet, outputFile);
+    obPointer.searchBench(mainOptions.benchmarkRadii, mainOptions.repeats, mainOptions.numSearches);
+    obPointer.deleteOctree();
     if(mainOptions.checkResults) {
-      resultsLinear->checkResults(resultsPointer);
+        ResultChecking::checkResultsLinearVsPointer(obLinear.getResultSet(), obPointer.getResultSet());
     }
-  }
-}
-
-/**
- * Benchmark neighSearch and neighSearchStruct for a given octree configuration (point type + encoder).
- */
-template <PointType Point_t, typename Encoder_t>
-void structSearchBenchmark(std::ofstream &outputFile) {
-  auto pointMetaPair = readPointsWithMetadata<Point_t>(mainOptions.inputFile);
-  std::vector<Point_t> points = std::move(pointMetaPair.first);
-  std::optional<std::vector<PointMetadata>> metadata = std::move(pointMetaPair.second);
-  std::shared_ptr<const SearchSet> searchSet = std::make_shared<const SearchSet>(mainOptions.numSearches, points);
-
-  auto results = runStructSearchBenchmark<LinearOctree, Point_t, Encoder_t>(outputFile, points, searchSet, metadata);
-  if(mainOptions.checkResults) {
-    results->checkResultStructSearches();
   }
 }
 
@@ -108,18 +69,32 @@ void structSearchBenchmark(std::ofstream &outputFile) {
  * Only uses LinearOctree, since that's where the implementation is being improved.
  */
 template <PointType Point_t, typename Encoder_t>
-void searchImplComparisonBenchmark(std::ofstream &outputFile) {
+void algoCompBenchmark(std::ofstream &outputFile) {
   auto pointMetaPair = readPointsWithMetadata<Point_t>(mainOptions.inputFile);
   std::vector<Point_t> points = std::move(pointMetaPair.first);
   std::optional<std::vector<PointMetadata>> metadata = std::move(pointMetaPair.second);
-  // Generate a shared search set for each benchmark execution
   std::shared_ptr<const SearchSet> searchSet = std::make_shared<const SearchSet>(mainOptions.numSearches, points);
 
-  auto results = runSearchImplComparisonBenchmark<LinearOctree, Point_t, Encoder_t>(outputFile, points, searchSet, metadata, "", false);
+  OctreeBenchmark<LinearOctree, Point_t, Encoder_t> ob(points, metadata, mainOptions.numSearches, searchSet, outputFile, "");
+  ob.searchImplComparisonBench(mainOptions.benchmarkRadii, mainOptions.repeats, mainOptions.numSearches);
 
-  // Check the results if needed
   if(mainOptions.checkResults) {
-    results->checkResultsAlgo();
+    ResultChecking::checkResultsAlgoComp(ob.getResultSet());
+  }
+}
+
+template <PointType Point_t, typename Encoder_t>
+void approxSearchBenchmark(std::ofstream &outputFile) {
+  auto pointMetaPair = readPointsWithMetadata<Point_t>(mainOptions.inputFile);
+  std::vector<Point_t> points = std::move(pointMetaPair.first);
+  std::optional<std::vector<PointMetadata>> metadata = std::move(pointMetaPair.second);  
+  std::shared_ptr<const SearchSet> searchSet = std::make_shared<const SearchSet>(mainOptions.numSearches, points);
+
+  OctreeBenchmark<LinearOctree, Point_t, Encoder_t> ob(points, metadata, mainOptions.numSearches, searchSet, outputFile);
+  ob.approxSearchBench(mainOptions.benchmarkRadii, mainOptions.repeats, mainOptions.numSearches, mainOptions.approximateTolerances);
+
+  if(mainOptions.checkResults) {
+    ResultChecking::checkResultsApproxSearches(ob.getResultSet());
   }
 }
 
@@ -143,16 +118,6 @@ void sequentialVsShuffleBenchmark(std::ofstream &outputFile) {
   searchSetShuffle->searchKNNLimits.clear();
   std::shared_ptr<SearchSet> searchSetSeq = std::make_shared<SearchSet>(mainOptions.numSearches, points, true);
   runSearchBenchmark<LinearOctree, Point_t, Encoder_t>(outputFile, points, searchSetSeq, metadata, "sequential");
-}
-
-template <PointType Point_t, typename Encoder_t>
-void approxSearchBenchmark(std::ofstream &outputFile) {
-  auto pointMetaPair = readPointsWithMetadata<Point_t>(mainOptions.inputFile);
-  std::vector<Point_t> points = std::move(pointMetaPair.first);
-  std::optional<std::vector<PointMetadata>> metadata = std::move(pointMetaPair.second);  std::shared_ptr<const SearchSet> searchSet = std::make_shared<const SearchSet>(mainOptions.numSearches, points);
-  auto results = runApproxSearchBenchmark<LinearOctree, Point_t, Encoder_t>(outputFile, points, searchSet, metadata);
-  if(mainOptions.checkResults)
-    results->checkResultsApproxSearches();
 }
 
 template <PointType Point_t>
@@ -240,10 +205,7 @@ int main(int argc, char *argv[]) {
       searchBenchmark<Lpoint64, PointEncoding::NoEncoder>(outputFile);
     break;
     case BenchmarkMode::COMPARE:
-      searchImplComparisonBenchmark<Lpoint64, PointEncoding::HilbertEncoder3D>(outputFile);
-    break;
-    case BenchmarkMode::SEQUENTIAL:
-      sequentialVsShuffleBenchmark<Lpoint64, PointEncoding::HilbertEncoder3D, Kernel_t::sphere>(outputFile);
+      algoCompBenchmark<Lpoint64, PointEncoding::HilbertEncoder3D>(outputFile);
     break;
     case BenchmarkMode::POINT_TYPE:
       searchBenchmark<Point, PointEncoding::HilbertEncoder3D>(outputFile);
@@ -253,8 +215,8 @@ int main(int argc, char *argv[]) {
     case BenchmarkMode::APPROX:
       approxSearchBenchmark<Lpoint64, PointEncoding::HilbertEncoder3D>(outputFile);
     break;
-    case BenchmarkMode::STRUCT:
-      structSearchBenchmark<Lpoint64, PointEncoding::HilbertEncoder3D>(outputFile);
+    case BenchmarkMode::SEQUENTIAL:
+      sequentialVsShuffleBenchmark<Lpoint64, PointEncoding::HilbertEncoder3D, Kernel_t::sphere>(outputFile);
     break;
     case BenchmarkMode::LOG_OCTREE:
       linearOctreeLog<Lpoint64, PointEncoding::MortonEncoder3D>(outputFile);

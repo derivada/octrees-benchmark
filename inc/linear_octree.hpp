@@ -819,7 +819,7 @@ public:
      */
     template<typename Kernel>
     [[nodiscard]] NeighborSet<Point_t> neighborsStruct(const Kernel& k) {
-        NeighborSet<Point_t> result(points);
+        NeighborSet<Point_t> result(&points);
         auto checkBoxIntersect = [&](uint32_t nodeIndex) {
             auto nodeCenter = this->centers[nodeIndex];
             auto nodeRadii = this->radii[nodeIndex];
@@ -895,7 +895,7 @@ public:
     template<typename Kernel>
     [[nodiscard]] NeighborSet<Point_t> neighborsApprox(const Kernel& k, uint32_t precisionLevel, bool upperBound) {
         // std::cout << "approximate neigh search with max precision level " << precisionLevel << "and mode " << (upperBound ? "upper bound": "lower bound") << std::endl;
-        NeighborSet<Point_t> result(points);
+        NeighborSet<Point_t> result(&points);
         auto checkBoxIntersect = [&](uint32_t nodeIndex) {
             auto nodeCenter = this->centers[nodeIndex];
             auto nodeRadii = this->radii[nodeIndex];

@@ -14,11 +14,8 @@
 template <typename Point_t>
 class NeighborSet {
     public:
-        /// @brief A placeholder for an empty cloud, needed for the default constructor.
-        std::vector<Point_t> emptyPoints;
-
         /// @brief Reference to the external point cloud.
-        std::vector<Point_t>& points;
+        std::vector<Point_t>* points = nullptr;
 
         /// @brief Ranges of indices defining neighborhoods.
         std::vector<std::pair<size_t, size_t>> ranges;
@@ -27,37 +24,52 @@ class NeighborSet {
         size_t numberOfPoints = 0;
 
         /// @brief Empty constructor
-        NeighborSet() : points(emptyPoints) {}
+        NeighborSet() = default;
 
         /**
          * @brief Constructs a NeighborSet with a reference to an existing point cloud.
          * @param points Reference to the point cloud.
          */        
-        NeighborSet(std::vector<Point_t>& points)
+        NeighborSet(std::vector<Point_t>* points)
             : points(points), ranges() {}
 
-        /// @brief Default copy constructor
-        NeighborSet(const NeighborSet& other) = default;
-    
-        /// @brief Default move constructor
-        NeighborSet(NeighborSet&& other) noexcept = default;
-            
-        /**
-         * @brief Copy assignment operator.
-         * @param other Another NeighborSet to copy from.
-         * @return Reference to the modified NeighborSet.
-         */
+        /// @brief Copy constructor
+        NeighborSet(const NeighborSet& other)
+            : points(other.points),  // Same external reference
+            ranges(other.ranges),
+            numberOfPoints(other.numberOfPoints) {}
+
+        /// @brief Copy assignment operator
         NeighborSet& operator=(const NeighborSet& other) {
             if (this != &other) {
-                points = other.points;
+                points = other.points;  // Same external reference
                 ranges = other.ranges;
                 numberOfPoints = other.numberOfPoints;
             }
             return *this;
         }
 
-        /// @brief Default move assignment operator
-        NeighborSet& operator=(NeighborSet&& other) noexcept = default;
+        /// @brief Move constructor
+        NeighborSet(NeighborSet&& other) noexcept
+            : points(other.points),  // Move ownership of reference
+            ranges(std::move(other.ranges)),
+            numberOfPoints(other.numberOfPoints) {
+            other.points = nullptr;  // Invalidate moved-from object
+            other.numberOfPoints = 0;
+        }
+
+        /// @brief Move assignment operator
+        NeighborSet& operator=(NeighborSet&& other) noexcept {
+            if (this != &other) {
+                points = other.points;
+                ranges = std::move(other.ranges);
+                numberOfPoints = other.numberOfPoints;
+
+                other.points = nullptr;  // Invalidate moved-from object
+                other.numberOfPoints = 0;
+            }
+            return *this;
+        }
 
         /**
          * @brief Adds a new range of indices inside the neighborhood.
@@ -144,7 +156,7 @@ class NeighborSet {
                     }
                 
                     // Update current point
-                    currentPoint = &result.points[currentIndex];
+                    currentPoint = &(*result.points)[currentIndex];
                 }
             };
         
@@ -158,5 +170,9 @@ class NeighborSet {
 
         size_t size() const {
             return numberOfPoints;
+        }
+
+        [[nodiscard]] bool empty() const noexcept {
+            return begin() == end();
         }
 };

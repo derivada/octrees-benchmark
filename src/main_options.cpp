@@ -105,8 +105,6 @@ void processArgs(int argc, char** argv)
 					mainOptions.benchmarkMode = LOG_OCTREE;
 				} else if(std::string(optarg) == "approx") {
 					mainOptions.benchmarkMode = APPROX;
-				} else if(std::string(optarg) == "struct") {
-					mainOptions.benchmarkMode = STRUCT;
 				} else {
 					std::cerr << "Invalid benchmark mode: " << optarg << "\n";
 					printHelp();
