@@ -235,56 +235,6 @@ void outputReorderings(std::ofstream &outputFilePoints, std::ofstream &outputFil
     }
 }
 
-void approximateSearchLog(std::ofstream &outputFile) {
-  auto pointMetaPair = readPointsWithMetadata<Lpoint64>(mainOptions.inputFile);
-  std::vector<Lpoint64> points = std::move(pointMetaPair.first);
-  std::optional<std::vector<PointMetadata>> metadata = std::move(pointMetaPair.second);
-
-  auto lin_oct = LinearOctree<Lpoint64, PointEncoding::MortonEncoder3D>(points, metadata, true);
-  std::array<float, 5> tolerances = {5.0, 10.0, 25.0, 50.0, 100.0};
-  float radius = 3.0;
-  outputFile << "tolerance,upper,x,y,z\n";
-  auto points_exact = lin_oct.searchNeighborsStruct<Kernel_t::sphere>(points[1234], radius);
-  for(const Point &p: points_exact) {
-    outputFile << "0.0,exact," << p.getX() << "," << p.getY() << "," << p.getZ() << "\n";
-  }
-  for(float tol: tolerances) {
-    auto points_upper = lin_oct.searchNeighborsApprox<Kernel_t::sphere>(points[1234], 3.0, tol, true);
-    auto points_lower = lin_oct.searchNeighborsApprox<Kernel_t::sphere>(points[1234], 3.0, tol, false);
-    for(const Point &p: points_upper) {
-      outputFile << tol << ",upper," << p.getX() << "," << p.getY() << "," << p.getZ() << "\n";
-    }
-    for(const Point &p: points_lower) {
-      outputFile << tol << ",lower," << p.getX() << "," << p.getY() << "," << p.getZ() << "\n";
-    }
-  }
-}
-
-
-void outputReorderings(std::ofstream &outputFilePoints, std::ofstream &outputFileOct) {
-  // std::vector<Lpoint64> points = generateGridCloud<Lpoint64>(16);
-  // std::optional<std::vector<PointMetadata>> metadata;
-
-  auto pointMetaPair = readPointsWithMetadata<Lpoint64>(mainOptions.inputFile);
-  std::vector<Lpoint64> points = std::move(pointMetaPair.first);
-  std::optional<std::vector<PointMetadata>> metadata = std::move(pointMetaPair.second);
-
-  if constexpr (! std::is_same_v<PointEncoding::NoEncoder>) {
-    PointEncoding::sortPoints<Lpoint64>(points, metadata);
-  }
-  std::optional<std::vector<PointMetadata>> emptyMetadata;
-  outputFilePoints << std::fixed << std::setprecision(3); 
-  for(size_t i = 0; i<points.size(); i+=100000) {
-    outputFilePoints << i << "," << points[i].getX() << "," << points[i].getY() << "," << points[i].getZ() << "\n";
-  }
-  
-  // build octree and output it
-  if constexpr (! std::is_same_v<PointEncoding::NoEncoder>) {
-    auto oct = LinearOctree<Lpoint64>(points, emptyMetadata, true);
-    oct.logOctreeBounds(outputFileOct, 6);
-  }
-}
-
 int main(int argc, char *argv[]) {
     // Set default OpenMP schedule: dynamic and auto chunk size
     omp_set_schedule(omp_sched_dynamic, 0);

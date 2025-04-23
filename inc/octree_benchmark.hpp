@@ -208,8 +208,6 @@ class OctreeBenchmark {
             } else if constexpr (std::is_same_v<Octree_t<Point_t>, Octree<Point_t>>) {
                 // Initialize for Octree
                 oct = std::make_unique<Octree<Point_t>>(points);
-            } else {
-                static_assert(false, "Unsupported Octree type");
             }
         }
     
