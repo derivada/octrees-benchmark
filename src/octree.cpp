@@ -18,6 +18,26 @@ template class Octree<Lpoint64>;
 template <typename Point_t>
 Octree<Point_t>::Octree() = default;
 
+
+template <typename Point_t>
+Octree<Point_t>::Octree(std::vector<Point_t>& points, Box box)
+{
+	center_ = box.center();
+	radii_ = box.radii();
+	octants_.reserve(OCTANTS_PER_NODE);
+	buildOctree(points);
+}
+
+template <typename Point_t>
+Octree<Point_t>::Octree(std::vector<Point_t*>& points, Box box)
+{
+	center_ = box.center();
+	radii_ = box.radii();
+	octants_.reserve(OCTANTS_PER_NODE);
+	buildOctree(points);
+}
+
+
 template <typename Point_t>
 Octree<Point_t>::Octree(std::vector<Point_t>& points)
 {

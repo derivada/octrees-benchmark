@@ -36,15 +36,15 @@ void searchBenchmark(std::ofstream &outputFile, EncoderType encoding = EncoderTy
     std::optional<std::vector<PointMetadata>> metadata = std::move(pointMetaPair.second);
     auto& enc = getEncoder(encoding);
     // Sort the point cloud
-    enc.sortPoints<Point_t>(points, metadata);
+    auto [codes, box] = enc.sortPoints<Point_t>(points, metadata);
     // Create the searchSet (WARMING: this should be done after sorting since it indexes points!)
     const SearchSet<Point_t> searchSet = SearchSet<Point_t>(mainOptions.numSearches, points);
 
-    OctreeBenchmark<Octree, Point_t> obPointer(points, enc, searchSet, outputFile);
+    OctreeBenchmark<Octree, Point_t> obPointer(points, codes, box, enc, searchSet, outputFile);
     obPointer.searchBench();
     obPointer.deleteOctree();
     if(encoding != EncoderType::NO_ENCODING) {
-        OctreeBenchmark<LinearOctree, Point_t> obLinear(points, enc, searchSet, outputFile);
+        OctreeBenchmark<LinearOctree, Point_t> obLinear(points,  codes, box, enc, searchSet, outputFile);
         obLinear.searchBench();
         obLinear.deleteOctree();
         if(mainOptions.checkResults)
@@ -67,12 +67,12 @@ void algoCompBenchmark(std::ofstream &outputFile, EncoderType encoding) {
 
     // Sort the point cloud
     auto& enc = getEncoder(encoding);
-    enc.sortPoints<Point_t>(points, metadata);
+    auto [codes, box] = enc.sortPoints<Point_t>(points, metadata);
     
     // Create the searchSet (WARMING: this should be done after sorting since it indexes points!)
     const SearchSet<Point_t> searchSet = SearchSet<Point_t>(mainOptions.numSearches, points);
 
-    OctreeBenchmark<LinearOctree, Point_t> ob(points, enc, searchSet, outputFile);
+    OctreeBenchmark<LinearOctree, Point_t> ob(points, codes, box, enc, searchSet, outputFile);
     ob.searchImplComparisonBench();
 
     if(mainOptions.checkResults) {
@@ -93,12 +93,12 @@ void approxSearchBenchmark(std::ofstream &outputFile, EncoderType encoding) {
     std::optional<std::vector<PointMetadata>> metadata = std::move(pointMetaPair.second);
     // Sort the point cloud
     auto& enc = getEncoder(encoding);
-    enc.sortPoints<Point_t>(points, metadata);
+    auto [codes, box] = enc.sortPoints<Point_t>(points, metadata);
     
     // Create the searchSet (WARMING: this should be done after sorting since it indexes points!)
     const SearchSet<Point_t> searchSet = SearchSet<Point_t>(mainOptions.numSearches, points);
 
-    OctreeBenchmark<LinearOctree, Point_t> ob(points, enc, searchSet, outputFile);
+    OctreeBenchmark<LinearOctree, Point_t> ob(points, codes, box, enc, searchSet, outputFile);
     ob.approxSearchBench();
 
     if(mainOptions.checkResults) {
@@ -118,11 +118,11 @@ void parallelScalabilityBenchmark(std::ofstream &outputFile, EncoderType encodin
     std::optional<std::vector<PointMetadata>> metadata = std::move(pointMetaPair.second);
     // Sort the point cloud
     auto& enc = getEncoder(encoding);
-    enc.sortPoints<Point_t>(points, metadata);
+    auto [codes, box] = enc.sortPoints<Point_t>(points, metadata);
 
     // Create the searchSet (WARMING: this should be done after sorting since it indexes points!)
     const SearchSet<Point_t> searchSet = SearchSet<Point_t>(mainOptions.numSearches, points);
-    OctreeBenchmark<Octree_t, Point_t> ob(points, enc, searchSet, outputFile);
+    OctreeBenchmark<Octree_t, Point_t> ob(points, codes, box, enc, searchSet, outputFile);
     ob.parallelScalabilityBenchmark();
 }
 
@@ -137,65 +137,15 @@ std::vector<Point_t> generateGridCloud(size_t n) {
     return points;
 }
 
-/**
- * @brief Constructs a linear octree and logs it to two separate files
- *  octree-structure.txt contains the structure of the octree
- *  encoded-points.csv contains the encodings of each point and its x,y,z coordinates
- * 
- * Keep in mind that those files (specially the second, since it will be on the same order of magnitude as the .las file) 
- * will be huge for big clouds, so only use this for small clouds (e.g. <5M points)
- */
-template <typename Point_t>
-void linearOctreeLog(std::ofstream &outputFile, EncoderType encoding, 
-    bool useGridCloud = false, size_t gridCloudSize = 16) {
-        
-    assert(encoding != EncoderType::NO_ENCODING);
-    TimeWatcher tw;
-    tw.start();
-    std::vector<Point_t> points;
-    std::string cloudName;
-    if(useGridCloud) {
-        points = generateGridCloud<Point_t>(gridCloudSize);
-        cloudName = "regular-grid-" + std::to_string(gridCloudSize);
-    } else {
-        points = readPointCloud<Point_t>(mainOptions.inputFile);
-        cloudName = mainOptions.inputFileName;
-    }
-    tw.stop();
-    pointCloudReadLog(points, tw, mainOptions.inputFile);
-    auto& enc = getEncoder(encoding);
-    enc.sortPoints(points);
-    std::string encoderName = enc.getEncoderName();
-    
-    // Open the files for outputting the octree structure and the encoded points
-    // Dont put the timestamp on this file to not occupy a lot of memory if we forget to remove them after user
-    std::string octreeOutputFilename = cloudName + "-" + encoderName + "-octree-structure.txt";
-    std::string encodedPointsFilename = cloudName + "-" + encoderName + "-encoded-points.csv";
-    std::filesystem::path octreeOutputPath = mainOptions.outputDirName / octreeOutputFilename;
-    std::filesystem::path encodedPointsPath = mainOptions.outputDirName / encodedPointsFilename;
-    std::ofstream octreeOutputFile(octreeOutputPath, std::ios::out);
-    std::ofstream encodedPointsFile(encodedPointsPath, std::ios::out);
-    if (!octreeOutputFile.is_open() || !encodedPointsFile.is_open()) {
-        throw std::ios_base::failure(std::string("Failed to open octree log output files"));
-    }
-    std::optional<std::vector<PointMetadata>> metadata = std::nullopt;
-    LinearOctree<Point_t> linearOctree(points, enc, metadata, true);
-    std::cout << "OCTREE LOGGING MODE -- Outputting linear octree structure built from point cloud " << cloudName << " to " 
-            << octreeOutputFilename << " and encoded points to " << encodedPointsFilename << std::endl;
-    linearOctree.logOctree(octreeOutputFile, encodedPointsFile);
-    octreeOutputFile.close();
-    encodedPointsFile.close();
-}
-
 void approximateSearchLog(std::ofstream &outputFile, EncoderType encoding) {
     assert(encoding != EncoderType::NO_ENCODING);
     auto pointMetaPair = readPointsWithMetadata<Lpoint64>(mainOptions.inputFile);
     std::vector<Lpoint64> points = std::move(pointMetaPair.first);
     std::optional<std::vector<PointMetadata>> metadata = std::move(pointMetaPair.second);
     auto& enc = getEncoder(encoding);
-    enc.sortPoints<Lpoint64>(points, metadata);
+    auto [codes, box] = enc.sortPoints<Lpoint64>(points, metadata);
 
-    auto lin_oct = LinearOctree<Lpoint64>(points, enc);
+    auto lin_oct = LinearOctree<Lpoint64>(points, codes, box, enc);
     std::array<float, 5> tolerances = {5.0, 10.0, 25.0, 50.0, 100.0};
     float radius = 3.0;
     outputFile << "tolerance,upper,x,y,z\n";
@@ -223,16 +173,16 @@ void encodingAndOctreeLog(std::ofstream &outputFile, EncoderType encoding) {
     std::vector<Point_t> points = std::move(pointMetaPair.first);
     std::optional<std::vector<PointMetadata>> metadata = std::move(pointMetaPair.second);
     auto& enc = getEncoder(encoding);
-    enc.sortPoints<Point_t>(points, metadata, log);
+    auto [codes, box] = enc.sortPoints<Point_t>(points, metadata, log);
     if constexpr (std::is_same_v<Octree_t<Point_t>, LinearOctree<Point_t>>) {
-        LinearOctree<Point_t> oct(points, enc, log);
-        std::cout << "TEST"  << std::endl;
+        LinearOctree<Point_t> oct(points, codes, box, enc, log);
     } else if constexpr (std::is_same_v<Octree_t<Point_t>, Octree<Point_t>>) {
+        // only measure total time for pointer-based Octree, we do it here
         TimeWatcher tw;
         tw.start();
-        Octree<Point_t> oct(points);
+        Octree<Point_t> oct(points, box);
         tw.stop();
-        log->totalTime = tw.getElapsedDecimalSeconds();
+        log->octreeTime = tw.getElapsedDecimalSeconds();
         log->octreeType = "Octree";
     }
     std::cout << *log << std::endl;
@@ -245,7 +195,7 @@ void outputReorderings(std::ofstream &outputFilePoints, std::ofstream &outputFil
     std::optional<std::vector<PointMetadata>> metadata = std::move(pointMetaPair.second);
 
     auto& enc = getEncoder(encoding);
-    enc.sortPoints<Lpoint64>(points, metadata);
+    auto [codes, box] = enc.sortPoints<Lpoint64>(points, metadata);
 
     // Output reordered points
     outputFilePoints << std::fixed << std::setprecision(3); 
@@ -255,7 +205,7 @@ void outputReorderings(std::ofstream &outputFilePoints, std::ofstream &outputFil
 
     if(encoding != EncoderType::NO_ENCODING) {
         // Build linear octree and output bounds
-        auto oct = LinearOctree<Lpoint64>(points, enc);
+        auto oct = LinearOctree<Lpoint64>(points, codes, box, enc);
         oct.logOctreeBounds(outputFileOct, 6);
     }
 }
@@ -330,7 +280,7 @@ int main(int argc, char *argv[]) {
             // outputReorderings(mortonFile, mortonFileOct, EncoderType::MORTON_ENCODER_3D);  
             // outputReorderings(hilbertFile, hilbertFileOct, EncoderType::HILBERT_ENCODER_3D);  
             std::filesystem::path encAndOctreeLogsPath = mainOptions.outputDirName / "enc_octree_times.csv";
-            std::ofstream encAndOctreeLogsFile(encAndOctreeLogsPath, std::ios::app);
+            std::ofstream encAndOctreeLogsFile(encAndOctreeLogsPath);
             EncodingOctreeLog::writeCSVHeader(encAndOctreeLogsFile);
             encodingAndOctreeLog<LinearOctree, Lpoint64>(encAndOctreeLogsFile, EncoderType::MORTON_ENCODER_3D);
             encodingAndOctreeLog<LinearOctree, Lpoint64>(encAndOctreeLogsFile, EncoderType::HILBERT_ENCODER_3D);

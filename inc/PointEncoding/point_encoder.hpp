@@ -19,8 +19,6 @@ using key_t = uint_fast64_t;
 
 class PointEncoder {
 public:
-
-
     virtual ~PointEncoder() = default;
 
     virtual key_t encode(coords_t x, coords_t y, coords_t z) const = 0;
@@ -106,12 +104,12 @@ public:
     }
 
     template <typename Point_t>
-    std::pair<Box, std::vector<key_t>> sortPoints(std::vector<Point_t> &points, std::shared_ptr<EncodingOctreeLog> log = nullptr) const {
+    std::pair<std::vector<key_t>, Box> sortPoints(std::vector<Point_t> &points, std::shared_ptr<EncodingOctreeLog> log = nullptr) const {
         // Find the bbox
-        Vector radii;
-        Point center = mbb(points, radii);
         TimeWatcher tw;
         tw.start();
+        Vector radii;
+        Point center = mbb(points, radii);
         Box bbox = Box(center, radii);
         tw.stop();
         if(log) {
@@ -120,7 +118,7 @@ public:
             log->cloudSize = points.size();
         }
         // Call the regular sortPoints
-        return std::make_pair(bbox, sortPoints<Point_t>(points, bbox, log));
+        return std::make_pair(sortPoints<Point_t>(points, bbox, log), bbox);
     }
 
     /**
@@ -169,13 +167,13 @@ public:
     }
 
     template <typename Point_t>
-    std::pair<Box, std::vector<key_t>> sortPoints(std::vector<Point_t> &points, 
+    std::pair<std::vector<key_t>, Box> sortPoints(std::vector<Point_t> &points, 
         std::optional<std::vector<PointMetadata>> &meta_opt, std::shared_ptr<EncodingOctreeLog> log = nullptr) const {
         // Find the bbox
-        Vector radii;
-        Point center = mbb(points, radii);
         TimeWatcher tw;
         tw.start();
+        Vector radii;
+        Point center = mbb(points, radii);
         Box bbox = Box(center, radii);
         tw.stop();
         if(log) {
@@ -184,7 +182,7 @@ public:
             log->cloudSize = points.size();
         }
         // Call the regular sortPoints with metadata
-        return std::make_pair(bbox, sortPoints<Point_t>(points, meta_opt, bbox, log));
+        return std::make_pair(sortPoints<Point_t>(points, meta_opt, bbox, log), bbox);
     }
 
 

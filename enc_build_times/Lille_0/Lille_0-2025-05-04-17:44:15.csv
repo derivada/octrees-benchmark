@@ -1,0 +1,5 @@
+date,octree,point_type,encoder,npoints,operation,kernel,radius,num_searches,sequential_searches,repeats,accumulated,mean,median,stdev,used_warmup,warmup_time,avg_result_size,tolerance_percentage,openmp_threads,openmp_schedule
+2025-05-04-17:44:27,Octree,Point,NoEncoding,10000000,neighSearch,Circle,2.5,10000,random,2,2.98721,1.4936,1.58024,0.0866388,1,1.67833,65924,0,40,dynamic
+2025-05-04-17:44:31,Octree,Point,NoEncoding,10000000,neighSearch,Sphere,2.5,10000,random,2,2.30626,1.15313,1.15686,0.00373101,1,1.18417,50121,0,40,dynamic
+2025-05-04-17:44:35,Octree,Point,NoEncoding,10000000,neighSearch,Square,2.5,10000,random,2,2.71117,1.35559,1.35564,5.02765e-05,1,1.39757,81570,0,40,dynamic
+2025-05-04-17:44:38,Octree,Point,NoEncoding,10000000,neighSearch,Cube,2.5,10000,random,2,2.28371,1.14186,1.15118,0.00932142,1,1.15025,66564,0,40,dynamic

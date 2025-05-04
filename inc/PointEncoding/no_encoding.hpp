@@ -23,29 +23,6 @@ class NoEncoding : public PointEncoder {
         return 0;
     }
 
-    template <typename Point_t>
-    std::vector<key_t> encodePoints(const std::vector<Point_t> &points, const Box &bbox) const {
-        return std::vector<key_t>(0);
-    }
-    template <typename Point_t>
-    std::vector<key_t> sortPoints(std::vector<Point_t> &points, const Box &bbox) const {
-        return std::vector<key_t>(0);
-    }
-    template <typename Point_t>
-    std::vector<key_t> sortPoints(std::vector<Point_t> &points) const {
-        return std::vector<key_t>(0);
-    }
-    template <typename Point_t>
-    std::vector<key_t> sortPoints(std::vector<Point_t> &points, 
-        std::optional<std::vector<PointMetadata>> &meta_opt, const Box &bbox) const {
-            return std::vector<key_t>(0);
-    }
-    template <typename Point_t>
-    std::vector<key_t> sortPoints(std::vector<Point_t> &points, 
-        std::optional<std::vector<PointMetadata>> &meta_opt) const {
-        return std::vector<key_t>(0);
-    }
-    
     // Getters
     inline uint32_t maxDepth() const override { return MAX_DEPTH; }
     inline double eps() const override { return EPS; }

@@ -129,7 +129,7 @@ private:
     std::vector<Vector> radii;
 
     /// @brief The global bounding box of the octree
-    Box bbox = Box(Point(), Vector());
+    Box box;
 
     /// @brief A simple vector containinf the radii of each level in the octree to speed up computations.
     std::vector<Vector> precomputedRadii;
@@ -161,7 +161,7 @@ private:
         total_size += vectorMemorySize(codes);
         total_size += vectorMemorySize(centers);
         total_size += vectorMemorySize(radii);
-        total_size += sizeof(precomputedRadii) + sizeof(halfLengths) + sizeof(bbox) + sizeof(maxDepthSeen) + sizeof(points);
+        total_size += sizeof(precomputedRadii) + sizeof(halfLengths) + sizeof(box) + sizeof(maxDepthSeen) + sizeof(points);
         return total_size;
     }
 
@@ -498,40 +498,41 @@ public:
      * spatial data locality
      */
     explicit LinearOctree(std::vector<Point_t>& points,
+                        std::vector<key_t>& codes,
+                        Box box,
                         PointEncoder& enc,
                         std::shared_ptr<EncodingOctreeLog> log = nullptr)
-        : points(points), enc(enc) {
-
+        : points(points), enc(enc), codes(codes), box(box)  {
+        
         static_assert(!std::is_same_v<std::decay_t<PointEncoder>, PointEncoding::NoEncoding>,
                     "Encoder cannot be an instance of NoEncoding when using LinearOctree.");
 
-        precomputedRadii = std::vector<Vector>(enc.maxDepth() + 1);
-        levelRange = std::vector<size_t>(enc.maxDepth() + 2);
+        setupBbox();
 
-        double totalTime = 0.0;
         TimeWatcher tw;
+        // Leaf construction
+        tw.start();
+        buildOctreeLeaves();
+        tw.stop();
+        if(log)
+            log->octreeLeafTime = tw.getElapsedDecimalSeconds();
+        
+        // Internal part construction
+        tw.start();
+        resize();
+        buildOctreeInternal();
+        computeGeometry();
+        tw.stop();
+        if(log)
+            log->octreeInternalTime = tw.getElapsedDecimalSeconds();
 
-        auto buildStep = [&](auto&& step, double* logField = nullptr) {
-            tw.start();
-            step();
-            tw.stop();
-            const double elapsed = tw.getElapsedDecimalSeconds();
-            totalTime += elapsed;
-            if (logField) *logField = elapsed;
-        };
 
-        buildStep([&] { setupBbox(); },          log ? &log->boundingBoxTime            : nullptr);
-        buildStep([&] { encodePoints(); },       log ? &log->encodingTime2              : nullptr);
-        buildStep([&] { buildOctreeLeaves(); },  log ? &log->leafConstructionTime       : nullptr);
-        buildStep([&] { resize(); },             log ? &log->internalMemAllocTime       : nullptr);
-        buildStep([&] { buildOctreeInternal(); },log ? &log->internalConstructionTime   : nullptr);
-        buildStep([&] { computeGeometry(); },    log ? &log->geometryTime               : nullptr);
-
+        // Output extra info from the build
         if (log) {
-            log->MAX_POINTS = MAX_POINTS;
-            log->MIN_OCTANT_RADIUS = MIN_OCTANT_RADIUS;
+            log->octreeTime = log->octreeLeafTime + log->octreeInternalTime;
+            log->max_leaf_points = MAX_POINTS;
+            log->min_octant_radius = MIN_OCTANT_RADIUS;
             log->octreeType = "LinearOctree";
-            log->totalTime = totalTime;
             log->memoryUsed = computeMemorySize();
             log->totalNodes = nTotal;
             log->leafNodes = nLeaf;
@@ -551,14 +552,12 @@ public:
      * 3. Precomputes radii for all the possible levels
      */
     void setupBbox() {
-        Vector radii;
-        Point center = mbb(points, radii);
-        bbox = Box(center, radii);
-
+        precomputedRadii = std::vector<Vector>(enc.maxDepth() + 1);
+        levelRange = std::vector<size_t>(enc.maxDepth() + 2);
         // Compute the physical half lengths for multiplying with the encoded coordinates
-        halfLengths[0] = 0.5f * enc.eps() * (bbox.maxX() - bbox.minX());
-        halfLengths[1] = 0.5f * enc.eps() * (bbox.maxY() - bbox.minY());
-        halfLengths[2] = 0.5f * enc.eps() * (bbox.maxZ() - bbox.minZ());
+        halfLengths[0] = 0.5f * enc.eps() * (box.maxX() - box.minX());
+        halfLengths[1] = 0.5f * enc.eps() * (box.maxY() - box.minY());
+        halfLengths[2] = 0.5f * enc.eps() * (box.maxZ() - box.minZ());
 
         for(int i = 0; i <= enc.maxDepth(); i++) {
             coords_t sideLength = (1u << (enc.maxDepth() - i));
@@ -568,14 +567,6 @@ public:
                 sideLength * halfLengths[2]
             );
         }
-    }
-
-    /**
-     * @brief This function computes the encodins but does not sort (it is called on the ctor when the 
-     * points are already sorted beforehand to not sort them again)
-     */
-    void encodePoints() {
-        codes = enc.encodePoints<Point_t>(points, bbox);
     }
 
     /// @brief Builds the octeee leaves array by repeatingly calling @ref updateOctreeLeaves()
@@ -698,13 +689,13 @@ public:
             key_t startKey = enc.decodePlaceholderBit(prefix);
             uint32_t level = enc.decodePrefixLength(prefix) / 3;
             std::tie(centers[i], radii[i]) = 
-                enc.getCenterAndRadii(startKey, level, bbox, halfLengths, precomputedRadii);
+                enc.getCenterAndRadii(startKey, level, box, halfLengths, precomputedRadii);
         }
     }
 
     /// @brief Computes the density of the point cloud as number of points / dataset
     double getDensity() {
-        return (double) points.size() / (bbox.radii().getX() * bbox.radii().getY() * bbox.radii().getZ() * 8.0f);
+        return (double) points.size() / (box.radii().getX() * box.radii().getY() * box.radii().getZ() * 8.0f);
     }
 
     /**
@@ -1039,7 +1030,7 @@ public:
         double r = 1.0;
 
         size_t nmax = std::min(k, maxNeighs);
-        const double rMax = bbox.radii().getMaxCoordinate(); // Use maximum radius as an upper bound
+        const double rMax = box.radii().getMaxCoordinate(); // Use maximum radius as an upper bound
 
         while (knn.size() <= nmax && r <= rMax)
         {

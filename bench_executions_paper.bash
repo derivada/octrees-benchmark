@@ -39,4 +39,13 @@ N_SEARCHES="5000"
 
 # Parallel only for Lille_0, both random subset and full (with less radii/numthreads in the full executions)
 #./build/rule-based-classifier-cpp --kernels "sphere" -i "data/paris_lille/Lille_0.las" -o "$FOLDER/parallel_subset" -r "0.25,0.5,1.0,2.0" -b "parallel" -s "$N_SEARCHES" --repeats 1 --no-warmup --num-threads "$THREADS"
-./build/rule-based-classifier-cpp --kernels "sphere" -i "data/paris_lille/Lille_0.las" -o "$FOLDER/parallel_full" -r "0.25,0.5,1.0,2.0" -b "parallel" -s "all" --repeats 1 --no-warmup --num-threads "$THREADS"
+# ./build/rule-based-classifier-cpp --kernels "sphere" -i "data/paris_lille/Lille_0.las" -o "$FOLDER/parallel_full" -r "0.25,0.5,1.0,2.0" -b "parallel" -s "all" --repeats 1 --no-warmup --num-threads "$THREADS"
+
+
+# Build and encoding times
+for data in "${datasets_low_density[@]}"; do
+   ./build/rule-based-classifier-cpp -i "$data" -o "enc_build_times" -b "log"
+done
+for data in "${datasets_high_density[@]}"; do
+   ./build/rule-based-classifier-cpp -i "$data" -o "enc_build_times" -b "log"
+done 

@@ -1,0 +1,6 @@
+point_type,oct_type,enc_type,max_leaf_points,cloud_size,bbox_time,enc_time,sort_time,max_leaf_points,min_oct_radius,octree_leaf_time,octree_internal_time,octree_time,octree_memory,number_of_nodes,leaf_nodes,internal_nodes,max_depth_seen,min_radii_seen
+Lpoint64,LinearOctree,128,mort3d,10000000,0.0835857,0.077604,1.92433,0,0.346511,0.200249,0.54676,132894892,408449,357393,51056,10,0.0282491
+Lpoint64,LinearOctree,128,hilb3d,10000000,0.0831286,0.0873608,2.38102,0,0.34645,0.254846,0.601296,132894892,408449,357393,51056,10,0.0282491
+Lpoint64,Octree,0,nocode,10000000,0.083802,0.0795089,1.94984,0,0,0,2.94539,0,0,0,0,0,0
+Lpoint64,Octree,0,mort3d,10000000,0.0839036,0.0784896,1.85659,0,0,0,1.42851,0,0,0,0,0,0
+Lpoint64,Octree,0,hilb3d,10000000,0.0838657,0.102865,2.40715,0,0,0,1.5237,0,0,0,0,0,0

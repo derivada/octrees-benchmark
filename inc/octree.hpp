@@ -35,6 +35,8 @@ class Octree
 	public:
 	Octree();
 	// ignore pointsSorted
+	explicit Octree(std::vector<Point_t>& points, Box box);
+	explicit Octree(std::vector<Point_t*>& points, Box box);
 	explicit Octree(std::vector<Point_t>& points);
 	explicit Octree(std::vector<Point_t*>& points);
 

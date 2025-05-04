@@ -17,6 +17,8 @@ template <template <typename> class Octree_t, typename Point_t>
 class OctreeBenchmark {
     private:
         using PointEncoder = PointEncoding::PointEncoder;
+        using key_t = PointEncoding::key_t;
+        using coords_t = PointEncoding::coords_t;
         std::unique_ptr<Octree_t<Point_t>> oct;
         PointEncoder& enc;
         const std::string comment;
@@ -191,7 +193,7 @@ class OctreeBenchmark {
         }
 
     public:
-        OctreeBenchmark(std::vector<Point_t>& points, PointEncoder& enc, const SearchSet<Point_t>& searchSet, 
+        OctreeBenchmark(std::vector<Point_t>& points, std::vector<key_t>& codes, Box box, PointEncoder& enc, const SearchSet<Point_t>& searchSet, 
             std::ofstream &file, bool checkResults = mainOptions.checkResults, bool useWarmup = mainOptions.useWarmup) :
             points(points), 
             enc(enc),
@@ -204,10 +206,10 @@ class OctreeBenchmark {
             // Conditional initialization of oct based on the type of Octree_t<Point_t>
             if constexpr (std::is_same_v<Octree_t<Point_t>, LinearOctree<Point_t>>) {
                 // Initialize for LinearOctree
-                oct = std::make_unique<LinearOctree<Point_t>>(points, enc);
+                oct = std::make_unique<LinearOctree<Point_t>>(points, codes, box, enc);
             } else if constexpr (std::is_same_v<Octree_t<Point_t>, Octree<Point_t>>) {
                 // Initialize for Octree
-                oct = std::make_unique<Octree<Point_t>>(points);
+                oct = std::make_unique<Octree<Point_t>>(points, box);
             }
         }
     
