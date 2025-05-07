@@ -42,11 +42,13 @@ N_SEARCHES="5000"
 # ./build/rule-based-classifier-cpp --kernels "sphere" -i "data/paris_lille/Lille_0.las" -o "$FOLDER/parallel_full" -r "0.25,0.5,1.0,2.0" -b "parallel" -s "all" --repeats 1 --no-warmup --num-threads "$THREADS"
 
 # Build and encoding times
-for data in "${datasets_low_density[@]}"; do
-    ./build/rule-based-classifier-cpp -i "$data" -o "enc_build_times_64" -b "log" --max-leaf 64
-    ./build/rule-based-classifier-cpp -i "$data" -o "enc_build_times_64" -b "log" --max-leaf 64
+datasets_build_enc=(
+    "data/paris_lille/Lille_0.las"
+    "data/dales_las/test/5080_54400.las"
+    "data/semantic3d/sg27_station8_intensity_rgb.txt"
+    "data/speulderbos/Speulderbos_2017_TLS.las"
+)
+for data in "${datasets_build_enc[@]}"; do
+    ./build/rule-based-classifier-cpp -i "$data" -o "enc_build_times_64" -b "log" --max-leaf 64 --repeats 3
+    ./build/rule-based-classifier-cpp -i "$data" -o "enc_build_times_128" -b "log" --max-leaf 128 --repeats 3
 done
-for data in "${datasets_high_density[@]}"; do
-    ./build/rule-based-classifier-cpp -i "$data" -o "enc_build_times_128" -b "log" --max-leaf 128
-    ./build/rule-based-classifier-cpp -i "$data" -o "enc_build_times_128" -b "log" --max-leaf 128
-done 

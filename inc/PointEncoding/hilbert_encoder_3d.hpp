@@ -104,7 +104,7 @@ public:
     inline key_t upperBound() const override { return UPPER_BOUND; }
     inline uint32_t unusedBits() const override { return UNUSED_BITS; }
     inline std::string getEncoderName() const override { return "HilbertEncoder3D"; };
-    inline std::string getShortEncoderName() const override { return "hilb3d"; };
+    inline std::string getShortEncoderName() const override { return "hilb"; };
 };
 
 } // namespace PointEncoding

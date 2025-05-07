@@ -19,6 +19,7 @@ class Box
 	Point  max_{};
 
 	public:
+	Box() = default;
 	explicit Box(const Point& p, const Vector& radii) : center_(p), radii_(radii), min_(p - radii), max_(p + radii) {}
 	explicit Box(const std::pair<Point, Point>& min_max) :
 	  center_(midpoint(min_max.first, min_max.second)), radii_((min_max.second - min_max.first) / 2), min_(min_max.first),

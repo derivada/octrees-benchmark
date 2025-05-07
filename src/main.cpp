@@ -15,7 +15,7 @@
 #include "NeighborKernels/KernelFactory.hpp"
 #include "Geometry/point.hpp"
 #include "Geometry/Lpoint.hpp"
-#include "Geometry/Lpoint64.hpp"
+#include "Geometry/Lpoint.hpp"
 #include "Geometry/PointMetadata.hpp"
 #include "PointEncoding/point_encoder_factory.hpp"
 #include "result_checking.hpp"
@@ -53,60 +53,6 @@ void searchBenchmark(std::ofstream &outputFile, EncoderType encoding = EncoderTy
 }
 
 /**
- * @brief Benchmark oldNeighSearch vs neighSearch and oldNumNeighSearch vs numNeighSearch for a given octree configuration (point type + encoder),
- * in order to see the performance improvement of the new implementation.
- * 
- * Only uses LinearOctree, since that's where the implementation is being improved, so don't pass PointEncoding::NoEncoder!
- */
-template <typename Point_t>
-void algoCompBenchmark(std::ofstream &outputFile, EncoderType encoding) {
-    assert(encoding != EncoderType::NO_ENCODING);
-    auto pointMetaPair = readPointsWithMetadata<Point_t>(mainOptions.inputFile);
-    std::vector<Point_t> points = std::move(pointMetaPair.first);
-    std::optional<std::vector<PointMetadata>> metadata = std::move(pointMetaPair.second);
-
-    // Sort the point cloud
-    auto& enc = getEncoder(encoding);
-    auto [codes, box] = enc.sortPoints<Point_t>(points, metadata);
-    
-    // Create the searchSet (WARMING: this should be done after sorting since it indexes points!)
-    const SearchSet<Point_t> searchSet = SearchSet<Point_t>(mainOptions.numSearches, points);
-
-    OctreeBenchmark<LinearOctree, Point_t> ob(points, codes, box, enc, searchSet, outputFile);
-    ob.searchImplComparisonBench();
-
-    if(mainOptions.checkResults) {
-        ResultChecking::checkResultsAlgoComp(ob.getResultSet());
-    }
-}
-
-/**
- * @brief Runs the approximate searches benchmark with the configuration given in mainOptions
- * 
- * Only uses LinearOctree, so don't pass PointEncoding::NoEncoder!
- */
-template <typename Point_t>
-void approxSearchBenchmark(std::ofstream &outputFile, EncoderType encoding) {
-    assert(encoding != EncoderType::NO_ENCODING);
-    auto pointMetaPair = readPointsWithMetadata<Point_t>(mainOptions.inputFile);
-    std::vector<Point_t> points = std::move(pointMetaPair.first);
-    std::optional<std::vector<PointMetadata>> metadata = std::move(pointMetaPair.second);
-    // Sort the point cloud
-    auto& enc = getEncoder(encoding);
-    auto [codes, box] = enc.sortPoints<Point_t>(points, metadata);
-    
-    // Create the searchSet (WARMING: this should be done after sorting since it indexes points!)
-    const SearchSet<Point_t> searchSet = SearchSet<Point_t>(mainOptions.numSearches, points);
-
-    OctreeBenchmark<LinearOctree, Point_t> ob(points, codes, box, enc, searchSet, outputFile);
-    ob.approxSearchBench();
-
-    if(mainOptions.checkResults) {
-        ResultChecking::checkResultsApproxSearches(ob.getResultSet());
-    }
-}
-
-/**
  * @brief Runs the parallel execution benchmark.
  * 
  * Only uses LinearOctree, so don't pass PointEncoding::NoEncoder!
@@ -139,13 +85,13 @@ std::vector<Point_t> generateGridCloud(size_t n) {
 
 void approximateSearchLog(std::ofstream &outputFile, EncoderType encoding) {
     assert(encoding != EncoderType::NO_ENCODING);
-    auto pointMetaPair = readPointsWithMetadata<Lpoint64>(mainOptions.inputFile);
-    std::vector<Lpoint64> points = std::move(pointMetaPair.first);
+    auto pointMetaPair = readPointsWithMetadata<Lpoint>(mainOptions.inputFile);
+    std::vector<Lpoint> points = std::move(pointMetaPair.first);
     std::optional<std::vector<PointMetadata>> metadata = std::move(pointMetaPair.second);
     auto& enc = getEncoder(encoding);
-    auto [codes, box] = enc.sortPoints<Lpoint64>(points, metadata);
+    auto [codes, box] = enc.sortPoints<Lpoint>(points, metadata);
 
-    auto lin_oct = LinearOctree<Lpoint64>(points, codes, box, enc);
+    auto lin_oct = LinearOctree<Lpoint>(points, codes, box, enc);
     std::array<float, 5> tolerances = {5.0, 10.0, 25.0, 50.0, 100.0};
     float radius = 3.0;
     outputFile << "tolerance,upper,x,y,z\n";
@@ -169,20 +115,48 @@ template <template <typename> class Octree_t, typename Point_t>
 void encodingAndOctreeLog(std::ofstream &outputFile, EncoderType encoding) {
     std::shared_ptr<EncodingOctreeLog> log = std::make_shared<EncodingOctreeLog>();
     log->pointType = getPointName<Point_t>();
-    auto pointMetaPair = readPointsWithMetadata<Lpoint64>(mainOptions.inputFile);
+    auto pointMetaPair = readPointsWithMetadata<Lpoint>(mainOptions.inputFile);
     std::vector<Point_t> points = std::move(pointMetaPair.first);
     std::optional<std::vector<PointMetadata>> metadata = std::move(pointMetaPair.second);
     auto& enc = getEncoder(encoding);
-    auto [codes, box] = enc.sortPoints<Point_t>(points, metadata, log);
+    double totalBbox = 0.0, totalEnc = 0.0, totalSort = 0.0;
+    std::vector<uint64_t> codes; Box box;
+    if(mainOptions.repeats == 0)
+        return;
+    if(mainOptions.useWarmup) {
+        auto [codesWarmup, boxWarmup] = enc.sortPoints<Point_t>(points, metadata, log);
+        std::cout << "encoding warmup times - bbox: " << log->boundingBoxTime << " enc:  " << log->encodingTime << " sort: " << log->sortingTime << "\n";
+    }
+    for(int i = 0; i<mainOptions.repeats; i++) {
+        auto [codesRepeat, boxRepeat] = enc.sortPoints<Point_t>(points, metadata, log);
+        totalBbox += log->boundingBoxTime, totalEnc += log->encodingTime, totalSort += log->sortingTime;
+        std::cout << "encoding repeat #" << i << " times - bbox: " << log->boundingBoxTime << " enc:  " << log->encodingTime << " sort: " << log->sortingTime << "\n";
+        if(i == mainOptions.repeats - 1) {
+            codes = std::move(codesRepeat);
+            box = std::move(boxRepeat);
+        }
+    }
+    log->boundingBoxTime = totalBbox / mainOptions.repeats;
+    log->encodingTime = totalEnc / mainOptions.repeats;
+    log->sortingTime = totalSort / mainOptions.repeats;
     if constexpr (std::is_same_v<Octree_t<Point_t>, LinearOctree<Point_t>>) {
-        LinearOctree<Point_t> oct(points, codes, box, enc, log);
+        double totalInternal = 0.0, totalLeaf = 0.0;
+        if(mainOptions.useWarmup) {
+            LinearOctree<Point_t> oct(points, codes, box, enc, log);
+            std::cout << "linear octree total warmup time: " << log->octreeTime << "\n";
+        }
+        for(int i = 0; i<mainOptions.repeats; i++) {
+            LinearOctree<Point_t> oct(points, codes, box, enc, log);
+            totalLeaf += log->octreeLeafTime, totalInternal += log->octreeInternalTime;
+            std::cout << "linear octree repeat #" << i << " time: " << log->octreeTime << "\n";
+        }
+        log->octreeLeafTime = totalLeaf / mainOptions.repeats;
+        log->octreeInternalTime = totalInternal / mainOptions.repeats;
     } else if constexpr (std::is_same_v<Octree_t<Point_t>, Octree<Point_t>>) {
         // only measure total time for pointer-based Octree, we do it here
-        TimeWatcher tw;
-        tw.start();
-        Octree<Point_t> oct(points, box);
-        tw.stop();
-        log->octreeTime = tw.getElapsedDecimalSeconds();
+        auto stats = benchmarking::benchmark(mainOptions.repeats, 
+            [&]() { Octree<Point_t> oct(points, box); }, mainOptions.useWarmup);
+        log->octreeTime = stats.mean();
         log->octreeType = "Octree";
     }
     std::cout << *log << std::endl;
@@ -190,12 +164,12 @@ void encodingAndOctreeLog(std::ofstream &outputFile, EncoderType encoding) {
 }
 
 void outputReorderings(std::ofstream &outputFilePoints, std::ofstream &outputFileOct, EncoderType encoding = EncoderType::NO_ENCODING) {
-    auto pointMetaPair = readPointsWithMetadata<Lpoint64>(mainOptions.inputFile);
-    std::vector<Lpoint64> points = std::move(pointMetaPair.first);
+    auto pointMetaPair = readPointsWithMetadata<Lpoint>(mainOptions.inputFile);
+    std::vector<Lpoint> points = std::move(pointMetaPair.first);
     std::optional<std::vector<PointMetadata>> metadata = std::move(pointMetaPair.second);
 
     auto& enc = getEncoder(encoding);
-    auto [codes, box] = enc.sortPoints<Lpoint64>(points, metadata);
+    auto [codes, box] = enc.sortPoints<Lpoint>(points, metadata);
 
     // Output reordered points
     outputFilePoints << std::fixed << std::setprecision(3); 
@@ -205,7 +179,7 @@ void outputReorderings(std::ofstream &outputFilePoints, std::ofstream &outputFil
 
     if(encoding != EncoderType::NO_ENCODING) {
         // Build linear octree and output bounds
-        auto oct = LinearOctree<Lpoint64>(points, codes, box, enc);
+        auto oct = LinearOctree<Lpoint>(points, codes, box, enc);
         oct.logOctreeBounds(outputFileOct, 6);
     }
 }
@@ -235,28 +209,23 @@ int main(int argc, char *argv[]) {
             throw std::ios_base::failure(std::string("Failed to open benchmark output file: ") + csvPath.string());
         }
      }
-
+    using namespace PointEncoding;
     switch(mainOptions.benchmarkMode) {
         case BenchmarkMode::SEARCH:
-            searchBenchmark<Point>(outputFile);
-            searchBenchmark<Point>(outputFile, EncoderType::MORTON_ENCODER_3D);
-            searchBenchmark<Point>(outputFile, EncoderType::HILBERT_ENCODER_3D);
-        break;
-        case BenchmarkMode::COMPARE:
-            algoCompBenchmark<Point>(outputFile, EncoderType::HILBERT_ENCODER_3D);
-        break;
-        case BenchmarkMode::POINT_TYPE:
-            searchBenchmark<Point>(outputFile, EncoderType::HILBERT_ENCODER_3D);
-            searchBenchmark<Lpoint64>(outputFile, EncoderType::HILBERT_ENCODER_3D);
-            searchBenchmark<Lpoint>(outputFile, EncoderType::HILBERT_ENCODER_3D);
-        break;
-        case BenchmarkMode::APPROX:
-            approxSearchBenchmark<Point>(outputFile, EncoderType::HILBERT_ENCODER_3D);
+            if(mainOptions.encodings.contains(EncoderType::NO_ENCODING))
+                searchBenchmark<Lpoint>(outputFile, EncoderType::NO_ENCODING);
+            if(mainOptions.encodings.contains(EncoderType::MORTON_ENCODER_3D))
+                searchBenchmark<Lpoint>(outputFile, EncoderType::MORTON_ENCODER_3D);
+            if(mainOptions.encodings.contains(EncoderType::HILBERT_ENCODER_3D))
+                searchBenchmark<Lpoint>(outputFile, EncoderType::HILBERT_ENCODER_3D);
         break;
         case BenchmarkMode::PARALLEL:
-            parallelScalabilityBenchmark<Octree, Point>(outputFile);
-            parallelScalabilityBenchmark<Octree, Point>(outputFile, EncoderType::HILBERT_ENCODER_3D);
-            parallelScalabilityBenchmark<LinearOctree, Point>(outputFile, EncoderType::HILBERT_ENCODER_3D);
+            if(mainOptions.encodings.contains(EncoderType::NO_ENCODING))
+                parallelScalabilityBenchmark<Octree, Lpoint>(outputFile, EncoderType::NO_ENCODING);
+            if(mainOptions.encodings.contains(EncoderType::MORTON_ENCODER_3D))
+                parallelScalabilityBenchmark<Octree, Lpoint>(outputFile, EncoderType::HILBERT_ENCODER_3D);
+            if(mainOptions.encodings.contains(EncoderType::HILBERT_ENCODER_3D))
+                parallelScalabilityBenchmark<LinearOctree, Lpoint>(outputFile, EncoderType::HILBERT_ENCODER_3D);
         break;
         case BenchmarkMode::LOG_OCTREE:
             // std::filesystem::path unencodedPath = mainOptions.outputDirName / "output_unencoded.csv";
@@ -285,11 +254,19 @@ int main(int argc, char *argv[]) {
             std::filesystem::path encAndOctreeLogsPath = mainOptions.outputDirName / "enc_octree_times.csv";
             std::ofstream encAndOctreeLogsFile(encAndOctreeLogsPath);
             EncodingOctreeLog::writeCSVHeader(encAndOctreeLogsFile);
-            encodingAndOctreeLog<LinearOctree, Lpoint64>(encAndOctreeLogsFile, EncoderType::MORTON_ENCODER_3D);
-            encodingAndOctreeLog<LinearOctree, Lpoint64>(encAndOctreeLogsFile, EncoderType::HILBERT_ENCODER_3D);
-            encodingAndOctreeLog<Octree, Lpoint64>(encAndOctreeLogsFile, EncoderType::NO_ENCODING);
-            encodingAndOctreeLog<Octree, Lpoint64>(encAndOctreeLogsFile, EncoderType::MORTON_ENCODER_3D);
-            encodingAndOctreeLog<Octree, Lpoint64>(encAndOctreeLogsFile, EncoderType::HILBERT_ENCODER_3D);
+            if(mainOptions.encodings.contains(EncoderType::NO_ENCODING)) {
+                encodingAndOctreeLog<Octree, Lpoint>(encAndOctreeLogsFile, EncoderType::NO_ENCODING);
+            }
+            if(mainOptions.encodings.contains(EncoderType::MORTON_ENCODER_3D)) {
+                encodingAndOctreeLog<LinearOctree, Lpoint>(encAndOctreeLogsFile, EncoderType::MORTON_ENCODER_3D);
+                encodingAndOctreeLog<Octree, Lpoint>(encAndOctreeLogsFile, EncoderType::MORTON_ENCODER_3D);
+            }
+
+            if(mainOptions.encodings.contains(EncoderType::HILBERT_ENCODER_3D)) {
+                encodingAndOctreeLog<LinearOctree, Lpoint>(encAndOctreeLogsFile, EncoderType::HILBERT_ENCODER_3D);
+                encodingAndOctreeLog<Octree, Lpoint>(encAndOctreeLogsFile, EncoderType::HILBERT_ENCODER_3D);
+            }
+        break;
     }
     return EXIT_SUCCESS;
 }

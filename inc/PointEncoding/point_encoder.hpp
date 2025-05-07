@@ -3,16 +3,15 @@
 #include "Geometry/point.hpp"
 #include "Geometry/Box.hpp"
 #include <cstdint>
+#include <optional>
+#include "Geometry/PointMetadata.hpp"
 #include "encoding_octree_log.hpp"
+#include "TimeWatcher.hpp"
 
 // Base class for all Encoders
 namespace PointEncoding {
 
-enum class EncoderType {
-    MORTON_ENCODER_3D,
-    HILBERT_ENCODER_3D,
-    NO_ENCODING
-};
+
 
 using coords_t = uint_fast32_t;
 using key_t = uint_fast64_t;

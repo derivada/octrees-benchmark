@@ -52,6 +52,6 @@ class MortonEncoder3D : public PointEncoder {
     inline key_t upperBound() const override { return UPPER_BOUND; }
     inline uint32_t unusedBits() const override { return UNUSED_BITS; }
     inline std::string getEncoderName() const override { return "MortonEncoder3D"; };
-    inline std::string getShortEncoderName() const override { return "mort3d"; };
+    inline std::string getShortEncoderName() const override { return "mort"; };
 };
 };

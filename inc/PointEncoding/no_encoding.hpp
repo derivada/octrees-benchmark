@@ -29,6 +29,6 @@ class NoEncoding : public PointEncoder {
     inline key_t upperBound() const override { return UPPER_BOUND; }
     inline uint32_t unusedBits() const override { return UNUSED_BITS; }
     inline std::string getEncoderName() const { return "NoEncoding"; };
-    inline std::string getShortEncoderName() const { return "nocode"; };
+    inline std::string getShortEncoderName() const { return "none"; };
 };
 };
