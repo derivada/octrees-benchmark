@@ -11,7 +11,7 @@ datasets_high_density=(
 )
 FOLDER="out_paper_v2"
 RADII="0.5,1.0,2.0,3.0"
-LOW_RADII="0.01,0.05,0.1"
+LOW_RADII="0.01,0.05,0.1,0.2"
 THREADS="1,4,8,12,16,20,24,28,32,36,40"
 KERNELS_3D="cube,sphere"
 N_SEARCHES="5000"

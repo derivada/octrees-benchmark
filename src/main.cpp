@@ -189,84 +189,73 @@ int main(int argc, char *argv[]) {
     omp_set_schedule(omp_sched_dynamic, 0);
     processArgs(argc, argv);
     std::cout << std::fixed << std::setprecision(3); 
+    
+    // Handle input file
     fs::path inputFile = mainOptions.inputFile;
     std::string fileName = inputFile.stem();
-
     if (!mainOptions.outputDirName.empty()) {
         mainOptions.outputDirName = mainOptions.outputDirName / fileName;
     }
 
-    // Handling Directories
+    // Create output directory
     createDirectory(mainOptions.outputDirName);
 
-    // Open the benchmark output file
-    std::string csvFilename = mainOptions.inputFileName + "-" + getCurrentDate() + ".csv";
-    std::filesystem::path csvPath = mainOptions.outputDirName / csvFilename;
-    std::ofstream outputFile;
-    if(mainOptions.benchmarkMode != BenchmarkMode::LOG_OCTREE) {
-        outputFile = std::ofstream(csvPath, std::ios::app);
+    using namespace PointEncoding;
+    if(!mainOptions.debug) {
+        // Open the benchmark output file
+        std::string csvFilename = mainOptions.inputFileName + "-" + getCurrentDate() + ".csv";
+        std::filesystem::path csvPath = mainOptions.outputDirName / csvFilename;
+        std::ofstream outputFile = std::ofstream(csvPath, std::ios::app);
         if (!outputFile.is_open()) {
             throw std::ios_base::failure(std::string("Failed to open benchmark output file: ") + csvPath.string());
         }
-     }
-    using namespace PointEncoding;
-    switch(mainOptions.benchmarkMode) {
-        case BenchmarkMode::SEARCH:
-            if(mainOptions.encodings.contains(EncoderType::NO_ENCODING))
-                searchBenchmark<Lpoint>(outputFile, EncoderType::NO_ENCODING);
-            if(mainOptions.encodings.contains(EncoderType::MORTON_ENCODER_3D))
-                searchBenchmark<Lpoint>(outputFile, EncoderType::MORTON_ENCODER_3D);
-            if(mainOptions.encodings.contains(EncoderType::HILBERT_ENCODER_3D))
-                searchBenchmark<Lpoint>(outputFile, EncoderType::HILBERT_ENCODER_3D);
-        break;
-        case BenchmarkMode::PARALLEL:
-            if(mainOptions.encodings.contains(EncoderType::NO_ENCODING))
-                parallelScalabilityBenchmark<Octree, Lpoint>(outputFile, EncoderType::NO_ENCODING);
-            if(mainOptions.encodings.contains(EncoderType::MORTON_ENCODER_3D))
-                parallelScalabilityBenchmark<Octree, Lpoint>(outputFile, EncoderType::HILBERT_ENCODER_3D);
-            if(mainOptions.encodings.contains(EncoderType::HILBERT_ENCODER_3D))
-                parallelScalabilityBenchmark<LinearOctree, Lpoint>(outputFile, EncoderType::HILBERT_ENCODER_3D);
-        break;
-        case BenchmarkMode::LOG_OCTREE:
-            // std::filesystem::path unencodedPath = mainOptions.outputDirName / "output_unencoded.csv";
-            // std::filesystem::path mortonPath = mainOptions.outputDirName / "output_morton.csv";
-            // std::filesystem::path hilbertPath = mainOptions.outputDirName / "output_hilbert.csv";
-            // std::filesystem::path unencodedPathOct = mainOptions.outputDirName / "output_unencoded_oct.csv";
-            // std::filesystem::path mortonPathOct = mainOptions.outputDirName / "output_morton_oct.csv";
-            // std::filesystem::path hilbertPathOct = mainOptions.outputDirName / "output_hilbert_oct.csv";
-            // // Open files
-            // std::ofstream unencodedFile(unencodedPath, std::ios::app);
-            // std::ofstream mortonFile(mortonPath, std::ios::app);
-            // std::ofstream hilbertFile(hilbertPath, std::ios::app);
-            // std::ofstream unencodedFileOct(unencodedPathOct, std::ios::app);
-            // std::ofstream mortonFileOct(mortonPathOct, std::ios::app);
-            // std::ofstream hilbertFileOct(hilbertPathOct, std::ios::app);
-            
-            // if (!unencodedFile.is_open() || !mortonFile.is_open() || !hilbertFile.is_open() || 
-            //     !unencodedFileOct.is_open() || !mortonFileOct.is_open() || !hilbertFileOct.is_open()) {
-            //     throw std::ios_base::failure("Failed to open output files");
-            // }
-            
-            // std::cout << "Output files created successfully." << std::endl;
-            // outputReorderings(unencodedFile, unencodedFileOct);  
-            // outputReorderings(mortonFile, mortonFileOct, EncoderType::MORTON_ENCODER_3D);  
-            // outputReorderings(hilbertFile, hilbertFileOct, EncoderType::HILBERT_ENCODER_3D);  
-            std::filesystem::path encAndOctreeLogsPath = mainOptions.outputDirName / "enc_octree_times.csv";
-            std::ofstream encAndOctreeLogsFile(encAndOctreeLogsPath);
-            EncodingOctreeLog::writeCSVHeader(encAndOctreeLogsFile);
-            if(mainOptions.encodings.contains(EncoderType::NO_ENCODING)) {
-                encodingAndOctreeLog<Octree, Lpoint>(encAndOctreeLogsFile, EncoderType::NO_ENCODING);
-            }
-            if(mainOptions.encodings.contains(EncoderType::MORTON_ENCODER_3D)) {
-                encodingAndOctreeLog<LinearOctree, Lpoint>(encAndOctreeLogsFile, EncoderType::MORTON_ENCODER_3D);
-                encodingAndOctreeLog<Octree, Lpoint>(encAndOctreeLogsFile, EncoderType::MORTON_ENCODER_3D);
-            }
+        if(mainOptions.encodings.contains(EncoderType::NO_ENCODING))
+            searchBenchmark<Lpoint>(outputFile, EncoderType::NO_ENCODING);
+        if(mainOptions.encodings.contains(EncoderType::MORTON_ENCODER_3D))
+            searchBenchmark<Lpoint>(outputFile, EncoderType::MORTON_ENCODER_3D);
+        if(mainOptions.encodings.contains(EncoderType::HILBERT_ENCODER_3D))
+            searchBenchmark<Lpoint>(outputFile, EncoderType::HILBERT_ENCODER_3D);
+    } else {
+        // Debug mode, for graphs and other measures
+        // std::filesystem::path unencodedPath = mainOptions.outputDirName / "output_unencoded.csv";
+        // std::filesystem::path mortonPath = mainOptions.outputDirName / "output_morton.csv";
+        // std::filesystem::path hilbertPath = mainOptions.outputDirName / "output_hilbert.csv";
+        // std::filesystem::path unencodedPathOct = mainOptions.outputDirName / "output_unencoded_oct.csv";
+        // std::filesystem::path mortonPathOct = mainOptions.outputDirName / "output_morton_oct.csv";
+        // std::filesystem::path hilbertPathOct = mainOptions.outputDirName / "output_hilbert_oct.csv";
+        // // Open files
+        // std::ofstream unencodedFile(unencodedPath, std::ios::app);
+        // std::ofstream mortonFile(mortonPath, std::ios::app);
+        // std::ofstream hilbertFile(hilbertPath, std::ios::app);
+        // std::ofstream unencodedFileOct(unencodedPathOct, std::ios::app);
+        // std::ofstream mortonFileOct(mortonPathOct, std::ios::app);
+        // std::ofstream hilbertFileOct(hilbertPathOct, std::ios::app);
+        
+        // if (!unencodedFile.is_open() || !mortonFile.is_open() || !hilbertFile.is_open() || 
+        //     !unencodedFileOct.is_open() || !mortonFileOct.is_open() || !hilbertFileOct.is_open()) {
+        //     throw std::ios_base::failure("Failed to open output files");
+        // }
+        
+        // std::cout << "Output files created successfully." << std::endl;
+        // outputReorderings(unencodedFile, unencodedFileOct);  
+        // outputReorderings(mortonFile, mortonFileOct, EncoderType::MORTON_ENCODER_3D);  
+        // outputReorderings(hilbertFile, hilbertFileOct, EncoderType::HILBERT_ENCODER_3D);  
+        std::filesystem::path encAndOctreeLogsPath = mainOptions.outputDirName / "enc_octree_times.csv";
+        std::ofstream encAndOctreeLogsFile(encAndOctreeLogsPath);
+        EncodingOctreeLog::writeCSVHeader(encAndOctreeLogsFile);
+        if(mainOptions.encodings.contains(EncoderType::NO_ENCODING)) {
+            encodingAndOctreeLog<Octree, Lpoint>(encAndOctreeLogsFile, EncoderType::NO_ENCODING);
+        }
+        if(mainOptions.encodings.contains(EncoderType::MORTON_ENCODER_3D)) {
+            encodingAndOctreeLog<LinearOctree, Lpoint>(encAndOctreeLogsFile, EncoderType::MORTON_ENCODER_3D);
+            encodingAndOctreeLog<Octree, Lpoint>(encAndOctreeLogsFile, EncoderType::MORTON_ENCODER_3D);
+        }
 
-            if(mainOptions.encodings.contains(EncoderType::HILBERT_ENCODER_3D)) {
-                encodingAndOctreeLog<LinearOctree, Lpoint>(encAndOctreeLogsFile, EncoderType::HILBERT_ENCODER_3D);
-                encodingAndOctreeLog<Octree, Lpoint>(encAndOctreeLogsFile, EncoderType::HILBERT_ENCODER_3D);
-            }
-        break;
+        if(mainOptions.encodings.contains(EncoderType::HILBERT_ENCODER_3D)) {
+            encodingAndOctreeLog<LinearOctree, Lpoint>(encAndOctreeLogsFile, EncoderType::HILBERT_ENCODER_3D);
+            encodingAndOctreeLog<Octree, Lpoint>(encAndOctreeLogsFile, EncoderType::HILBERT_ENCODER_3D);
+        }
     }
+
     return EXIT_SUCCESS;
 }

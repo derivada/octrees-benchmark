@@ -5,7 +5,6 @@
 #include "NeighborKernels/KernelFactory.hpp"
 #include <unordered_map>
 #include "PointEncoding/point_encoder_factory.hpp"
-
 main_options mainOptions{};
 
 void printHelp()
@@ -18,10 +17,6 @@ void printHelp()
 			"-r, --radii: Benchmark radii (comma-separated, e.g., '2.5,5.0,7.5')\n"
 			"-s, --searches: Number of searches\n"
 			"-t, --repeats: Number of repeats\n"
-			"-b, --benchmark: Benchmark to run:\n\t" 
-				"'srch' for comparison between pointer and linear octree, and between point encodings (default),\n\t"
-				"'parallel' for a parallelism scalability benchmark across a number of threads spawned (passed with --num-threads) and with multiple OpenMP schedules. Always uses neighborsPtr vs neighborsV2\n\t"
-				"'log' for logging the entire linear octree built, use for debugging\n"
 			"-k, --kernels: Specify which kernels to use (comma-separated or all). possible values are sphere, cube, square and circle\n"
 			"-a, --search-algo: Specify which search algorithms to run on the linear octree (comma-separated or 'all'), default='neighborsPtr,neighborsV2', possible values:\n\t"
 				"'neighborsPtr' basic search algorihtm on pointer-based octree,\n\t"
@@ -35,6 +30,7 @@ void printHelp()
 				"'hilb' run both octrees with their selected algos with Hilbert SFC Reordering\n\n"
 			
 			"Other options:\n"
+			"--debug: Enable debug mode\n"
 			"--check: Enable result checking\n"
 			"--no-warmup: Disable warmup phase\n"
 			"--approx-tol: For specifying tolerance percentage in approximate searches (e.g. 80.0 = 80% tolerance on kernel size), format is list of doubles in format e.g. '10.0,50.0,100.0'\n"
@@ -183,7 +179,6 @@ std::string getEncoderListString() {
     return oss.str();
 }
 
-
 void processArgs(int argc, char** argv)
 {
 	while (true)
@@ -222,22 +217,6 @@ void processArgs(int argc, char** argv)
 					mainOptions.numSearches = std::stoul(std::string(optarg));
 				}
 				break;
-
-			case 'b':
-			case LongOptions::BENCHMARK:
-				if (std::string(optarg) == "srch") {
-					mainOptions.benchmarkMode = SEARCH;
-				} else if(std::string(optarg) == "log") {
-					mainOptions.benchmarkMode = LOG_OCTREE;
-				} else if(std::string(optarg) == "approx") {
-					mainOptions.benchmarkMode = APPROX;
-				} else if(std::string(optarg) == "parallel") {
-					mainOptions.benchmarkMode = PARALLEL;
-				} else {
-					std::cerr << "Invalid benchmark mode: " << optarg << "\n";
-					printHelp();
-				}
-				break;
 			case 'k':
 			case LongOptions::KERNELS:
 				mainOptions.kernels = parseKernelOptions(std::string(optarg));
@@ -251,6 +230,9 @@ void processArgs(int argc, char** argv)
 				mainOptions.encodings = parseEncodingOptions(std::string(optarg));
 				break;
 			
+			case LongOptions::DEBUG:
+				mainOptions.debug = true;
+				break;
 			case LongOptions::CHECK:
 				mainOptions.checkResults = true;
 				break;

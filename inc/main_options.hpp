@@ -11,7 +11,6 @@
 
 namespace fs = std::filesystem;
 
-enum BenchmarkMode { SEARCH, APPROX, PARALLEL, LOG_OCTREE };
 enum SearchAlgo { NEIGHBORS_PTR, NEIGHBORS, NEIGHBORS_V2, NEIGHBORS_STRUCT, NEIGHBORS_APPROX };
 enum EncoderType { MORTON_ENCODER_3D, HILBERT_ENCODER_3D, NO_ENCODING };
 
@@ -47,11 +46,12 @@ public:
 	std::vector<float> benchmarkRadii{2.5, 5.0, 7.5, 10.0};
 	size_t repeats{2};
 	size_t numSearches{10000};
-	BenchmarkMode benchmarkMode{SEARCH};
+	
 	std::set<Kernel_t> kernels{Kernel_t::sphere, Kernel_t::circle, Kernel_t::cube, Kernel_t::square};
-	std::set<SearchAlgo> searchAlgos{ SearchAlgo::NEIGHBORS_PTR, SearchAlgo::NEIGHBORS_V2 };
-	std::set<EncoderType> encodings { EncoderType::NO_ENCODING, EncoderType::MORTON_ENCODER_3D, EncoderType::HILBERT_ENCODER_3D };
+	std::set<SearchAlgo> searchAlgos{SearchAlgo::NEIGHBORS_PTR, SearchAlgo::NEIGHBORS_V2 };
+	std::set<EncoderType> encodings{EncoderType::NO_ENCODING, EncoderType::MORTON_ENCODER_3D, EncoderType::HILBERT_ENCODER_3D };
 
+	bool debug{false};
 	bool checkResults{false};
 	bool useWarmup{true};
 	std::vector<double> approximateTolerances{50.0};
@@ -70,11 +70,11 @@ enum LongOptions : int
 	RADII,
 	REPEATS,
 	SEARCHES,
-	BENCHMARK,
 	KERNELS,
 	SEARCH_ALGOS,
 	ENCODINGS,
-
+	
+	DEBUG,
 	CHECK,
 	NO_WARMUP,
 	APPROXIMATE_TOLERANCES,
@@ -92,17 +92,17 @@ const option long_opts[] = {
 	{ "radii", required_argument, nullptr, LongOptions::RADII },
 	{ "repeats", required_argument, nullptr, LongOptions::REPEATS },
 	{ "searches", required_argument, nullptr, LongOptions::SEARCHES },
-	{ "benchmark", required_argument, nullptr, LongOptions::BENCHMARK },
 	{ "kernels", required_argument, nullptr, LongOptions::KERNELS},
 	{ "search-algos", required_argument, nullptr, LongOptions::SEARCH_ALGOS },
 	{ "encodings", required_argument, nullptr, LongOptions::ENCODINGS },
 
+	{ "debug", no_argument, nullptr, LongOptions::DEBUG },
 	{ "check", no_argument, nullptr, LongOptions::CHECK },
 	{ "no-warmup", no_argument, nullptr, LongOptions::NO_WARMUP },
 	{ "approx-tol", required_argument, nullptr, LongOptions::APPROXIMATE_TOLERANCES },
-	{ "num-threads", required_argument, nullptr, LongOptions::NUM_THREADS},
-	{ "sequential", no_argument, nullptr, LongOptions::SEQUENTIAL_SEARCH_SET},
-	{ "max-leaf", required_argument, nullptr, LongOptions::MAX_POINTS_LEAF},
+	{ "num-threads", required_argument, nullptr, LongOptions::NUM_THREADS },
+	{ "sequential", no_argument, nullptr, LongOptions::SEQUENTIAL_SEARCH_SET },
+	{ "max-leaf", required_argument, nullptr, LongOptions::MAX_POINTS_LEAF },
 	{ nullptr, 0, nullptr, 0 }
 };
 
@@ -115,5 +115,6 @@ std::string getKernelListString();
 std::string getSearchAlgoListString();
 std::string getEncoderListString();
 void processArgs(int argc, char** argv);
+
 
 #endif // CPP_MAIN_OPTIONS_HPP

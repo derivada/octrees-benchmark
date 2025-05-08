@@ -13,6 +13,7 @@
 #include "type_names.hpp"
 #include "neighbor_set.hpp"
 #include "encoding_octree_log.hpp"
+#include "main_options.hpp"
 
 /**
 * @class LinearOctree
@@ -1229,7 +1230,7 @@ public:
         pointsFile << std::flush;
         std::cout << "Done! Octree and points logged" << std::endl;
     }
-
+    
     void logOctreeBounds(std::ofstream &outputFile, int max_level) {
         outputFile << "level,upx,upy,upz,downx,downy,downz\n";
         auto logBounds = [&](uint32_t nodeIndex) {
