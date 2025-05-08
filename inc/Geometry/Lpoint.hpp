@@ -1,93 +1,104 @@
-//
-// Created by miguelyermo on 25/3/21.
-//
-
-#ifndef RULE_BASED_CLASSIFIER_CPP_LPOINT_HPP
-#define RULE_BASED_CLASSIFIER_CPP_LPOINT_HPP
+#pragma once
 
 #include "point.hpp"
 #include <array>
+#include <cstdint>
 
-class Region; // Region forward declaration
+// Forward declaration
+class Region;
 
-class Lpoint : public Point
-{
-	protected:
-	double         I_{};              // Intensity
-	unsigned short rn_{};             // Return Number
-	unsigned short nor_{};            // Number of Returns (given pulse)
-	unsigned short dir_{};            // Scan Direction Flag
-	unsigned short edge_{};           // Edge of Flight Line
-	unsigned short classification_{}; // Classification of the point
-	char           sar_{};            // Scan Angle Rank
-	unsigned char  ud_{};             // User Data
-	unsigned short psId_{};           // Point Source ID
+// Follows Point Data Record Format 2 from the LAS standard, but with double coordinates and intensity and a point ID
+// https://www.asprs.org/wp-content/uploads/2010/12/LAS_1_4_r13.pdf
+struct Lpoint : public Point {
+protected:
+    double     I_{};                // Intensity
+    uint16_t  psId_{};             // Point Source ID
+    uint16_t  r_{};                // Red
+    uint16_t  g_{};                // Green
+    uint16_t  b_{};                // Blue
+    uint8_t   ud_{};               // User Data
+    uint8_t   classification_{};  // Classification
+    int8_t    sar_{};              // Scan Angle Rank
 
-	unsigned int r_{}; // Red channel (0-65535)
-	unsigned int g_{}; // Green channel (0-65535)
-	unsigned int b_{}; // Blue channel (0-65535)
+    union PackedFlags {
+        uint8_t packed = 0;
+        struct {
+            uint8_t rn_   : 3;  // Return Number (bits 0–2)
+            uint8_t nor_  : 3;  // Number of Returns (bits 3–5)
+            uint8_t dir_  : 1;  // Scan Direction Flag (bit 6)
+            uint8_t edge_ : 1;  // Edge of Flight Line (bit 7)
+        } fields;
 
-	Vector normal_{};
+        PackedFlags() = default;
+    } flags;
 
+public:
+    // Constructors
+    Lpoint() = default;
+    Lpoint(size_t id, double x, double y, double z) : Point(id, x, y, z) {}
+    Lpoint(double x, double y) : Point(x, y) {}
+    Lpoint(double x, double y, double z) : Point(x, y, z) {}
+    explicit Lpoint(Point p) : Point(p.getX(), p.getY(), p.getZ()) {}
 
-	protected:
+    // ISPRS-style input
+    Lpoint(size_t id, double x, double y, double z, double I, uint8_t rn, uint8_t nor, uint8_t classification)
+        : Point(id, x, y, z), I_(I), classification_(classification) {
+        setPackedFields(rn, nor, false, false);
+    }
 
-	public:
-	// Default constructor
-	Lpoint() : Point(){};
-	Lpoint(size_t id, double x, double y, double z) : Point(id, x, y, z){};
-	Lpoint(double x, double y) : Point(x, y){};
-	Lpoint(double x, double y, double z) : Point(x, y, z){};
-	explicit Lpoint(Point p) : Point(p.getX(), p.getY(), p.getZ()){};
+    // Standard classified cloud
+    Lpoint(size_t id, double x, double y, double z, double I, uint8_t rn, uint8_t nor, bool dir,
+           bool edge, uint8_t classification)
+        : Point(id, x, y, z), I_(I), classification_(classification) {
+        setPackedFields(rn, nor, dir, edge);
+    }
 
+    // Classified cloud with RGB
+    Lpoint(size_t id, double x, double y, double z, double I, uint8_t rn, uint8_t nor, bool dir,
+           bool edge, uint8_t classification, uint16_t r, uint16_t g, uint16_t b)
+        : Point(id, x, y, z), I_(I), classification_(classification), r_(r), g_(g), b_(b) {
+        setPackedFields(rn, nor, dir, edge);
+    }
 
-	// Reading points ISPRS format
-	Lpoint(size_t id, double x, double y, double z, double I, double rn, double nor, unsigned int classification) :
-	  Point(id, x, y, z), I_(I), rn_(rn), nor_(nor), classification_(classification){};
+    // Full record format (including extra LAS fields)
+    Lpoint(size_t id, double x, double y, double z, double I, uint8_t rn, uint8_t nor, bool dir,
+           bool edge, uint8_t classification, int8_t sar, uint8_t ud, uint16_t psId,
+           uint16_t r, uint16_t g, uint16_t b)
+        : Point(id, x, y, z), I_(I), classification_(classification),
+          sar_(sar), ud_(ud), psId_(psId), r_(r), g_(g), b_(b) {
+        setPackedFields(rn, nor, dir, edge);
+    }
 
-	// Reading standard classified cloud
-	Lpoint(size_t id, double x, double y, double z, double I, unsigned short rn, unsigned short nor, unsigned char dir,
-	       unsigned char edge, unsigned short classification) :
-	  Point(id, x, y, z),
-	  I_(I), rn_(rn), nor_(nor), dir_(dir), edge_(edge), classification_(classification){};
+    // Setters and field helpers
+    inline void setI(double I) { I_ = I; }
 
-	// Reading classified cloud with RGB
-	Lpoint(size_t id, double x, double y, double z, double I, unsigned short rn, unsigned short nor, unsigned char dir,
-	       unsigned char edge, unsigned short classification, unsigned int r, unsigned int g, unsigned int b) :
-	  Point(id, x, y, z),
-	  I_(I), rn_(rn), nor_(nor), dir_(dir), edge_(edge), classification_(classification), r_(r), g_(g), b_(b){};
+    inline void setPackedFields(uint8_t rn, uint8_t nor, bool dir, bool edge) {
+        setRN(rn);
+        setNOR(nor);
+        setDir(dir);
+        setEdge(edge);
+    }
 
+    inline void setRN(uint8_t rn) { flags.fields.rn_ = rn & 0b111; }
+    inline void setNOR(uint8_t nor) { flags.fields.nor_ = nor & 0b111; }
+    inline void setDir(bool dir) { flags.fields.dir_ = dir & 0b1; }
+    inline void setEdge(bool edge) { flags.fields.edge_ = edge & 0b1; }
 
-	// Reading Point Data Record Format 2 (Babcock / Coremain request)
-	Lpoint(size_t id, double x, double y, double z, double I, unsigned short rn, unsigned short nor, unsigned char dir,
-	       unsigned char edge, unsigned short classification, char sar, unsigned char ud, unsigned short psId,
-	       unsigned int r, unsigned int g, unsigned int b) :
-	  Point(id, x, y, z),
-	  I_(I), rn_(rn), nor_(nor), dir_(dir), edge_(edge), classification_(classification), sar_(sar), ud_(ud), psId_(psId),
-	  r_(r), g_(g), b_(b){};
+    // Accessors
+    inline double          getI() const { return I_; }
+    inline uint8_t        getClass() const { return classification_; }
+    inline void           setClass(uint8_t classification) { classification_ = classification; }
+    inline uint8_t        rn() const { return flags.fields.rn_; }
+    inline uint8_t        nor() const { return flags.fields.nor_; }
+    inline uint8_t        dir() const { return flags.fields.dir_; }
+    inline uint8_t        edge() const { return flags.fields.edge_; }
+    inline uint16_t       getR() const { return r_; }
+    inline void           setR(uint16_t r) { r_ = r; }
+    inline uint16_t       getG() const { return g_; }
+    inline void           setG(uint16_t g) { g_ = g; }
+    inline uint16_t       getB() const { return b_; }
+    inline void           setB(uint16_t b) { b_ = b; }
 
-	// Setters and getters
-	inline double I() const { return I_; }
-	inline void   setI(double I) { I_ = I; }
-
-	// TODO: delete gId references
-	inline unsigned short        getClass() const { return classification_; }
-	inline void                  setClass(unsigned short classification) { classification_ = classification; }
-	inline unsigned short        rn() const { return rn_; }
-	inline unsigned short        nor() const { return nor_; }
-	inline unsigned short        dir() const { return dir_; }
-	inline unsigned short        edge() const { return edge_; }
-	inline unsigned int          getR() const { return r_; }
-	inline void                  setR(unsigned int r) { r_ = r; }
-	inline unsigned int          getG() const { return g_; }
-	inline void                  setG(unsigned int g) { g_ = g; }
-	inline unsigned int          getB() const { return b_; }
-	inline void                  setB(unsigned int b) { b_ = b; }
-	const Vector&                getNormal() const { return normal_; }
-	void                         setNormal(const Vector& normal) { normal_ = normal; }
-	void                         setEigenvalues(const std::vector<double>& eigenvalues) {}
-	double                       getI() const { return I_; }
-
+    // Stub (can be implemented later)
+    void setEigenvalues(const std::vector<double>& eigenvalues) {}
 };
-
-#endif //RULE_BASED_CLASSIFIER_CPP_LPOINT_HPP

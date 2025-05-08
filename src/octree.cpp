@@ -9,12 +9,10 @@
 #include <algorithm>
 #include <unordered_map>
 #include "Geometry/Lpoint.hpp"
-#include "Geometry/Lpoint64.hpp"
 #include "main_options.hpp"
 
 template class Octree<Point>;
 template class Octree<Lpoint>;
-template class Octree<Lpoint64>;
 
 template <typename Point_t>
 Octree<Point_t>::Octree() = default;

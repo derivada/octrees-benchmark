@@ -1,7 +1,6 @@
 #pragma once
 
 #include "Geometry/Lpoint.hpp"
-#include "Geometry/Lpoint64.hpp"
 #include "Geometry/point.hpp"
 
 /**
@@ -15,9 +14,6 @@
  */
 template <typename T>
 std::string getPointName();
-
-template <>
-inline std::string getPointName<Lpoint64>() { return "Lpoint64"; }
 
 template <>
 inline std::string getPointName<Lpoint>() { return "Lpoint"; }
