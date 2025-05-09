@@ -20,8 +20,7 @@ class Octree
 {
 	private:
 	// Keep dividing the octree while octants have more points than these.
-	static constexpr unsigned int MAX_POINTS        = 128;
-	static constexpr double        MIN_OCTANT_RADIUS = 0;
+	static constexpr float        MIN_OCTANT_RADIUS = 0;
 	static constexpr size_t       DEFAULT_KNN       = 100;
 	static constexpr short        OCTANTS_PER_NODE  = 8;
 	
@@ -342,7 +341,7 @@ class Octree
 	}
 
 	/** Inside a sphere */
-	[[nodiscard]] inline std::vector<Point_t*> searchSphereNeighbors(const Point& point, const double radius) const
+	[[nodiscard]] inline std::vector<Point_t*> searchSphereNeighbors(const Point& point, const float radius) const
 	{
 		return searchNeighbors<Kernel_t::sphere>(point, radius);
 	}
@@ -376,24 +375,24 @@ class Octree
 	std::vector<Point_t*> searchEraseCircleNeighbors(const std::vector<Point_t*>& points, double radius);
 
 	/** Inside a sphere */
-	std::vector<Point_t*> searchEraseSphereNeighbors(const std::vector<Point_t*>& points, double radius);
+	std::vector<Point_t*> searchEraseSphereNeighbors(const std::vector<Point_t*>& points, float radius);
 
 	/** Connected inside a spherical shell*/
-	[[nodiscard]] std::vector<Point_t*> searchConnectedShellNeighbors(const Point& point, double nextDoorDistance,
-	                                                                 double minRadius, double maxRadius) const;
+	[[nodiscard]] std::vector<Point_t*> searchConnectedShellNeighbors(const Point& point, float nextDoorDistance,
+	                                                                 float minRadius, float maxRadius) const;
 
 	/** Connected circle neighbors*/
-	std::vector<Point_t*> searchEraseConnectedCircleNeighbors(double nextDoorDistance);
+	std::vector<Point_t*> searchEraseConnectedCircleNeighbors(float nextDoorDistance);
 
 	static std::vector<Point_t*> connectedNeighbors(const Point* point, std::vector<Point_t*>& neighbors,
-	                                               double nextDoorDistance);
+	                                               float nextDoorDistance);
 
-	static std::vector<Point_t*> extractCloseNeighbors(const Point* p, std::vector<Point_t*>& neighbors, double radius);
+	static std::vector<Point_t*> extractCloseNeighbors(const Point* p, std::vector<Point_t*>& neighbors, float radius);
 
 	std::vector<Point_t*> kClosestCircleNeighbors(const Point_t* p, size_t k) const;
-	std::vector<Point_t*> nCircleNeighbors(const Point_t* p, size_t n, double& radius, double minRadius, double maxRadius,
-	                                      double maxIncrement = 0.25, double maxDecrement = 0.25) const;
+	std::vector<Point_t*> nCircleNeighbors(const Point_t* p, size_t n, float& radius, float minRadius, float maxRadius,
+	                                      float maxIncrement = 0.25, float maxDecrement = 0.25) const;
 
-	std::vector<Point_t*> nSphereNeighbors(const Point_t& p, size_t n, double& radius, double minRadius, double maxRadius,
-	                                      double maxStep = 0.25) const;
+	std::vector<Point_t*> nSphereNeighbors(const Point_t& p, size_t n, float& radius, float minRadius, float maxRadius,
+	                                      float maxStep = 0.25) const;
 };

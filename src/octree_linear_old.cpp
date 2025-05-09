@@ -292,7 +292,7 @@
 // 	return pointsNeighbors;
 // }
 
-// std::vector<Lpoint*> LinearOctreeOld::searchEraseSphereNeighbors(const std::vector<Lpoint*>& points, double radius)
+// std::vector<Lpoint*> LinearOctreeOld::searchEraseSphereNeighbors(const std::vector<Lpoint*>& points, float radius)
 // {
 // 	std::vector<Lpoint*> pointsNeighbors{};
 
@@ -311,8 +311,8 @@
 // }
 
 // /** Connected inside a spherical shell*/
-// std::vector<Lpoint*> LinearOctreeOld::searchConnectedShellNeighbors(const Point& point, const double nextDoorDistance,
-//                                                            const double minRadius, const double maxRadius) const
+// std::vector<Lpoint*> LinearOctreeOld::searchConnectedShellNeighbors(const Point& point, const float nextDoorDistance,
+//                                                            const float minRadius, const float maxRadius) const
 // {
 // 	std::vector<Lpoint*> connectedShellNeighs;
 
@@ -327,7 +327,7 @@
 // }
 
 // /** Connected circle neighbors*/
-// std::vector<Lpoint*> LinearOctreeOld::searchEraseConnectedCircleNeighbors(const double nextDoorDistance)
+// std::vector<Lpoint*> LinearOctreeOld::searchEraseConnectedCircleNeighbors(const float nextDoorDistance)
 // {
 // 	std::vector<Lpoint*> connectedCircleNeighbors;
 
@@ -346,7 +346,7 @@
 // }
 
 // std::vector<Lpoint*> LinearOctreeOld::connectedNeighbors(const Point* point, std::vector<Lpoint*>& neighbors,
-//                                                 const double nextDoorDistance)
+//                                                 const float nextDoorDistance)
 // /**
 // 	 * Filters neighbors which are not connected to point through a chain of next-door neighbors. Erases neighbors in the
 // 	 * process.
@@ -375,7 +375,7 @@
 // 	return connectedNeighbors;
 // }
 
-// std::vector<Lpoint*> LinearOctreeOld::extractCloseNeighbors(const Point* p, std::vector<Lpoint*>& neighbors, const double radius)
+// std::vector<Lpoint*> LinearOctreeOld::extractCloseNeighbors(const Point* p, std::vector<Lpoint*>& neighbors, const float radius)
 // /**
 // 	 * Fetches neighbors within radius from p, erasing them from neighbors and returning them.
 // 	 *
@@ -435,9 +435,9 @@
 // 	return closeNeighbors;
 // }
 
-// std::vector<Lpoint*> LinearOctreeOld::nCircleNeighbors(const Lpoint* p, const size_t n, double& radius, const double minRadius,
-//                                               const double maxRadius, const double maxIncrement,
-//                                               const double maxDecrement) const
+// std::vector<Lpoint*> LinearOctreeOld::nCircleNeighbors(const Lpoint* p, const size_t n, float& radius, const float minRadius,
+//                                               const float maxRadius, const float maxIncrement,
+//                                               const float maxDecrement) const
 // /**
 // 	 * Radius-adaptive search method for circle neighbors.
 // 	 *
@@ -452,7 +452,7 @@
 // {
 // 	auto neighs = searchCircleNeighbors(p, radius);
 
-// 	double radiusOffset = (double(n) - double(neighs.size())) * SENSEPSILON;
+// 	float radiusOffset = (float(n) - float(neighs.size())) * SENSEPSILON;
 // 	if (radiusOffset > maxIncrement) { radiusOffset = maxIncrement; }
 // 	else if (radiusOffset < -maxDecrement) { radiusOffset = -maxDecrement; }
 
@@ -463,8 +463,8 @@
 // 	return neighs;
 // }
 
-// std::vector<Lpoint*> LinearOctreeOld::nSphereNeighbors(const Lpoint& p, const size_t n, double& radius, const double minRadius,
-//                                               const double maxRadius, const double maxStep) const
+// std::vector<Lpoint*> LinearOctreeOld::nSphereNeighbors(const Lpoint& p, const size_t n, float& radius, const float minRadius,
+//                                               const float maxRadius, const float maxStep) const
 // /**
 // 	 * Radius-adaptive search method for sphere neighbors.
 // 	 *
@@ -479,7 +479,7 @@
 // {
 // 	auto neighs = searchSphereNeighbors(p, radius);
 
-// 	double radiusOffset = (double(n) - double(neighs.size())) * SENSEPSILON;
+// 	float radiusOffset = (float(n) - float(neighs.size())) * SENSEPSILON;
 // 	if (radiusOffset > maxStep) { radiusOffset = maxStep; }
 // 	else if (radiusOffset < -maxStep) { radiusOffset = -maxStep; }
 

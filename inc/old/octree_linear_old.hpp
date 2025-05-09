@@ -25,7 +25,7 @@
 class LinearOctreeOld {
 private:
     static constexpr unsigned int MAX_POINTS        = 100;
-	static constexpr double        MIN_OCTANT_RADIUS = 0.1;
+	static constexpr float        MIN_OCTANT_RADIUS = 0.1;
     static constexpr unsigned int MAX_DEPTH         = 19;
 	static constexpr size_t       DEFAULT_KNN       = 100;
 	static constexpr short        OCTANTS_PER_NODE  = 8;
@@ -79,7 +79,7 @@ private:
     static constexpr key_t XY_MASK = X_MASK | Y_MASK;
     static constexpr key_t YZ_MASK = Y_MASK | Z_MASK;
     static constexpr key_t XZ_MASK = X_MASK | Z_MASK;
-    static constexpr double EPS = 1.0f / (1 << (MAX_DEPTH+1));
+    static constexpr float EPS = 1.0f / (1 << (MAX_DEPTH+1));
 
     /*
      * Method to convert a point to its anchor, this operation approximates its coordinates and so it is not reversible
@@ -89,9 +89,9 @@ private:
             x = 0, y = 0, z = 0;
             return;
         }
-        double x_transf = ((p.getX() - center.getX())  + radii.getX()) / (2 * radii.getX());
-        double y_transf = ((p.getY() - center.getY())  + radii.getY()) / (2 * radii.getY());
-        double z_transf = ((p.getZ() - center.getZ())  + radii.getZ()) / (2 * radii.getZ());
+        float x_transf = ((p.getX() - center.getX())  + radii.getX()) / (2 * radii.getX());
+        float y_transf = ((p.getY() - center.getY())  + radii.getY()) / (2 * radii.getY());
+        float z_transf = ((p.getZ() - center.getZ())  + radii.getZ()) / (2 * radii.getZ());
         if(x_transf + EPS >= 1.0f) x_transf = 1.0f - EPS;
         if(y_transf + EPS >= 1.0f) y_transf = 1.0f - EPS;
         if(z_transf + EPS >= 1.0f) z_transf = 1.0f - EPS;
@@ -595,7 +595,7 @@ public:
 	}
 
     // Other neighbourhood search methods
-    [[nodiscard]] inline std::vector<Lpoint*> searchSphereNeighbors(const Point& point, const double radius) const
+    [[nodiscard]] inline std::vector<Lpoint*> searchSphereNeighbors(const Point& point, const float radius) const
 	{
 		return searchNeighbors<Kernel_t::sphere>(point, radius);
 	}
@@ -629,26 +629,26 @@ public:
 	std::vector<Lpoint*> searchEraseCircleNeighbors(const std::vector<Lpoint*>& points, double radius);
 
 	/** Inside a sphere */
-	std::vector<Lpoint*> searchEraseSphereNeighbors(const std::vector<Lpoint*>& points, double radius);
+	std::vector<Lpoint*> searchEraseSphereNeighbors(const std::vector<Lpoint*>& points, float radius);
 
 	/** Connected inside a spherical shell*/
-	[[nodiscard]] std::vector<Lpoint*> searchConnectedShellNeighbors(const Point& point, double nextDoorDistance,
-	                                                                 double minRadius, double maxRadius) const;
+	[[nodiscard]] std::vector<Lpoint*> searchConnectedShellNeighbors(const Point& point, float nextDoorDistance,
+	                                                                 float minRadius, float maxRadius) const;
 
 	/** Connected circle neighbors*/
-	std::vector<Lpoint*> searchEraseConnectedCircleNeighbors(double nextDoorDistance);
+	std::vector<Lpoint*> searchEraseConnectedCircleNeighbors(float nextDoorDistance);
 
 	static std::vector<Lpoint*> connectedNeighbors(const Point* point, std::vector<Lpoint*>& neighbors,
-	                                               double nextDoorDistance);
+	                                               float nextDoorDistance);
 
-	static std::vector<Lpoint*> extractCloseNeighbors(const Point* p, std::vector<Lpoint*>& neighbors, double radius);
+	static std::vector<Lpoint*> extractCloseNeighbors(const Point* p, std::vector<Lpoint*>& neighbors, float radius);
 
 	std::vector<Lpoint*> kClosestCircleNeighbors(const Lpoint* p, size_t k) const;
-	std::vector<Lpoint*> nCircleNeighbors(const Lpoint* p, size_t n, double& radius, double minRadius, double maxRadius,
-	                                      double maxIncrement = 0.25, double maxDecrement = 0.25) const;
+	std::vector<Lpoint*> nCircleNeighbors(const Lpoint* p, size_t n, float& radius, float minRadius, float maxRadius,
+	                                      float maxIncrement = 0.25, float maxDecrement = 0.25) const;
 
-	std::vector<Lpoint*> nSphereNeighbors(const Lpoint& p, size_t n, double& radius, double minRadius, double maxRadius,
-	                                      double maxStep = 0.25) const;
+	std::vector<Lpoint*> nSphereNeighbors(const Lpoint& p, size_t n, float& radius, float minRadius, float maxRadius,
+	                                      float maxStep = 0.25) const;
 
     /**
      * Debug function for testing linear octree functionality
@@ -736,7 +736,7 @@ public:
         tw.stop();
         std::cout   << "Found " << (points.size() - not_found) << "/" << points.size() 
                     << " points in the octree in " << tw.getElapsedDecimalSeconds() << " seconds (" 
-                    << ((double) tw.getElapsedMicros() / (double) points.size()) << " microseconds per point)" << std::endl;
+                    << ((float) tw.getElapsedMicros() / (float) points.size()) << " microseconds per point)" << std::endl;
 
 
 
@@ -744,7 +744,7 @@ public:
 
         // Lpoint p = points[5000];
         // std::cout << "Sphere neighbourhood search for point " << p << std::endl;
-        // double radius = 1.0;
+        // float radius = 1.0;
         // auto neighPoints = nSphereNeighbors(p, 10, radius, 0.0001, 1000.0);
         // std::cout << "Found " << neighPoints.size() << " points in a sphere of radius " << radius << std::endl;
         // for(Lpoint* neighPoint : neighPoints) {

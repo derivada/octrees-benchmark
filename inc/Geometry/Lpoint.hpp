@@ -9,7 +9,7 @@ class Region;
 
 // Follows Point Data Record Format 2 from the LAS standard
 // https://www.asprs.org/wp-content/uploads/2010/12/LAS_1_4_r13.pdf
-struct Lpoint : public Point {
+struct alignas(32) Lpoint : public Point {
 protected:
     double     I_{};                // Intensity
     uint16_t  psId_{};             // Point Source ID

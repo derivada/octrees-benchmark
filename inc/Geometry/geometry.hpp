@@ -69,10 +69,10 @@ class Limits
 
 // Function declarations
 Point                                           computeCentroid(const std::vector<Lpoint*>& points);
-std::tuple<Vector, double, std::vector<double>> 	computeGeometryArma(const std::vector<Lpoint*>& points);
+std::tuple<Vector, double, std::vector<double>> computeGeometryArma(const std::vector<Lpoint*>& points);
 Vector                                          computeNormal(const std::vector<Point*>& points);
 Vector                                          computeNormal(const std::vector<Lpoint*>& points);
-std::tuple<Vector, double, std::vector<double>> 	computeGeometryArma(const std::vector<Lpoint*>& points);
+std::tuple<Vector, double, std::vector<double>> computeGeometryArma(const std::vector<Lpoint*>& points);
 Vector                                          computePlane(const std::vector<Lpoint*>& points, Lpoint& centroid);
 
 

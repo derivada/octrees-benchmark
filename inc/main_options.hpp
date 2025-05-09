@@ -43,7 +43,7 @@ public:
 	std::string inputFileName{};
 
 	// Benchmark parameters
-	std::vector<double> benchmarkRadii{2.5, 5.0, 7.5, 10.0};
+	std::vector<float> benchmarkRadii{2.5, 5.0, 7.5, 10.0};
 	size_t repeats{2};
 	size_t numSearches{10000};
 	

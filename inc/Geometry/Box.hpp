@@ -72,7 +72,7 @@ class Box
 	}
 
 	/** Calculate the radius in each axis and save the max radius of the bounding box */
-	static inline Vector mbbRadii(const Vector& min, const Vector& max, double& maxRadius)
+	static inline Vector mbbRadii(const Vector& min, const Vector& max, float& maxRadius)
 	{
 		const auto x = (max.getX() - min.getX()) / 2.0;
 		const auto y = (max.getY() - min.getY()) / 2.0;
@@ -187,81 +187,6 @@ requires std::is_base_of_v<Point, Point_t>
 
 	maxRadius = box.radii();
 	return midpoint(min, max);
-}
-
-
-template<typename Point_t>
-inline Point mbb(const std::vector<Point_t>& points, double& maxRadius)
-requires std::is_base_of_v<Point, Point_t>
-/**
- * Computes the minimum bounding box of a set of points
- * @param points Array of points
- * @param numPoints Number of points
- * @param[out] maxRadius Maximum radius of the bounding box
- * @return (Point) center of the bounding box
- */
-{
-	Point min;
-	Point max;
-
-	min.setX(std::numeric_limits<double>::max());
-	min.setY(std::numeric_limits<double>::max());
-	min.setZ(std::numeric_limits<double>::max());
-
-	max.setX(-std::numeric_limits<double>::max());
-	max.setY(-std::numeric_limits<double>::max());
-	max.setZ(-std::numeric_limits<double>::max());
-
-	for (const Point& p : points)
-	{
-		if (p.getX() < min.getX()) { min.setX(p.getX()); }
-		if (p.getX() > max.getX()) { max.setX(p.getX()); }
-		if (p.getY() < min.getY()) { min.setY(p.getY()); }
-		if (p.getY() > max.getY()) { max.setY(p.getY()); }
-		if (p.getZ() < min.getZ()) { min.setZ(p.getZ()); }
-		if (p.getZ() > max.getZ()) { max.setZ(p.getZ()); }
-	}
-
-	Box box(std::pair<Point, Point>{ min, max });
-
-	maxRadius = std::max({ box.radii().getX(), box.radii().getY(), box.radii().getZ() });
-
-	return midpoint(min, max);
-}
-
-template<typename Point_t>
-inline Point mbb(const std::vector<Point_t*>& points, double& maxRadius)
-requires std::is_base_of_v<Point, Point_t>
-/**
- * Computes the minimum bounding box of a set of points
- * @param points Array of points' pointers
- * @param numPoints Number of points
- * @param[out] maxRadius Maximum radius of the bounding box
- * @return (Point) center of the bounding box
- */
-{
-	Point min;
-	Point max;
-
-	min.setX(std::numeric_limits<double>::max());
-	min.setY(std::numeric_limits<double>::max());
-	min.setZ(std::numeric_limits<double>::max());
-
-	max.setX(-std::numeric_limits<double>::max());
-	max.setY(-std::numeric_limits<double>::max());
-	max.setZ(-std::numeric_limits<double>::max());
-
-	for (Point* p : points)
-	{
-		if (p->getX() < min.getX()) { min.setX(p->getX()); }
-		if (p->getX() > max.getX()) { max.setX(p->getX()); }
-		if (p->getY() < min.getY()) { min.setY(p->getY()); }
-		if (p->getY() > max.getY()) { max.setY(p->getY()); }
-		if (p->getZ() < min.getZ()) { min.setZ(p->getZ()); }
-		if (p->getZ() > max.getZ()) { max.setZ(p->getZ()); }
-	}
-
-	return Box::mbbRadii(min, max, maxRadius);
 }
 
 inline void makeBox(const Point& p, double radius, Vector& min, Vector& max)

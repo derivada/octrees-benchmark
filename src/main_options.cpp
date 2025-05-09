@@ -202,7 +202,7 @@ void processArgs(int argc, char** argv)
 				break;
 			case 'r':
 			case LongOptions::RADII:
-				mainOptions.benchmarkRadii = readVectorArg<double>(std::string(optarg));
+				mainOptions.benchmarkRadii = readVectorArg<float>(std::string(optarg));
 				break;
 			case 't':
 			case LongOptions::REPEATS:

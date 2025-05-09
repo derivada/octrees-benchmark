@@ -173,7 +173,7 @@ inline std::string getCurrentDate(const std::string fmt = "%Y-%m-%d-%H:%M:%S") {
 constexpr int BAR_WIDTH = 70; 
 
 inline void progressBar(size_t progress, size_t total) {
-    int pos = static_cast<int>((double) progress  * BAR_WIDTH / 100.0);
+    int pos = static_cast<int>((float) progress  * BAR_WIDTH / 100.0);
     std::cout << "Reading point cloud [";
     for (int i = 0; i < BAR_WIDTH; ++i) {
         if (i < pos) {

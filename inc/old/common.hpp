@@ -27,10 +27,10 @@ namespace PointEncoding {
      * @brief Get anchor integer coordinates for a point within a bounding box. Necessary before point encoding.
      * 
      * @details Anchor coordinates are a set of 3 integers (x,y,z) obtained from the coordinates of a point p (p.x, p.y, p.z). The process goes as follows:
-     * 1. The doubles p.x, p.y, p.z are normalized into the unit cube [0,1]x[0,1]x[0,1] using the given bounding box coordinates
+     * 1. The floats p.x, p.y, p.z are normalized into the unit cube [0,1]x[0,1]x[0,1] using the given bounding box coordinates
      * 2. These normalized coordinates are scaled again into the bigger cube [0,2^L]x[0,2^L]x[0,2^L] where L is the maximum depth of the encoder (for 3D
      * Hilbert and Morton encodings, L=21) 
-     * 3. Convert those scaled doubles into ints via floor implicit conversion
+     * 3. Convert those scaled floats into ints via floor implicit conversion
      * 
      * The output is (x,y,z) each, in the range 0 to 2^L. If L=21, the total amount of bits will be 63, which will be the input of the encoding funcions for 3D Morton
      * and Hilbert codes, that use 64-bit keys.

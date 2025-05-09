@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <unordered_map>
 #include "Geometry/Lpoint.hpp"
+#include "main_options.hpp"
 
 template class Octree<Point>;
 template class Octree<Lpoint>;
@@ -515,7 +516,7 @@ std::vector<Point_t*> Octree<Point_t>::searchEraseCircleNeighbors(const std::vec
 }
 
 template <typename Point_t>
-std::vector<Point_t*> Octree<Point_t>::searchEraseSphereNeighbors(const std::vector<Point_t*>& points, double radius)
+std::vector<Point_t*> Octree<Point_t>::searchEraseSphereNeighbors(const std::vector<Point_t*>& points, float radius)
 {
 	std::vector<Point_t*> pointsNeighbors{};
 
@@ -535,8 +536,8 @@ std::vector<Point_t*> Octree<Point_t>::searchEraseSphereNeighbors(const std::vec
 
 /** Connected inside a spherical shell*/
 template <typename Point_t>
-std::vector<Point_t*> Octree<Point_t>::searchConnectedShellNeighbors(const Point& point, const double nextDoorDistance,
-                                                           const double minRadius, const double maxRadius) const
+std::vector<Point_t*> Octree<Point_t>::searchConnectedShellNeighbors(const Point& point, const float nextDoorDistance,
+                                                           const float minRadius, const float maxRadius) const
 {
 	std::vector<Point_t*> connectedShellNeighs;
 
@@ -552,7 +553,7 @@ std::vector<Point_t*> Octree<Point_t>::searchConnectedShellNeighbors(const Point
 
 /** Connected circle neighbors*/
 template <typename Point_t>
-std::vector<Point_t*> Octree<Point_t>::searchEraseConnectedCircleNeighbors(const double nextDoorDistance)
+std::vector<Point_t*> Octree<Point_t>::searchEraseConnectedCircleNeighbors(const float nextDoorDistance)
 {
 	std::vector<Point_t*> connectedCircleNeighbors;
 
@@ -572,7 +573,7 @@ std::vector<Point_t*> Octree<Point_t>::searchEraseConnectedCircleNeighbors(const
 
 template <typename Point_t>
 std::vector<Point_t*> Octree<Point_t>::connectedNeighbors(const Point* point, std::vector<Point_t*>& neighbors,
-                                                const double nextDoorDistance)
+                                                const float nextDoorDistance)
 /**
 	 * Filters neighbors which are not connected to point through a chain of next-door neighbors. Erases neighbors in the
 	 * process.
@@ -602,7 +603,7 @@ std::vector<Point_t*> Octree<Point_t>::connectedNeighbors(const Point* point, st
 }
 
 template <typename Point_t>
-std::vector<Point_t*> Octree<Point_t>::extractCloseNeighbors(const Point* p, std::vector<Point_t*>& neighbors, const double radius)
+std::vector<Point_t*> Octree<Point_t>::extractCloseNeighbors(const Point* p, std::vector<Point_t*>& neighbors, const float radius)
 /**
 	 * Fetches neighbors within radius from p, erasing them from neighbors and returning them.
 	 *
@@ -664,9 +665,9 @@ std::vector<Point_t*> Octree<Point_t>::kClosestCircleNeighbors(const Point_t* p,
 }
 
 template <typename Point_t>
-std::vector<Point_t*> Octree<Point_t>::nCircleNeighbors(const Point_t* p, const size_t n, double& radius, const double minRadius,
-                                              const double maxRadius, const double maxIncrement,
-                                              const double maxDecrement) const
+std::vector<Point_t*> Octree<Point_t>::nCircleNeighbors(const Point_t* p, const size_t n, float& radius, const float minRadius,
+                                              const float maxRadius, const float maxIncrement,
+                                              const float maxDecrement) const
 /**
 	 * Radius-adaptive search method for circle neighbors.
 	 *
@@ -681,7 +682,7 @@ std::vector<Point_t*> Octree<Point_t>::nCircleNeighbors(const Point_t* p, const 
 {
 	auto neighs = searchCircleNeighbors(p, radius);
 
-	double radiusOffset = (double(n) - double(neighs.size())) * SENSEPSILON;
+	float radiusOffset = (float(n) - float(neighs.size())) * SENSEPSILON;
 	if (radiusOffset > maxIncrement) { radiusOffset = maxIncrement; }
 	else if (radiusOffset < -maxDecrement) { radiusOffset = -maxDecrement; }
 
@@ -693,8 +694,8 @@ std::vector<Point_t*> Octree<Point_t>::nCircleNeighbors(const Point_t* p, const 
 }
 
 template <typename Point_t>
-std::vector<Point_t*> Octree<Point_t>::nSphereNeighbors(const Point_t& p, const size_t n, double& radius, const double minRadius,
-                                              const double maxRadius, const double maxStep) const
+std::vector<Point_t*> Octree<Point_t>::nSphereNeighbors(const Point_t& p, const size_t n, float& radius, const float minRadius,
+                                              const float maxRadius, const float maxStep) const
 /**
 	 * Radius-adaptive search method for sphere neighbors.
 	 *
@@ -709,7 +710,7 @@ std::vector<Point_t*> Octree<Point_t>::nSphereNeighbors(const Point_t& p, const 
 {
 	auto neighs = searchSphereNeighbors(p, radius);
 
-	double radiusOffset = (double(n) - double(neighs.size())) * SENSEPSILON;
+	float radiusOffset = (float(n) - float(neighs.size())) * SENSEPSILON;
 	if (radiusOffset > maxStep) { radiusOffset = maxStep; }
 	else if (radiusOffset < -maxStep) { radiusOffset = -maxStep; }
 
