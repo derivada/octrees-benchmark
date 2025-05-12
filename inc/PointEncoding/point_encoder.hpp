@@ -11,9 +11,7 @@
 
 // Base class for all Encoders
 namespace PointEncoding {
-
-
-
+    
 using coords_t = uint_fast32_t;
 using key_t = uint_fast64_t;
 
@@ -57,69 +55,41 @@ public:
             }
         return codes;
     }
-
+   
     /**
-     * @brief This function computes the encodings of the points and sorts them in
-     * the given order. The points array is altered in-place here!
+     * @brief Parallel radix sort implementation for the SFC reordering.
      * 
-     * @details This is the main reordering function that we use to achieve spatial locality during neighbourhood
-     * searches. Encodings are first computed using encodeFromPoint, put into a pairs vector and then reordered.
+     * @returns The final array of encodings of the points
      * 
-     * @param points The input/output array of 3D points (i.e. the point cloud)
-     * @param codes The output array of computed codes (allocated here, only pass unallocated reference)
-     * @param bbox The precomputed global bounding box of points
+     * @details This implementation computes the codes multiple times for each element, but since SFC time is very fast,
+     * it does not matter. Saving the codes in another buffer array takes more time as a lot more memory may
+     * be needed
+     * 
      */
     template <typename Point_t>
-    std::vector<key_t> sortPoints(std::vector<Point_t> &points, const Box &bbox, std::shared_ptr<EncodingOctreeLog> log = nullptr) const {
-        // Temporal vector of pairs
-        std::cout << "sorting.." << std::endl;
-        std::vector<std::pair<key_t, Point_t>> encoded_points(points.size());
-        TimeWatcher tw;
-        tw.start();
-        // Compute encodings in parallel
-        #pragma omp parallel for schedule(static)
-            for(size_t i = 0; i < points.size(); i++) {
-                encoded_points[i] = std::make_pair(encodeFromPoint(points[i], bbox), points[i]);
-            }
-        tw.stop();
-        if(log)
-            log->encodingTime = tw.getElapsedDecimalSeconds();
-        // Sort the points
-        tw.start();
-        std::sort(encoded_points.begin(), encoded_points.end(),
-            [](const auto& a, const auto& b) {
-                return a.first < b.first;  // Compare only the morton codes
-        });
-        
-        // Copy back sorted codes and points in parallel
-        std::vector<key_t> codes(points.size());
-        #pragma omp parallel for schedule(static)
-            for(size_t i = 0; i < points.size(); i++) {
-                codes[i] = encoded_points[i].first;
-                points[i] = encoded_points[i].second;
-            }
-        tw.stop();
-        if(log)
-            log->sortingTime = tw.getElapsedDecimalSeconds();
-        return codes;
-    }
-
-    template <typename Point_t>
-    std::vector<key_t> sortPointsRadix(std::vector<Point_t>& points, const Box& bbox, std::shared_ptr<EncodingOctreeLog> log = nullptr) const {
+    std::vector<key_t> sortPoints(std::vector<Point_t> &points, 
+        std::optional<std::vector<PointMetadata>> &meta_opt, const Box &bbox, std::shared_ptr<EncodingOctreeLog> log = nullptr) const {
         size_t n = points.size();
-        // Configure to 4, 8 or 16 (higher -> extra memory, but potentially faster if cache is big)
-        constexpr int BITS_PER_PASS = 16; 
+        // Choose 4, 8 or 16. 16 is less passes but requires more memory for the histograms and it offers better performance in most cases.
+        constexpr int BITS_PER_PASS = 16;
         constexpr int NUM_BUCKETS = 1 << BITS_PER_PASS;
         constexpr size_t BUCKET_MASK = NUM_BUCKETS - 1;
         constexpr int NUM_PASSES = sizeof(key_t) * 8 / BITS_PER_PASS;
+    
         TimeWatcher tw;
         tw.start();
+    
         std::vector<Point_t> buffer(n);
-        for (int pass = 0; pass < NUM_PASSES; ++pass) {
+        std::vector<PointMetadata> metadata_buffer;
+        if (meta_opt) metadata_buffer.resize(n);
+    
+        for (int pass = 0; pass < NUM_PASSES; pass++) {
             int shift = pass * BITS_PER_PASS;
-            // Step 1: Build histograms
+    
+            // Step 1: Histogram
             const int nThreads = omp_get_max_threads();
             std::vector<std::vector<size_t>> localHist(nThreads, std::vector<size_t>(NUM_BUCKETS, 0));
+    
             #pragma omp parallel
             {
                 int tid = omp_get_thread_num();
@@ -131,141 +101,67 @@ public:
                     hist[bucket]++;
                 }
             }
-            
-            // Step 2: Convert local histogram to local offsets by running a 2D scan
+    
+            // Step 2: Scan histograms to offsets
             size_t offset = 0;
-            for (int b = 0; b < NUM_BUCKETS; ++b) {
-                for (int t = 0; t < nThreads; ++t) {
+            for (int b = 0; b < NUM_BUCKETS; b++) {
+                for (int t = 0; t < nThreads; t++) {
                     size_t val = localHist[t][b];
                     localHist[t][b] = offset;
                     offset += val;
                 }
             }
     
-            // Step 3: Redistribute into buffer using per-thread local offsets
+            // Step 3: Scatter to buffer using per-thread offsets
             #pragma omp parallel
             {
                 int tid = omp_get_thread_num();
                 auto& localOffset = localHist[tid];
     
                 #pragma omp for
-                for (size_t i = 0; i < n; ++i) {
+                for (size_t i = 0; i < n; i++) {
                     size_t encoded_key = encodeFromPoint(points[i], bbox);
                     size_t bucket = (encoded_key >> shift) & BUCKET_MASK;
                     size_t pos = localOffset[bucket]++;
                     buffer[pos] = points[i];
+                    if (meta_opt) metadata_buffer[pos] = (*meta_opt)[i];
                 }
             }
+    
             std::swap(points, buffer);
+            if (meta_opt) std::swap(*meta_opt, metadata_buffer);
         }
-
+    
         tw.stop();
         if (log) log->sortingTime = tw.getElapsedDecimalSeconds();
-        tw.start();    
-        // Compute final encodings in parallel
+        tw.start();
+    
+        // Final encoding
         std::vector<key_t> keys(n);
         #pragma omp parallel for
         for (size_t i = 0; i < n; ++i) {
-            keys[i] = { encodeFromPoint(points[i], bbox) };
+            keys[i] = encodeFromPoint(points[i], bbox);
         }
+    
         tw.stop();
         if (log) log->encodingTime = tw.getElapsedDecimalSeconds();
+    
         return keys;
-    }
-   
-    template <typename Point_t>
-    std::pair<std::vector<key_t>, Box> sortPoints(std::vector<Point_t> &points, std::shared_ptr<EncodingOctreeLog> log = nullptr) const {
-        // Find the bbox
-        TimeWatcher tw;
-        tw.start();
-        Vector radii;
-        Point center = mbb(points, radii);
-        Box bbox = Box(center, radii);
-        tw.stop();
-        std::cout << "NON-PARALLEL: center " << center << " , radii " << radii << " time: " << tw.getElapsedDecimalSeconds() << std::endl;
-        tw.start();
-        Vector radii_parallel;
-        Point center_parallel = mbb_parallel(points, radii_parallel);
-        Box bbox_parallel = Box(center_parallel, radii_parallel);
-        tw.stop();
-        std::cout << "PARALLEL: center " << center_parallel << " , radii " << radii_parallel << " time: " << tw.getElapsedDecimalSeconds()  << std::endl;
-        if(log) {
-            log->boundingBoxTime = tw.getElapsedDecimalSeconds();
-            log->encoderType = getShortEncoderName();
-            log->cloudSize = points.size();
-        }
-        // Call the regular sortPoints
-        std::cout << "calling sortPoints" << std::endl;
-        return std::make_pair(sortPoints<Point_t>(points, bbox, log), bbox);
     }
 
     /**
-     * @brief A similar function to @see sortPoints(), but here the LiDAR metadata of the points is passed separately, and a tuple of 3 elements is sorted instead
-     * of a pair. 
+     * @brief This function computes the encodings of the points and sorts them in
+     * the given order. The points array is altered in-place here!
+     * 
+     * @details This is the main reordering function that we use to achieve spatial locality during neighbourhood
+     * searches. Encodings are first computed using encodeFromPoint, put into a pairs vector and then reordered.
+     * 
+     * @param points The input/output array of 3D points (i.e. the point cloud)
+     * @param codes The output array of computed codes (allocated here, only pass unallocated reference)
+     * @param bbox The precomputed global bounding box of points
+     * @param meta_opt The optional metadata of the point cloud (if Lpoint is used, it is contained on the struct). 
+     * meta_opt is a parallel array to points and will be sorted in the same order
      */
-    template <typename Point_t>
-    std::vector<key_t> sortPoints(std::vector<Point_t> &points, 
-        std::optional<std::vector<PointMetadata>> &meta_opt, const Box &bbox, std::shared_ptr<EncodingOctreeLog> log = nullptr) const {
-        if(!meta_opt.has_value()) {
-            // regular sort without metadata
-            std::vector<Point_t> points_copy = points;
-            TimeWatcher tw;
-            tw.start();
-            auto keys = sortPoints<Point_t>(points, bbox, log);
-            tw.stop();
-            std::cout << "normal: " << tw.getElapsedDecimalSeconds() << std::endl;
-            tw.start();
-            auto keys_copy = sortPointsRadix<Point_t>(points_copy, bbox, log);
-            tw.stop();
-            std::cout << "radix: " << tw.getElapsedDecimalSeconds() << std::endl;
-            for(int i = 0; i<points.size(); i++) {
-                if(points[i] != points_copy[i]) {
-                    std::cout << "different points at index " << i << std::endl;
-                    std::cout << "   normal: " << points[i].getX() << "," << points[i].getY() << "," << points[i].getZ() << std::endl;
-                    std::cout << "   radix: " << points_copy[i].getX() << "," << points_copy[i].getY() << "," << points_copy[i].getZ() << std::endl;
-                }
-                if(keys[i] != keys_copy[i]) {
-                    std::cout << "different keys at index " << i << std::endl;
-                    std::cout << "   normal: " << keys[i] << std::endl;
-                    std::cout << "   radix: " << keys_copy[i] << std::endl;
-                }            
-            }
-            return keys;
-        }
-        // Temporal vector of 3-tuples
-        // TODO: find a better way, since this consumes a lot of extra memory 
-        std::vector<PointMetadata>& metadata = meta_opt.value();
-        std::vector<std::tuple<key_t, Point_t, PointMetadata>> encoded_points(points.size());
-
-        // Compute encodings in parallel
-        TimeWatcher tw;
-        tw.start();
-        #pragma omp parallel for schedule(static)
-            for(size_t i = 0; i < points.size(); i++) {
-                encoded_points[i] = std::make_tuple(encodeFromPoint(points[i], bbox), points[i], metadata[i]);
-            }
-        tw.stop();
-        if(log)
-            log->encodingTime = tw.getElapsedDecimalSeconds();
-        tw.start();
-        // TODO: implement parallel radix sort and stop using vector of tuples if possible (only sort the encodings)
-        std::sort(encoded_points.begin(), encoded_points.end(),
-            [](const auto& a, const auto& b) {
-                return std::get<0>(a) < std::get<0>(b);  // Compare only the codes
-        });
-        
-        // Copy back sorted codes, points, and metadata in parallel
-        std::vector<key_t> codes(points.size());
-        #pragma omp parallel for schedule(static)
-            for(size_t i = 0; i < points.size(); i++) {
-                std::tie(codes[i], points[i], metadata[i]) = encoded_points[i];
-            }
-        tw.stop();
-        if(log)
-            log->sortingTime = tw.getElapsedDecimalSeconds();
-        return codes;
-    }
-
     template <typename Point_t>
     std::pair<std::vector<key_t>, Box> sortPoints(std::vector<Point_t> &points, 
         std::optional<std::vector<PointMetadata>> &meta_opt, std::shared_ptr<EncodingOctreeLog> log = nullptr) const {
