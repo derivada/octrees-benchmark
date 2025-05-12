@@ -50,7 +50,7 @@ class FileReaderFactory
 			case txt_t:
 				return std::make_shared<TxtFileReader<Point_t>>(path);
 			case las_t:
-				return std::make_shared<LasFileReader<Point_t>>(path);
+				return std::make_shared<LasFileReaderParallel<Point_t>>(path);
 			default:
 				std::cout << "Unable to create specialized FileReader\n";
 				exit(-2);
