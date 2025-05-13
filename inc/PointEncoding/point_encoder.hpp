@@ -94,7 +94,7 @@ public:
             {
                 int tid = omp_get_thread_num();
                 auto& hist = localHist[tid];
-                #pragma omp for nowait
+                #pragma omp for nowait schedule(static)
                 for (size_t i = 0; i < n; ++i) {
                     size_t encoded_key = encodeFromPoint(points[i], bbox);
                     size_t bucket = (encoded_key >> shift) & BUCKET_MASK;
@@ -118,7 +118,7 @@ public:
                 int tid = omp_get_thread_num();
                 auto& localOffset = localHist[tid];
     
-                #pragma omp for
+                #pragma omp for schedule(static)
                 for (size_t i = 0; i < n; i++) {
                     size_t encoded_key = encodeFromPoint(points[i], bbox);
                     size_t bucket = (encoded_key >> shift) & BUCKET_MASK;
@@ -138,7 +138,7 @@ public:
     
         // Final encoding
         std::vector<key_t> keys(n);
-        #pragma omp parallel for
+        #pragma omp parallel for schedule(static)
         for (size_t i = 0; i < n; ++i) {
             keys[i] = encodeFromPoint(points[i], bbox);
         }

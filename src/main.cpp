@@ -25,13 +25,15 @@
 namespace fs = std::filesystem;
 using namespace PointEncoding;
 
+// Set the point type to be used here (Lpoint or Point). If Point is set, we will create separate LiDAR metadata vector)
+using Point_t = Lpoint;
+
 /**
  * @brief Benchmark neighSearch and numNeighSearch for a given octree configuration (point type + encoder).
  * Compares LinearOctree and PointerOctree. If passed PointEncoding::NoEncoder, only PointerOctree is used.
  */
-template <typename Point_t>
 void searchBenchmark(std::ofstream &outputFile, EncoderType encoding = EncoderType::NO_ENCODING) {
-    auto pointMetaPair = readPointsWithMetadata<Point_t>(mainOptions.inputFile);
+    auto pointMetaPair = readPoints<Point_t>(mainOptions.inputFile);
     std::vector<Point_t> points = std::move(pointMetaPair.first);
     std::optional<std::vector<PointMetadata>> metadata = std::move(pointMetaPair.second);
     auto& enc = getEncoder(encoding);
@@ -57,9 +59,9 @@ void searchBenchmark(std::ofstream &outputFile, EncoderType encoding = EncoderTy
  * 
  * Only uses LinearOctree, so don't pass PointEncoding::NoEncoder!
  */
-template <template <typename> class Octree_t, typename Point_t>
+template <template <typename> class Octree_t>
 void parallelScalabilityBenchmark(std::ofstream &outputFile, EncoderType encoding = EncoderType::NO_ENCODING) {
-    auto pointMetaPair = readPointsWithMetadata<Point_t>(mainOptions.inputFile);
+    auto pointMetaPair = readPoints<Point_t>(mainOptions.inputFile);
     std::vector<Point_t> points = std::move(pointMetaPair.first);
     std::optional<std::vector<PointMetadata>> metadata = std::move(pointMetaPair.second);
     // Sort the point cloud
@@ -72,7 +74,6 @@ void parallelScalabilityBenchmark(std::ofstream &outputFile, EncoderType encodin
     ob.parallelScalabilityBenchmark();
 }
 
-template <typename Point_t>
 std::vector<Point_t> generateGridCloud(size_t n) {
     std::vector<Point_t> points;
     points.reserve(n * n * n);
@@ -85,13 +86,13 @@ std::vector<Point_t> generateGridCloud(size_t n) {
 
 void approximateSearchLog(std::ofstream &outputFile, EncoderType encoding) {
     assert(encoding != EncoderType::NO_ENCODING);
-    auto pointMetaPair = readPointsWithMetadata<Lpoint>(mainOptions.inputFile);
-    std::vector<Lpoint> points = std::move(pointMetaPair.first);
+    auto pointMetaPair = readPoints<Point_t>(mainOptions.inputFile);
+    std::vector<Point_t> points = std::move(pointMetaPair.first);
     std::optional<std::vector<PointMetadata>> metadata = std::move(pointMetaPair.second);
     auto& enc = getEncoder(encoding);
-    auto [codes, box] = enc.sortPoints<Lpoint>(points, metadata);
+    auto [codes, box] = enc.sortPoints<Point_t>(points, metadata);
 
-    auto lin_oct = LinearOctree<Lpoint>(points, codes, box, enc);
+    auto lin_oct = LinearOctree<Point_t>(points, codes, box, enc);
     std::array<float, 5> tolerances = {5.0, 10.0, 25.0, 50.0, 100.0};
     float radius = 3.0;
     outputFile << "tolerance,upper,x,y,z\n";
@@ -111,11 +112,11 @@ void approximateSearchLog(std::ofstream &outputFile, EncoderType encoding) {
     }
 }
 
-template <template <typename> class Octree_t, typename Point_t>
+template <template <typename> class Octree_t>
 void encodingAndOctreeLog(std::ofstream &outputFile, EncoderType encoding) {
     std::shared_ptr<EncodingOctreeLog> log = std::make_shared<EncodingOctreeLog>();
     log->pointType = getPointName<Point_t>();
-    auto pointMetaPair = readPointsWithMetadata<Lpoint>(mainOptions.inputFile);
+    auto pointMetaPair = readPoints<Point_t>(mainOptions.inputFile);
     std::vector<Point_t> points = std::move(pointMetaPair.first);
     std::optional<std::vector<PointMetadata>> metadata = std::move(pointMetaPair.second);
     auto& enc = getEncoder(encoding);
@@ -166,12 +167,14 @@ void encodingAndOctreeLog(std::ofstream &outputFile, EncoderType encoding) {
 }
 
 void outputReorderings(std::ofstream &outputFilePoints, std::ofstream &outputFileOct, EncoderType encoding = EncoderType::NO_ENCODING) {
-    auto pointMetaPair = readPointsWithMetadata<Lpoint>(mainOptions.inputFile);
-    std::vector<Lpoint> points = std::move(pointMetaPair.first);
-    std::optional<std::vector<PointMetadata>> metadata = std::move(pointMetaPair.second);
+    auto points = generateGridCloud(4);
+    std::optional<std::vector<PointMetadata>> metadata = std::nullopt;
+    // auto pointMetaPair = readPoints<Point_t>(mainOptions.inputFile);
+    // std::vector<Point_t> points = std::move(pointMetaPair.first);
+    // std::optional<std::vector<PointMetadata>> metadata = std::move(pointMetaPair.second);
 
     auto& enc = getEncoder(encoding);
-    auto [codes, box] = enc.sortPoints<Lpoint>(points, metadata);
+    auto [codes, box] = enc.sortPoints<Point_t>(points, metadata);
 
     // Output reordered points
     outputFilePoints << std::fixed << std::setprecision(3); 
@@ -181,7 +184,7 @@ void outputReorderings(std::ofstream &outputFilePoints, std::ofstream &outputFil
 
     if(encoding != EncoderType::NO_ENCODING) {
         // Build linear octree and output bounds
-        auto oct = LinearOctree<Lpoint>(points, codes, box, enc);
+        auto oct = LinearOctree<Point_t>(points, codes, box, enc);
         oct.logOctreeBounds(outputFileOct, 6);
     }
 }
@@ -211,51 +214,50 @@ int main(int argc, char *argv[]) {
         if (!outputFile.is_open()) {
             throw std::ios_base::failure(std::string("Failed to open benchmark output file: ") + csvPath.string());
         }
-        // if(mainOptions.encodings.contains(EncoderType::NO_ENCODING))
-        //     searchBenchmark<Lpoint>(outputFile, EncoderType::NO_ENCODING);
+        if(mainOptions.encodings.contains(EncoderType::NO_ENCODING))
+            searchBenchmark(outputFile, EncoderType::NO_ENCODING);
         if(mainOptions.encodings.contains(EncoderType::MORTON_ENCODER_3D))
-            searchBenchmark<Lpoint>(outputFile, EncoderType::MORTON_ENCODER_3D);
+            searchBenchmark(outputFile, EncoderType::MORTON_ENCODER_3D);
         if(mainOptions.encodings.contains(EncoderType::HILBERT_ENCODER_3D))
-            searchBenchmark<Lpoint>(outputFile, EncoderType::HILBERT_ENCODER_3D);
+            searchBenchmark(outputFile, EncoderType::HILBERT_ENCODER_3D);
     } else {
-        // Debug mode, for graphs and other measures
-        // std::filesystem::path unencodedPath = mainOptions.outputDirName / "output_unencoded.csv";
-        // std::filesystem::path mortonPath = mainOptions.outputDirName / "output_morton.csv";
-        // std::filesystem::path hilbertPath = mainOptions.outputDirName / "output_hilbert.csv";
-        // std::filesystem::path unencodedPathOct = mainOptions.outputDirName / "output_unencoded_oct.csv";
-        // std::filesystem::path mortonPathOct = mainOptions.outputDirName / "output_morton_oct.csv";
-        // std::filesystem::path hilbertPathOct = mainOptions.outputDirName / "output_hilbert_oct.csv";
-        // // Open files
-        // std::ofstream unencodedFile(unencodedPath, std::ios::app);
-        // std::ofstream mortonFile(mortonPath, std::ios::app);
-        // std::ofstream hilbertFile(hilbertPath, std::ios::app);
-        // std::ofstream unencodedFileOct(unencodedPathOct, std::ios::app);
-        // std::ofstream mortonFileOct(mortonPathOct, std::ios::app);
-        // std::ofstream hilbertFileOct(hilbertPathOct, std::ios::app);
+        // Output encoded point clouds to the files
+        std::filesystem::path unencodedPath = mainOptions.outputDirName / "output_unencoded.csv";
+        std::filesystem::path mortonPath = mainOptions.outputDirName / "output_morton.csv";
+        std::filesystem::path hilbertPath = mainOptions.outputDirName / "output_hilbert.csv";
+        std::filesystem::path unencodedPathOct = mainOptions.outputDirName / "output_unencoded_oct.csv";
+        std::filesystem::path mortonPathOct = mainOptions.outputDirName / "output_morton_oct.csv";
+        std::filesystem::path hilbertPathOct = mainOptions.outputDirName / "output_hilbert_oct.csv";
+        std::ofstream unencodedFile(unencodedPath, std::ios::app);
+        std::ofstream mortonFile(mortonPath, std::ios::app);
+        std::ofstream hilbertFile(hilbertPath, std::ios::app);
+        std::ofstream unencodedFileOct(unencodedPathOct, std::ios::app);
+        std::ofstream mortonFileOct(mortonPathOct, std::ios::app);
+        std::ofstream hilbertFileOct(hilbertPathOct, std::ios::app);
         
-        // if (!unencodedFile.is_open() || !mortonFile.is_open() || !hilbertFile.is_open() || 
-        //     !unencodedFileOct.is_open() || !mortonFileOct.is_open() || !hilbertFileOct.is_open()) {
-        //     throw std::ios_base::failure("Failed to open output files");
-        // }
+        if (!unencodedFile.is_open() || !mortonFile.is_open() || !hilbertFile.is_open() || 
+            !unencodedFileOct.is_open() || !mortonFileOct.is_open() || !hilbertFileOct.is_open()) {
+            throw std::ios_base::failure("Failed to open output files");
+        }
         
-        // std::cout << "Output files created successfully." << std::endl;
-        // outputReorderings(unencodedFile, unencodedFileOct);  
-        // outputReorderings(mortonFile, mortonFileOct, EncoderType::MORTON_ENCODER_3D);  
-        // outputReorderings(hilbertFile, hilbertFileOct, EncoderType::HILBERT_ENCODER_3D);  
+        std::cout << "Output files created successfully." << std::endl;
+        outputReorderings(unencodedFile, unencodedFileOct);  
+        outputReorderings(mortonFile, mortonFileOct, EncoderType::MORTON_ENCODER_3D);  
+        outputReorderings(hilbertFile, hilbertFileOct, EncoderType::HILBERT_ENCODER_3D);  
         std::filesystem::path encAndOctreeLogsPath = mainOptions.outputDirName / "enc_octree_times.csv";
         std::ofstream encAndOctreeLogsFile(encAndOctreeLogsPath);
         EncodingOctreeLog::writeCSVHeader(encAndOctreeLogsFile);
         if(mainOptions.encodings.contains(EncoderType::NO_ENCODING)) {
-            encodingAndOctreeLog<Octree, Lpoint>(encAndOctreeLogsFile, EncoderType::NO_ENCODING);
+            encodingAndOctreeLog<Octree>(encAndOctreeLogsFile, EncoderType::NO_ENCODING);
         }
         if(mainOptions.encodings.contains(EncoderType::MORTON_ENCODER_3D)) {
-            encodingAndOctreeLog<LinearOctree, Lpoint>(encAndOctreeLogsFile, EncoderType::MORTON_ENCODER_3D);
-            encodingAndOctreeLog<Octree, Lpoint>(encAndOctreeLogsFile, EncoderType::MORTON_ENCODER_3D);
+            encodingAndOctreeLog<LinearOctree>(encAndOctreeLogsFile, EncoderType::MORTON_ENCODER_3D);
+            encodingAndOctreeLog<Octree>(encAndOctreeLogsFile, EncoderType::MORTON_ENCODER_3D);
         }
 
         if(mainOptions.encodings.contains(EncoderType::HILBERT_ENCODER_3D)) {
-            encodingAndOctreeLog<LinearOctree, Lpoint>(encAndOctreeLogsFile, EncoderType::HILBERT_ENCODER_3D);
-            encodingAndOctreeLog<Octree, Lpoint>(encAndOctreeLogsFile, EncoderType::HILBERT_ENCODER_3D);
+            encodingAndOctreeLog<LinearOctree>(encAndOctreeLogsFile, EncoderType::HILBERT_ENCODER_3D);
+            encodingAndOctreeLog<Octree>(encAndOctreeLogsFile, EncoderType::HILBERT_ENCODER_3D);
         }
     }
 
