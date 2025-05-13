@@ -26,7 +26,7 @@ namespace fs = std::filesystem;
 using namespace PointEncoding;
 
 // Set the point type to be used here (Lpoint or Point). If Point is set, we will create separate LiDAR metadata vector)
-using Point_t = Lpoint;
+using Point_t = Point;
 
 /**
  * @brief Benchmark neighSearch and numNeighSearch for a given octree configuration (point type + encoder).
@@ -42,15 +42,15 @@ void searchBenchmark(std::ofstream &outputFile, EncoderType encoding = EncoderTy
     // Create the searchSet (WARMING: this should be done after sorting since it indexes points!)
     const SearchSet<Point_t> searchSet = SearchSet<Point_t>(mainOptions.numSearches, points);
 
-    // OctreeBenchmark<Octree, Point_t> obPointer(points, codes, box, enc, searchSet, outputFile);
-    // obPointer.searchBench();
-    // obPointer.deleteOctree();
+    OctreeBenchmark<Octree, Point_t> obPointer(points, codes, box, enc, searchSet, outputFile);
+    obPointer.searchBench();
+    obPointer.deleteOctree();
     if(encoding != EncoderType::NO_ENCODING) {
         OctreeBenchmark<LinearOctree, Point_t> obLinear(points,  codes, box, enc, searchSet, outputFile);
         obLinear.searchBench();
         obLinear.deleteOctree();
-        // if(mainOptions.checkResults)
-        //     ResultChecking::checkResultsLinearVsPointer(obLinear.getResultSet(), obPointer.getResultSet());
+        if(mainOptions.checkResults)
+            ResultChecking::checkResultsLinearVsPointer(obLinear.getResultSet(), obPointer.getResultSet());
     }
 }
 
@@ -222,28 +222,29 @@ int main(int argc, char *argv[]) {
             searchBenchmark(outputFile, EncoderType::HILBERT_ENCODER_3D);
     } else {
         // Output encoded point clouds to the files
-        std::filesystem::path unencodedPath = mainOptions.outputDirName / "output_unencoded.csv";
-        std::filesystem::path mortonPath = mainOptions.outputDirName / "output_morton.csv";
-        std::filesystem::path hilbertPath = mainOptions.outputDirName / "output_hilbert.csv";
-        std::filesystem::path unencodedPathOct = mainOptions.outputDirName / "output_unencoded_oct.csv";
-        std::filesystem::path mortonPathOct = mainOptions.outputDirName / "output_morton_oct.csv";
-        std::filesystem::path hilbertPathOct = mainOptions.outputDirName / "output_hilbert_oct.csv";
-        std::ofstream unencodedFile(unencodedPath, std::ios::app);
-        std::ofstream mortonFile(mortonPath, std::ios::app);
-        std::ofstream hilbertFile(hilbertPath, std::ios::app);
-        std::ofstream unencodedFileOct(unencodedPathOct, std::ios::app);
-        std::ofstream mortonFileOct(mortonPathOct, std::ios::app);
-        std::ofstream hilbertFileOct(hilbertPathOct, std::ios::app);
+        // std::filesystem::path unencodedPath = mainOptions.outputDirName / "output_unencoded.csv";
+        // std::filesystem::path mortonPath = mainOptions.outputDirName / "output_morton.csv";
+        // std::filesystem::path hilbertPath = mainOptions.outputDirName / "output_hilbert.csv";
+        // std::filesystem::path unencodedPathOct = mainOptions.outputDirName / "output_unencoded_oct.csv";
+        // std::filesystem::path mortonPathOct = mainOptions.outputDirName / "output_morton_oct.csv";
+        // std::filesystem::path hilbertPathOct = mainOptions.outputDirName / "output_hilbert_oct.csv";
+        // std::ofstream unencodedFile(unencodedPath, std::ios::app);
+        // std::ofstream mortonFile(mortonPath, std::ios::app);
+        // std::ofstream hilbertFile(hilbertPath, std::ios::app);
+        // std::ofstream unencodedFileOct(unencodedPathOct, std::ios::app);
+        // std::ofstream mortonFileOct(mortonPathOct, std::ios::app);
+        // std::ofstream hilbertFileOct(hilbertPathOct, std::ios::app);
         
-        if (!unencodedFile.is_open() || !mortonFile.is_open() || !hilbertFile.is_open() || 
-            !unencodedFileOct.is_open() || !mortonFileOct.is_open() || !hilbertFileOct.is_open()) {
-            throw std::ios_base::failure("Failed to open output files");
-        }
+        // if (!unencodedFile.is_open() || !mortonFile.is_open() || !hilbertFile.is_open() || 
+        //     !unencodedFileOct.is_open() || !mortonFileOct.is_open() || !hilbertFileOct.is_open()) {
+        //     throw std::ios_base::failure("Failed to open output files");
+        // }
         
-        std::cout << "Output files created successfully." << std::endl;
-        outputReorderings(unencodedFile, unencodedFileOct);  
-        outputReorderings(mortonFile, mortonFileOct, EncoderType::MORTON_ENCODER_3D);  
-        outputReorderings(hilbertFile, hilbertFileOct, EncoderType::HILBERT_ENCODER_3D);  
+        // std::cout << "Output files created successfully." << std::endl;
+        // outputReorderings(unencodedFile, unencodedFileOct);  
+        // outputReorderings(mortonFile, mortonFileOct, EncoderType::MORTON_ENCODER_3D);  
+        // outputReorderings(hilbertFile, hilbertFileOct, EncoderType::HILBERT_ENCODER_3D);  
+
         std::filesystem::path encAndOctreeLogsPath = mainOptions.outputDirName / "enc_octree_times.csv";
         std::ofstream encAndOctreeLogsFile(encAndOctreeLogsPath);
         EncodingOctreeLog::writeCSVHeader(encAndOctreeLogsFile);
