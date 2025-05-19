@@ -77,17 +77,10 @@ void parallelScalabilityBenchmark(std::ofstream &outputFile, EncoderType encodin
 std::vector<Point_t> generateGridCloud(size_t n) {
     std::vector<Point_t> points;
     points.reserve(n * n * n);
-
-    std::mt19937 rng(42);
-    std::uniform_real_distribution<double> dist(0, 500.0);
-
     for (size_t i = 0; i < n; i++)
         for (size_t j = 0; j < n; j++)
             for (size_t k = 0; k < n; k++) {
-                double x = static_cast<double>(i) + dist(rng);
-                double y = static_cast<double>(j) + dist(rng);
-                double z = static_cast<double>(k) + dist(rng);
-                points.push_back(Point_t(i * n * n + j * n + k, x, y, z));
+                points.push_back(Point_t(i * n * n + j * n + k, i, j, k));
             }
 
     return points;
@@ -126,8 +119,10 @@ void encodingAndOctreeLog(std::ofstream &outputFile, EncoderType encoding) {
     std::shared_ptr<EncodingOctreeLog> log = std::make_shared<EncodingOctreeLog>();
     log->pointType = getPointName<Point_t>();
     auto pointMetaPair = readPoints<Point_t>(mainOptions.inputFile);
-    std::vector<Point_t> points = std::move(pointMetaPair.first);
-    std::optional<std::vector<PointMetadata>> metadata = std::move(pointMetaPair.second);
+    // std::vector<Point_t> points = std::move(pointMetaPair.first);
+    // std::optional<std::vector<PointMetadata>> metadata = std::move(pointMetaPair.second);
+    std::vector<Point> points = generateGridCloud(4);
+    std::optional<std::vector<PointMetadata>> metadata = std::nullopt;
     auto& enc = getEncoder(encoding);
     double totalBbox = 0.0, totalEnc = 0.0, totalSort = 0.0;
     std::vector<uint64_t> codes; Box box;
@@ -170,6 +165,8 @@ void encodingAndOctreeLog(std::ofstream &outputFile, EncoderType encoding) {
             [&]() { Octree<Point_t> oct(points, box); }, mainOptions.useWarmup);
         log->octreeTime = stats.mean();
         log->octreeType = "Octree";
+        Octree<Point_t> oct(points, box);
+        oct.logOctreeData(log);
     }
     std::cout << *log << std::endl;
     log->toCSV(outputFile);
@@ -253,28 +250,21 @@ int main(int argc, char *argv[]) {
         // outputReorderings(unencodedFile, unencodedFileOct);  
         // outputReorderings(mortonFile, mortonFileOct, EncoderType::MORTON_ENCODER_3D);  
         // outputReorderings(hilbertFile, hilbertFileOct, EncoderType::HILBERT_ENCODER_3D);  
-        auto pointMetaPair = readPoints<Point_t>(mainOptions.inputFile);
-        std::vector<Point_t> points = std::move(pointMetaPair.first);
-        std::optional<std::vector<PointMetadata>> metadata = std::move(pointMetaPair.second);
-        auto &enc = getEncoder(MORTON_ENCODER_3D);
-        enc.sortPoints(points, metadata);
-        auto &enc2 = getEncoder(HILBERT_ENCODER_3D);
-        enc2.sortPoints(points, metadata);
-        // std::filesystem::path encAndOctreeLogsPath = mainOptions.outputDirName / "enc_octree_times.csv";
-        // std::ofstream encAndOctreeLogsFile(encAndOctreeLogsPath);
-        // EncodingOctreeLog::writeCSVHeader(encAndOctreeLogsFile);
-        // if(mainOptions.encodings.contains(EncoderType::NO_ENCODING)) {
-        //     encodingAndOctreeLog<Octree>(encAndOctreeLogsFile, EncoderType::NO_ENCODING);
-        // }
-        // if(mainOptions.encodings.contains(EncoderType::MORTON_ENCODER_3D)) {
-        //     encodingAndOctreeLog<LinearOctree>(encAndOctreeLogsFile, EncoderType::MORTON_ENCODER_3D);
-        //     encodingAndOctreeLog<Octree>(encAndOctreeLogsFile, EncoderType::MORTON_ENCODER_3D);
-        // }
+        std::filesystem::path encAndOctreeLogsPath = mainOptions.outputDirName / "enc_octree_times.csv";
+        std::ofstream encAndOctreeLogsFile(encAndOctreeLogsPath);
+        EncodingOctreeLog::writeCSVHeader(encAndOctreeLogsFile);
+        if(mainOptions.encodings.contains(EncoderType::NO_ENCODING)) {
+            encodingAndOctreeLog<Octree>(encAndOctreeLogsFile, EncoderType::NO_ENCODING);
+        }
+        if(mainOptions.encodings.contains(EncoderType::MORTON_ENCODER_3D)) {
+            encodingAndOctreeLog<LinearOctree>(encAndOctreeLogsFile, EncoderType::MORTON_ENCODER_3D);
+            encodingAndOctreeLog<Octree>(encAndOctreeLogsFile, EncoderType::MORTON_ENCODER_3D);
+        }
 
-        // if(mainOptions.encodings.contains(EncoderType::HILBERT_ENCODER_3D)) {
-        //     encodingAndOctreeLog<LinearOctree>(encAndOctreeLogsFile, EncoderType::HILBERT_ENCODER_3D);
-        //     encodingAndOctreeLog<Octree>(encAndOctreeLogsFile, EncoderType::HILBERT_ENCODER_3D);
-        // }
+        if(mainOptions.encodings.contains(EncoderType::HILBERT_ENCODER_3D)) {
+            encodingAndOctreeLog<LinearOctree>(encAndOctreeLogsFile, EncoderType::HILBERT_ENCODER_3D);
+            encodingAndOctreeLog<Octree>(encAndOctreeLogsFile, EncoderType::HILBERT_ENCODER_3D);
+        }
     }
 
     return EXIT_SUCCESS;

@@ -3,7 +3,6 @@
 #include <string>
 #include <iostream>
 #include <iomanip>
-#include "PointEncoding/point_encoder.hpp"
 #include "type_names.hpp"
 
 /// @brief Object with logs of the encoding and build time for both octrees and some basic info

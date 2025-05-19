@@ -87,6 +87,35 @@ void Octree<Point_t>::computeOctreeLimits()
 	max_.setZ(center_.getZ() + radii_.getZ());
 }
 
+/// @brief Fill the missing data in the octree log for the Pointer-based Octree 
+template <typename Point_t>
+void Octree<Point_t>::logOctreeData(std::shared_ptr<EncodingOctreeLog> log) const 
+{	
+	std::vector<std::pair<std::reference_wrapper<const Octree>, size_t>> toVisit;
+	toVisit.emplace_back(std::cref(*this), 0);
+
+	while (!toVisit.empty())
+	{
+		auto [octant_ref, depth] = toVisit.back();
+    	toVisit.pop_back();
+    	const Octree& octant = octant_ref.get();
+		// Add size of the structure
+		log->memoryUsed += sizeof(Octree);
+		// Add size of pointers to each of the points (will be 0 except on leaves)
+		log->memoryUsed += sizeof(Point_t*) * octant.getNumPoints();
+		if(!octant.isLeaf()) {
+			for(const auto &child: octant.octants_){
+				toVisit.push_back({std::cref(child), depth+1});
+			}  
+			log->internalNodes++;
+		} else {
+			log->leafNodes++;
+			log->maxDepthSeen = std::max(log->maxDepthSeen, depth);
+		}
+	}
+	log->totalNodes = log->leafNodes + log->internalNodes;
+}
+
 template <typename Point_t>
 std::vector<std::pair<Point, size_t>> Octree<Point_t>::computeNumPoints() const
 /**

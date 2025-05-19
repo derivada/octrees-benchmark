@@ -14,6 +14,7 @@
 #include <queue>
 #include <vector>
 #include <optional>
+#include "encoding_octree_log.hpp"
 
 template <typename Point_t>
 class Octree
@@ -76,6 +77,7 @@ class Octree
 	[[nodiscard]] const Octree* findOctant(const Point_t* p) const;
 
 	[[nodiscard]] std::vector<std::pair<Point, double>> computeDensities() const;
+	void logOctreeData(std::shared_ptr<EncodingOctreeLog> log) const;
 	[[nodiscard]] std::vector<std::pair<Point, size_t>> computeNumPoints() const;
 
 	[[nodiscard]] bool isInside2D(const Point& p) const;

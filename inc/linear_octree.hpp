@@ -140,14 +140,16 @@ private:
     double halfLengths[3];
 
     /// @brief Returns the memory footprint of the octree (without counting references)
-    size_t computeMemorySize() {
-        size_t total_size = 0;
-        total_size += vectorMemorySize(internalLayoutRanges);
-        total_size += vectorMemorySize(offsets);
-        total_size += vectorMemorySize(centers);
-        total_size += vectorMemorySize(precomputedRadii);
-        total_size +=  sizeof(box) + sizeof(maxDepthSeen) + sizeof(nLeaf) + sizeof(nInternal) + sizeof(nTotal) + sizeof(halfLengths);
-        return total_size;
+    size_t computeMemoryFootprint() {
+        size_t memory = 0;
+        // Base size of the structure
+        memory += sizeof(LinearOctree);
+        // Size of each of the 4 arrays used in neighbourhood searches (the others are deleted after build) 
+        memory += vectorMemorySize(internalLayoutRanges);
+        memory += vectorMemorySize(offsets);
+        memory += vectorMemorySize(centers);
+        memory += vectorMemorySize(precomputedRadii);
+        return memory;
     }
 
     /**
@@ -497,7 +499,7 @@ public:
             log->max_leaf_points = mainOptions.maxPointsLeaf;
             log->min_octant_radius = MIN_OCTANT_RADIUS;
             log->octreeType = "LinearOctree";
-            log->memoryUsed = computeMemorySize();
+            log->memoryUsed = computeMemoryFootprint();
             log->totalNodes = nTotal;
             log->leafNodes = nLeaf;
             log->internalNodes = nInternal;
