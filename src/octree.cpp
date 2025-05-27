@@ -110,7 +110,11 @@ void Octree<Point_t>::logOctreeData(std::shared_ptr<EncodingOctreeLog> log) cons
 			log->internalNodes++;
 		} else {
 			log->leafNodes++;
-			log->maxDepthSeen = std::max(log->maxDepthSeen, depth);
+			if(depth > log->maxDepthSeen) {
+				log->maxDepthSeen = depth;
+				auto minRadii = octant.getRadii();
+				log->minRadiusAtMaxDepth = std::min(minRadii.getX(), std::min(minRadii.getY(), minRadii.getZ()));
+			}
 		}
 	}
 	log->totalNodes = log->leafNodes + log->internalNodes;

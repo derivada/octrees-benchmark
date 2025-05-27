@@ -215,7 +215,28 @@ public:
         
         return center;
     }
+    inline Point getCenter(key_t code, uint32_t level, const Box &bbox, 
+        const double* halfLengths, const std::vector<double> precomputedRadius) const {
+    // Decode the points back into their integer coordinates
+    coords_t min_x, min_y, min_z;
+    decode(code, min_x, min_y, min_z);
 
+    // Now adjust the coordinates so they indicate the lowest code in the current level
+    // In Morton curves this is not needed, but in Hilbert curves it is, since it can return any corner instead of lower one we need
+    // Fun fact: finding this mistake when adding Hilbert curves took 6 hours of debugging
+    coords_t mask = ((1u << maxDepth()) - 1) ^ ((1u << (maxDepth() - level)) - 1);
+    min_x &= mask, min_y &= mask, min_z &= mask;
+
+    // Find the physical center by multiplying the encoding with the halfLength
+    // to get to the low corner of the cell, and then adding the radii of the cell
+    Point center = Point(
+        bbox.minX() + min_x * halfLengths[0] * 2, 
+        bbox.minY() + min_y * halfLengths[1] * 2, 
+        bbox.minZ() + min_z * halfLengths[2] * 2
+    ) + precomputedRadius[level];
+    
+    return center;
+}
     /// @brief Count the leading zeros in a binary key.
     constexpr uint32_t countLeadingZeros(key_t x) 
     {

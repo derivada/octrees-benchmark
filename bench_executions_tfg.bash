@@ -34,13 +34,13 @@ mkdir -p "$FOLDER"
 # 1.2. lineal neighbors vs neighborsV2 vs neighborsStruct
 # 1.3. punteros (neighbors) vs lineal (neighborsStruct)
 # subset runs
-echo "BENCHMARK 1 - SUBSET RUNS"
-for data in "${datasets_low_density[@]}"; do
-  ./build/rule-based-classifier-cpp --kernels "all" -i "$data" -o "$FOLDER/subset" -r "0.5,1.0,2.0,3.0" -s "$N_SEARCHES" --repeats 5 -a "$FULL_ALGOS"
-done
-for data in "${datasets_high_density[@]}"; do
-  ./build/rule-based-classifier-cpp --kernels "all" -i "$data" -o "$FOLDER/subset" -r "0.01,0.05,0.1,0.2" -s "$N_SEARCHES" --repeats 5 -a "$FULL_ALGOS"
-done
+# echo "BENCHMARK 1 - SUBSET RUNS"
+# for data in "${datasets_low_density[@]}"; do
+#   ./build/rule-based-classifier-cpp --kernels "all" -i "$data" -o "$FOLDER/subset" -r "0.5,1.0,2.0,3.0" -s "$N_SEARCHES" --repeats 5 -a "$FULL_ALGOS"
+# done
+# for data in "${datasets_high_density[@]}"; do
+#   ./build/rule-based-classifier-cpp --kernels "all" -i "$data" -o "$FOLDER/subset" -r "0.01,0.05,0.1,0.2" -s "$N_SEARCHES" --repeats 5 -a "$FULL_ALGOS"
+# done
 
 # # full run bildstein
 # echo "BENCHMARK 1 - FULL RUNS"
@@ -69,8 +69,8 @@ done
 # ./build/rule-based-classifier-cpp --kernels "sphere" -i "data/paris_lille/Lille_0.las" -o "$FOLDER/parallel_full" -r "0.25,0.5,1.0,2.0" -s "all" --sequential --repeats 1 --no-warmup -a "neighborsPtr,neighborsStruct" --num-threads "$NUM_THREADS"
 
 # # 4. build and encoding times
-# echo "BENCHMARK 6 - ENCODING AND BUILD TIMES"
-# for data in "${datasets_all[@]}"; do
-#     ./build/rule-based-classifier-cpp -i "$data" -o "$FOLDER/build_128" --debug --max-leaf 128 --repeats 3
-#     ./build/rule-based-classifier-cpp -i "$data" -o "$FOLDER/build_64" --debug --max-leaf 64 --repeats 3
-# done
+echo "BENCHMARK 6 - ENCODING AND BUILD TIMES"
+for data in "${datasets_all[@]}"; do
+    ./build/rule-based-classifier-cpp -i "$data" -o "$FOLDER/build_128" --debug --max-leaf 128 --repeats 3
+    ./build/rule-based-classifier-cpp -i "$data" -o "$FOLDER/build_64" --debug --max-leaf 64 --repeats 3
+done
