@@ -1,0 +1,57 @@
+\begin{table*}[ht]
+\centering
+\caption{Tiempos de ejecución de búsquedas de vecinos sobre todos los puntos de la nube con \textit{Sphere kernel}.}
+\label{tab:results-full}
+\begin{tabular}{|c|c|c|ccc|}
+\hline
+Nube                      & $n$                    & $r$ (m)                  & \Octree                    & SFC     & Tiempo (s)\\ \hline
+\multirow{5}{*}{\textit{5080\_54400}} & \multirow{5}{*}{12.22M} & \multirow{5}{*}{10.0}  & \multirow{3}{*}{Punteros} & - & 74.76 \\
+ &  &   & & Morton & 50.15 \\
+ &  &   & & Hilbert & 48.12 \\
+\cline{4-6}
+ &  &   & \multirow{2}{*}{Lineal} & Morton & 42.68 \\
+ &  &   & & Hilbert & 41.55 \\
+\cline{4-6}
+\hline
+\multirow{5}{*}{\textit{Paris\_Luxembourg\_6}} & \multirow{5}{*}{10.00M} & \multirow{5}{*}{3.0}  & \multirow{3}{*}{Punteros} & - & 1378.64 \\
+ &  &   & & Morton & 1052.79 \\
+ &  &   & & Hilbert & 1042.43 \\
+\cline{4-6}
+ &  &   & \multirow{2}{*}{Lineal} & Morton & 470.72 \\
+ &  &   & & Hilbert & 468.34 \\
+\cline{4-6}
+\hline
+\multirow{5}{*}{\textit{bildstein\_station1\_xyz\_intensity\_rgb}} & \multirow{5}{*}{29.70M} & \multirow{5}{*}{0.1}  & \multirow{3}{*}{Punteros} & - & 90.00 \\
+ &  &   & & Morton & 81.84 \\
+ &  &   & & Hilbert & 78.66 \\
+\cline{4-6}
+ &  &   & \multirow{2}{*}{Lineal} & Morton & 58.30 \\
+ &  &   & & Hilbert & 58.61 \\
+\cline{4-6}
+\hline
+\multirow{5}{*}{\textit{sg27\_station8\_intensity\_rgb}} & \multirow{5}{*}{429.62M} & \multirow{5}{*}{0.1}  & \multirow{3}{*}{Punteros} & - & 1921.69 \\
+ &  &   & & Morton & 1723.45 \\
+ &  &   & & Hilbert & 1687.30 \\
+\cline{4-6}
+ &  &   & \multirow{2}{*}{Lineal} & Morton & 1219.76 \\
+ &  &   & & Hilbert & 1260.34 \\
+\cline{4-6}
+\hline
+\multirow{5}{*}{\textit{Lille\_0}} & \multirow{5}{*}{10.00M} & \multirow{5}{*}{3.0}  & \multirow{3}{*}{Punteros} & - & 335.22 \\
+ &  &   & & Morton & 279.52 \\
+ &  &   & & Hilbert & 271.09 \\
+\cline{4-6}
+ &  &   & \multirow{2}{*}{Lineal} & Morton & 130.25 \\
+ &  &   & & Hilbert & 128.97 \\
+\cline{4-6}
+\hline
+\multirow{5}{*}{\textit{Speulderbos\_2017\_TLS}} & \multirow{5}{*}{721.81M} & \multirow{5}{*}{0.1}  & \multirow{3}{*}{Punteros} & - & 199.56 \\
+ &  &   & & Morton & 173.28 \\
+ &  &   & & Hilbert & 161.46 \\
+\cline{4-6}
+ &  &   & \multirow{2}{*}{Lineal} & Morton & 163.60 \\
+ &  &   & & Hilbert & 158.19 \\
+\cline{4-6}
+\hline
+\end{tabular}
+\end{table*}
