@@ -11,7 +11,7 @@
 
 namespace fs = std::filesystem;
 
-enum SearchAlgo { NEIGHBORS_PTR, NEIGHBORS, NEIGHBORS_V2, NEIGHBORS_STRUCT, NEIGHBORS_APPROX };
+enum SearchAlgo { NEIGHBORS_PTR, NEIGHBORS, NEIGHBORS_V2, NEIGHBORS_STRUCT, NEIGHBORS_APPROX, NEIGHBORS_UNIBN };
 enum EncoderType { MORTON_ENCODER_3D, HILBERT_ENCODER_3D, NO_ENCODING };
 
 constexpr const char* searchAlgoToString(SearchAlgo algo) {
@@ -21,6 +21,7 @@ constexpr const char* searchAlgoToString(SearchAlgo algo) {
         case SearchAlgo::NEIGHBORS_V2: return "neighborsV2";
         case SearchAlgo::NEIGHBORS_STRUCT: return "neighborsStruct";
 		case SearchAlgo::NEIGHBORS_APPROX: return "neighbors";
+		case SearchAlgo::NEIGHBORS_UNIBN: return "neighborsUnibn";
         default: return "Unknown";
     }
 }

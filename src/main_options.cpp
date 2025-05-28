@@ -23,7 +23,8 @@ void printHelp()
 				"'neighbors' basic search algorithm on linear octree\n\t"
 				"'neighborsV2' optimized search algorithm on linear octree, uses octant inside kernel check and bulk insert\n\t"
 				"'neighborsStruct' optimized search algorithm on linear octree, uses struct of range of indexes for result\n\t"
-				"'neighborsApprox' optimized search algorithm on linear octree, uses approximate searches\n"
+				"'neighborsApprox' optimized search algorithm on linear octree, uses approximate searches\n\t"
+				"'neighborsUnibn' search algorithm from unibnOctree\n"
 			"-e, --encodings: Specify which encodings (Reordering SFCs) to use (comma-separated or 'all'), default=all, possible values:\n\t"
 				"'none' run pointer-based octree algos selected (i.e. neighborsPtr) without encoding\n\t"
 				"'mort' run both octrees with their selected algos with Morton SFC Reordering\n\t"
@@ -90,7 +91,8 @@ std::set<SearchAlgo> parseSearchAlgoOptions(const std::string& algoStr) {
         {"neighbors", SearchAlgo::NEIGHBORS},
         {"neighborsV2", SearchAlgo::NEIGHBORS_V2},
         {"neighborsStruct", SearchAlgo::NEIGHBORS_STRUCT},
-		{"neighborsApprox", SearchAlgo::NEIGHBORS_APPROX}
+		{"neighborsApprox", SearchAlgo::NEIGHBORS_APPROX},
+		{"neighborsUnibn", SearchAlgo::NEIGHBORS_UNIBN}
     };
 
     std::set<SearchAlgo> selectedSearchAlgos;

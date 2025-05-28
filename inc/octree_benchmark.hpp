@@ -10,6 +10,7 @@
 #include "result_checking.hpp"
 #include "search_set.hpp"
 #include "main_options.hpp"
+#include "unibnOctree.hpp"
 
 using namespace ResultChecking;
 
@@ -37,7 +38,28 @@ class OctreeBenchmark {
             (void) *dummy;
         }
         #pragma GCC pop_options
-        
+                    
+        template<Kernel_t kernel>
+        size_t searchNeighUnibn(float radii) {
+            size_t averageResultSize = 0;
+            std::vector<size_t> &searchIndexes = searchSet.searchPoints[searchSet.currentRepeat];
+
+            #pragma omp parallel for schedule(runtime) reduction(+:averageResultSize)
+            for (size_t i = 0; i < searchSet.numSearches; i++) {
+                std::vector<uint32_t> results;
+                if constexpr (kernel == Kernel_t::sphere) {
+                    oct->template radiusNeighbors<unibn::L2Distance<Point_t>>(points[searchIndexes[i]], radii, results);
+                } else if constexpr (kernel == Kernel_t::cube) {
+                    oct->template radiusNeighbors<unibn::MaxDistance<Point_t>>(points[searchIndexes[i]], radii, results);
+                }
+                averageResultSize += results.size();
+            }
+
+            averageResultSize /= searchSet.numSearches;
+            searchSet.nextRepeat();
+            return averageResultSize;
+        }
+
         template<Kernel_t kernel>
         size_t searchNeigh(float radii) {
             size_t averageResultSize = 0;
@@ -124,6 +146,8 @@ class OctreeBenchmark {
                 octreeName = "LinearOctree";
             } else if constexpr (std::is_same_v<Octree_t<Point_t>, Octree<Point_t>>) {
                 octreeName = "Octree";
+            } else if constexpr (std::is_same_v<Octree_t<Point_t>, unibn::Octree<Point_t>>) {
+                octreeName = "unibnOctree";
             }
 
             std::string pointTypeName = getPointName<Point_t>();
@@ -190,9 +214,25 @@ class OctreeBenchmark {
             } else if constexpr (std::is_same_v<Octree_t<Point_t>, Octree<Point_t>>) {
                 // Initialize for Octree
                 oct = std::make_unique<Octree<Point_t>>(points, box);
+            } else if constexpr(std::is_same_v<Octree_t<Point_t>, unibn::Octree<Point_t>>) {
+                oct = std::make_unique<unibn::Octree<Point_t>>();
+                unibn::OctreeParams params;
+                params.bucketSize = mainOptions.maxPointsLeaf;
+                oct->template initialize(points, params);
             }
         }
     
+
+        template<Kernel_t kernel>
+        void benchmarkSearchNeighUnibn(size_t repeats, float radius, int numThreads = omp_get_max_threads()) {
+            omp_set_num_threads(numThreads);
+            const auto kernelStr = kernelToString(kernel);
+            auto [stats, averageResultSize] = benchmarking::benchmark<size_t>(repeats, [&]() { 
+                return searchNeighUnibn<kernel>(radius); 
+            }, useWarmup);
+            searchSet.reset();
+            appendToCsv("unibnNeighSearch", kernelStr, radius, stats, averageResultSize, numThreads);
+        }
 
         template<Kernel_t kernel>
         void benchmarkSearchNeigh(size_t repeats, float radius, int numThreads = omp_get_max_threads()) {
@@ -254,7 +294,11 @@ class OctreeBenchmark {
             } else if constexpr (std::is_same_v<Octree_t<Point_t>, LinearOctree<Point_t>>) {
                 availableAlgos = mainOptions.searchAlgos.size();
                 if(mainOptions.searchAlgos.contains(SearchAlgo::NEIGHBORS_PTR)) availableAlgos--;
+                if(mainOptions.searchAlgos.contains(SearchAlgo::NEIGHBORS_UNIBN)) availableAlgos--;
+            } else if constexpr (std::is_same_v<Octree_t<Point_t>, unibn::Octree<Point_t>>) {
+                if(mainOptions.searchAlgos.contains(SearchAlgo::NEIGHBORS_UNIBN)) availableAlgos = 1;
             }
+
             // Calculate total number of benchmark functionc alls
             size_t total = execPerAlgo * availableAlgos;
             if(mainOptions.searchAlgos.contains(SearchAlgo::NEIGHBORS_APPROX)) {
@@ -451,6 +495,20 @@ class OctreeBenchmark {
                             }
                         }
                         printBenchmarkUpdate("neighborsPtr", ++current, benchmarkRadii[r], numThreads[th]);
+                    } else if constexpr(std::is_same_v<Octree_t<Point_t>, unibn::Octree<Point_t>>) {
+                        if(algos.contains(SearchAlgo::NEIGHBORS_UNIBN)) {
+                            for (const auto & kernel: kernels) {
+                                switch(kernel) {
+                                     case Kernel_t::sphere:
+                                        benchmarkSearchNeighUnibn<Kernel_t::sphere>(repeats, benchmarkRadii[r], numThreads[th]);
+                                        break;
+                                    case Kernel_t::cube:
+                                        benchmarkSearchNeighUnibn<Kernel_t::cube>(repeats, benchmarkRadii[r], numThreads[th]);
+                                        break;
+                                }
+                            }
+                        }
+                        printBenchmarkUpdate("neighborsUnibn", ++current, benchmarkRadii[r], numThreads[th]);
                     }
                 }
             }

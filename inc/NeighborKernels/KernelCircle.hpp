@@ -12,20 +12,22 @@
 class KernelCircle : public Kernel2D
 {
 	double radius_;
-
+	double radiusSq_;
 	public:
-	KernelCircle(const Point& center, const double radius) : Kernel2D(center, radius), radius_(radius) {}
+	KernelCircle(const Point& center, const double radius) : Kernel2D(center, radius), radius_(radius), radiusSq_(radius*radius) {}
 
 	[[nodiscard]] inline auto radius() const { return radius_; }
 
-	[[nodiscard]] inline bool isInside(const Point& p) const override
+	[[nodiscard]] bool isInside(const Point& p) const override
 	/**
- * @brief Checks if a given point lies inside the kernel
- * @param p
- * @return
- */
+	 * @brief Checks if a given point lies inside the kernel
+	 * @param p
+	 * @return
+	*/
 	{
-		return square(p.getX() - center().getX()) + square(p.getY() - center().getY()) < square(radius());
+		double d1 = p.getX() - center().getX();
+		double d2 = p.getY() - center().getY();
+		return d1*d1 + d2*d2 < radiusSq_;
 	}
 
 	/**
@@ -33,66 +35,80 @@ class KernelCircle : public Kernel2D
 	 * from the kernel center and check if it is inside. We don't have to test the other corners, since
 	 * they will always be inside because of the circle definition.
 	*/
-	[[nodiscard]] IntersectionJudgement boxIntersect(const Point& center, const double radius) const override
+	[[nodiscard]] IntersectionJudgement boxIntersect(const Point& octantCenter, const double octantRadius) const override
 	{
-		// Box bounds
-		const double highX = center.getX() + radius, lowX = center.getX() - radius;
-		const double highY = center.getY() + radius, lowY = center.getY() - radius;
-
-		// Kernel bounds
-		const double boxMaxX = boxMax().getX(), boxMinX = boxMin().getX(); 
-		const double boxMaxY = boxMax().getY(), boxMinY = boxMin().getY();
-
-		// Check if box is definitely outside the kernel (like in boxOverlap)
-		if (highX < boxMinX || highY < boxMinY ||
-			lowX > boxMaxX 	|| lowY > boxMaxY) { 
-			return KernelAbstract::IntersectionJudgement::OUTSIDE; 
-		}
+		const Point& kernelCenter = this->center();
 	
-		// Check if the furthest point from the center of the box is inside sphere -> the box is inside the
-		// sphere	
-		Point furthest = Point(
-			( this->center().getX() > center.getX() ? highX : lowX ),
-			( this->center().getY() > center.getY() ? highY : lowY ),
-			0.0f);
-		if(isInside(furthest)) {
-			return KernelAbstract::IntersectionJudgement::INSIDE;
-		}
-
-		// Otherwise, the box may overlap the sphere 
-		// (this can give false positives but that is ok for octree traversal purposes) 
-		return KernelAbstract::IntersectionJudgement::OVERLAP;
+		// Symmetry trick: operate in first octant by taking abs difference.
+		double x = std::abs(kernelCenter.getX() - octantCenter.getX());
+		double y = std::abs(kernelCenter.getY() - octantCenter.getY());
+	
+		double maxDist = radius_ + octantRadius;
+	
+		// === OUTSIDE ===
+		if (x > maxDist || y > maxDist)
+			return IntersectionJudgement::OUTSIDE;
+	
+		// === CONTAINS ===
+		// Translate box corner to farthest corner from center, like in Octree::contains
+		double cx = x + octantRadius;
+		double cy = y + octantRadius;
+	
+		if ((cx * cx + cy * cy) < radiusSq_)
+			return IntersectionJudgement::INSIDE;
+	
+		// === OVERLAPS ===
+		// Mirror of Octree::overlaps
+		int32_t numLessExtent = (x < octantRadius) + (y < octantRadius);
+		if (numLessExtent > 1)
+			return IntersectionJudgement::OVERLAP;
+	
+		x = std::max(x - octantRadius, 0.0);
+		y = std::max(y - octantRadius, 0.0);
+	
+		if ((x * x + y * y) < radiusSq_)
+			return IntersectionJudgement::OVERLAP;
+	
+		return IntersectionJudgement::OUTSIDE;
 	}
 
-	[[nodiscard]] IntersectionJudgement boxIntersect(const Point& center, const Vector &radii) const override
+	[[nodiscard]] IntersectionJudgement boxIntersect(const Point& octantCenter, const Vector& octantRadii) const override
 	{
-		// Box bounds
-		const double highX = center.getX() + radii.getX(), lowX = center.getX() - radii.getX();
-		const double highY = center.getY() + radii.getY(), lowY = center.getY() - radii.getY();
+		const Point& kernelCenter = this->center();
 
-		// Kernel bounds
-		const double boxMaxX = boxMax().getX(), boxMinX = boxMin().getX(); 
-		const double boxMaxY = boxMax().getY(), boxMinY = boxMin().getY();
+		// Symmetric test: reflect into positive octant
+		double dx = std::abs(kernelCenter.getX() - octantCenter.getX());
+		double dy = std::abs(kernelCenter.getY() - octantCenter.getY());
 
-		// Check if box is definitely outside the kernel (like in boxOverlap)
-		if (highX < boxMinX || highY < boxMinY ||
-			lowX > boxMaxX 	|| lowY > boxMaxY) { 
-			return KernelAbstract::IntersectionJudgement::OUTSIDE; 
-		}
-		
-		// Check if the furthest point from the center of the box is inside sphere -> the box is inside the
-		// sphere
-		Point furthest = Point(
-			( this->center().getX() < center.getX() ? highX : lowX ),
-			( this->center().getY() < center.getY() ? highY : lowY ),
-			0.0f);
-		if(isInside(furthest)) {
-			return KernelAbstract::IntersectionJudgement::INSIDE;
-		}
+		const double rx = octantRadii.getX();
+		const double ry = octantRadii.getY();
 
-		// Otherwise, the box may overlap the sphere 
-		// (this can give false positives but that is ok for octree traversal purposes) 
-		return KernelAbstract::IntersectionJudgement::OVERLAP;
+		const double maxDx = radius_ + rx;
+		const double maxDy = radius_ + ry;
+
+		// === OUTSIDE === (no overlap at all)
+		if (dx > maxDx || dy > maxDy)
+			return IntersectionJudgement::OUTSIDE;
+
+		// === CONTAINS ===
+		// Farthest corner from center (Minkowski sum check)
+		double cx = dx + rx;
+		double cy = dy + ry;
+		if ((cx * cx + cy * cy) < radiusSq_)
+			return IntersectionJudgement::INSIDE;
+
+		// === OVERLAPS ===
+		int32_t numInside = (dx < rx) + (dy < ry);
+		if (numInside > 1)
+			return IntersectionJudgement::OVERLAP;
+
+		dx = std::max(dx - rx, 0.0);
+		dy = std::max(dy - ry, 0.0);
+
+		if ((dx * dx + dy * dy) < radiusSq_)
+			return IntersectionJudgement::OVERLAP;
+
+		return IntersectionJudgement::OUTSIDE;
 	}
 };
 
