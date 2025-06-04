@@ -15,7 +15,7 @@ enum SearchAlgo { NEIGHBORS_PTR, NEIGHBORS, NEIGHBORS_V2, NEIGHBORS_STRUCT,
 	NEIGHBORS_APPROX, NEIGHBORS_UNIBN, NEIGHBORS_PCLKD, NEIGHBORS_PCLOCT };
 enum EncoderType { MORTON_ENCODER_3D, HILBERT_ENCODER_3D, NO_ENCODING };
 
-constexpr const char* searchAlgoToString(SearchAlgo algo) {
+constexpr std::string searchAlgoToString(SearchAlgo algo) {
     switch (algo) {
 		case SearchAlgo::NEIGHBORS_PTR: return "neighborsPtr";
         case SearchAlgo::NEIGHBORS: return "neighbors";
@@ -29,7 +29,7 @@ constexpr const char* searchAlgoToString(SearchAlgo algo) {
     }
 }
 
-constexpr const char* encoderTypeToString(EncoderType enc) {
+constexpr std::string encoderTypeToString(EncoderType enc) {
     switch (enc) {
 		case EncoderType::NO_ENCODING: return "none";
         case EncoderType::MORTON_ENCODER_3D: return "mort";
@@ -52,8 +52,8 @@ public:
 	size_t numSearches{10000};
 	
 	std::set<Kernel_t> kernels{Kernel_t::sphere, Kernel_t::circle, Kernel_t::cube, Kernel_t::square};
-	std::set<SearchAlgo> searchAlgos{SearchAlgo::NEIGHBORS_PTR, SearchAlgo::NEIGHBORS_V2 };
-	std::set<EncoderType> encodings{EncoderType::NO_ENCODING, EncoderType::MORTON_ENCODER_3D, EncoderType::HILBERT_ENCODER_3D };
+	std::set<SearchAlgo> searchAlgos{SearchAlgo::NEIGHBORS_PTR, SearchAlgo::NEIGHBORS, SearchAlgo::NEIGHBORS_V2, SearchAlgo::NEIGHBORS_STRUCT};
+	std::set<EncoderType> encodings{EncoderType::NO_ENCODING, EncoderType::MORTON_ENCODER_3D, EncoderType::HILBERT_ENCODER_3D};
 
 	bool debug{false};
 	bool checkResults{false};

@@ -162,7 +162,25 @@ class OctreeBenchmark {
                 return "PCLOctree";
             }
 #endif
+            else {
+                return "UnknownOctree";
+            }
         }
+
+        constexpr std::string getPointTypeName() {
+            if constexpr (std::is_same_v<Point_t, Point>) {
+                return "Point";
+            }
+        #ifdef HAVE_PCL
+            else if constexpr (std::is_same_v<Point_t, pcl::PointXYZ>) {
+                return "PCLPointXYZ";
+            }
+        #endif
+            else {
+                return "UnknownPoint";
+            }
+        }
+
 
         inline void appendToCsv(const std::string& operation, const std::string& kernel, const float radius, const benchmarking::Stats<>& stats, 
                                 size_t averageResultSize = 0, int numThreads = omp_get_max_threads(), double tolerancePercentage = 0.0) {
@@ -173,18 +191,6 @@ class OctreeBenchmark {
                                 "openmp_threads,openmp_schedule\n";
             }
 
-            std::string pointTypeName;
-            if constexpr(std::is_same_v<Point_t, Point>) {
-                pointTypeName = "Point";
-            }
-#ifdef HAVE_PCL 
-            else if constexpr(std::is_same_v<Point_t, pcl::PointXYZ>) {
-                pointTypeName = "PCLPointXYZ";
-            } 
-#endif
-            else {
-                pointTypeName = "UnknownPoint";
-            }
             std::string encoderName = enc.getEncoderName();
             // if the comment, exists, append it to the op. name
             std::string fullOp = operation + ((comment != "") ? "_" + comment : "");
@@ -208,7 +214,7 @@ class OctreeBenchmark {
             }
             outputFile << getCurrentDate() << ',' 
                 << getOctreeName() << ',' 
-                << pointTypeName << ','
+                << getPointTypeName() << ','
                 << enc.getEncoderName() << ','
                 << points.size() <<  ','
                 << fullOp << ',' 
@@ -417,21 +423,9 @@ class OctreeBenchmark {
 
             // Displaying the basic information with formatting
             std::cout << std::fixed << std::setprecision(3);
-            std::string pointTypeName;
-            if constexpr(std::is_same_v<Point_t, Point>) {
-                pointTypeName = "Point";
-            } 
-#ifdef HAVE_PCL
-            else if constexpr(std::is_same_v<Point_t, pcl::PointXYZ>) {
-                pointTypeName = "PCLPointXYZ";
-            } 
-#endif
-            else {
-                pointTypeName = "UnknownPoint";
-            }
             std::cout << std::left << "Starting neighbor search benchmark!\n";
             std::cout << std::left << std::setw(LOG_FIELD_WIDTH) << "Octree used:"              << std::setw(LOG_FIELD_WIDTH) << getOctreeName()        << "\n";
-            std::cout << std::left << std::setw(LOG_FIELD_WIDTH) << "Point type:"               << std::setw(LOG_FIELD_WIDTH) << pointTypeName << "\n";
+            std::cout << std::left << std::setw(LOG_FIELD_WIDTH) << "Point type:"               << std::setw(LOG_FIELD_WIDTH) << getPointTypeName() << "\n";
             std::cout << std::left << std::setw(LOG_FIELD_WIDTH) << "Encoder:"                  << std::setw(LOG_FIELD_WIDTH) << enc.getEncoderName() << "\n";
             std::cout << std::left << std::setw(LOG_FIELD_WIDTH) << "Radii:";
 

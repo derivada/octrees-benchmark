@@ -38,13 +38,15 @@ using Point_t = Point;
  * Compares LinearOctree and PointerOctree. If passed PointEncoding::NoEncoder, only PointerOctree is used.
  */
 void searchBenchmark(std::ofstream &outputFile, EncoderType encoding = EncoderType::NO_ENCODING) {
+    // Load points and put their metadata into a separate vector
     auto pointMetaPair = readPoints<Point_t>(mainOptions.inputFile);
     std::vector<Point_t> points = std::move(pointMetaPair.first);
     std::optional<std::vector<PointMetadata>> metadata = std::move(pointMetaPair.second);
+
     auto& enc = getEncoder(encoding);
     // Sort the point cloud
     auto [codes, box] = enc.sortPoints<Point_t>(points, metadata);
-    // Create the searchSet (WARMING: this should be done after sorting since it indexes points!)
+    // Prepare the search set (must be done after sorting since it indexes points)
     SearchSet searchSet = SearchSet(mainOptions.numSearches, points.size());
 
     if(mainOptions.searchAlgos.contains(SearchAlgo::NEIGHBORS_PTR)) {
@@ -88,38 +90,6 @@ void searchBenchmark(std::ofstream &outputFile, EncoderType encoding = EncoderTy
 #endif
 }
 
-/**
- * @brief Runs the parallel execution benchmark.
- * 
- * Only uses LinearOctree, so don't pass PointEncoding::NoEncoder!
- */
-template <template <typename> class Octree_t>
-void parallelScalabilityBenchmark(std::ofstream &outputFile, EncoderType encoding = EncoderType::NO_ENCODING) {
-    auto pointMetaPair = readPoints<Point_t>(mainOptions.inputFile);
-    std::vector<Point_t> points = std::move(pointMetaPair.first);
-    std::optional<std::vector<PointMetadata>> metadata = std::move(pointMetaPair.second);
-    // Sort the point cloud
-    auto& enc = getEncoder(encoding);
-    auto [codes, box] = enc.sortPoints<Point_t>(points, metadata);
-
-    // Create the searchSet (WARMING: this should be done after sorting since it indexes points!)
-    SearchSet searchSet = SearchSet(mainOptions.numSearches, points.size());
-    OctreeBenchmark<Octree_t, Point_t> ob(points, codes, box, enc, searchSet, outputFile);
-    ob.parallelScalabilityBenchmark();
-}
-
-std::vector<Point_t> generateGridCloud(size_t n) {
-    std::vector<Point_t> points;
-    points.reserve(n * n * n);
-    for (size_t i = 0; i < n; i++)
-        for (size_t j = 0; j < n; j++)
-            for (size_t k = 0; k < n; k++) {
-                points.push_back(Point_t(i * n * n + j * n + k, i, j, k));
-            }
-
-    return points;
-}
-
 void approximateSearchLog(std::ofstream &outputFile, EncoderType encoding) {
     assert(encoding != EncoderType::NO_ENCODING);
     auto pointMetaPair = readPoints<Point_t>(mainOptions.inputFile);
@@ -147,6 +117,29 @@ void approximateSearchLog(std::ofstream &outputFile, EncoderType encoding) {
             }
     }
 }
+
+template <typename Point_t>
+void outputReorderings(std::ofstream &outputFilePoints, std::ofstream &outputFileOct, EncoderType encoding = EncoderType::NO_ENCODING) {
+    auto pointMetaPair = readPoints<Point_t>(mainOptions.inputFile);
+    std::vector<Point_t> points = std::move(pointMetaPair.first);
+    std::optional<std::vector<PointMetadata>> metadata = std::move(pointMetaPair.second);
+
+    auto& enc = getEncoder(encoding);
+    auto [codes, box] = enc.sortPoints<Point_t>(points, metadata);
+
+    // Output reordered points
+    outputFilePoints << std::fixed << std::setprecision(3); 
+    for(size_t i = 0; i<points.size(); i++) {
+        outputFilePoints <<  points[i].getX() << "," << points[i].getY() << "," << points[i].getZ() << "\n";
+    }
+
+    if(encoding != EncoderType::NO_ENCODING) {
+        // Build linear octree and output bounds
+        auto oct = LinearOctree<Point_t>(points, codes, box, enc);
+        oct.logOctreeBounds(outputFileOct, 6);
+    }
+}
+
 
 template <template <typename> class Octree_t>
 void encodingAndOctreeLog(std::ofstream &outputFile, EncoderType encoding) {
@@ -219,29 +212,6 @@ void encodingAndOctreeLog(std::ofstream &outputFile, EncoderType encoding) {
     log->toCSV(outputFile);
 }
 
-void outputReorderings(std::ofstream &outputFilePoints, std::ofstream &outputFileOct, EncoderType encoding = EncoderType::NO_ENCODING) {
-    auto points = generateGridCloud(4);
-    std::optional<std::vector<PointMetadata>> metadata = std::nullopt;
-    // auto pointMetaPair = readPoints<Point_t>(mainOptions.inputFile);
-    // std::vector<Point_t> points = std::move(pointMetaPair.first);
-    // std::optional<std::vector<PointMetadata>> metadata = std::move(pointMetaPair.second);
-
-    auto& enc = getEncoder(encoding);
-    auto [codes, box] = enc.sortPoints<Point_t>(points, metadata);
-
-    // Output reordered points
-    outputFilePoints << std::fixed << std::setprecision(3); 
-    for(size_t i = 0; i<points.size(); i++) {
-        outputFilePoints <<  points[i].getX() << "," << points[i].getY() << "," << points[i].getZ() << "\n";
-    }
-
-    if(encoding != EncoderType::NO_ENCODING) {
-        // Build linear octree and output bounds
-        auto oct = LinearOctree<Point_t>(points, codes, box, enc);
-        oct.logOctreeBounds(outputFileOct, 6);
-    }
-}
-
 int main(int argc, char *argv[]) {
     // Set default OpenMP schedule: dynamic and auto chunk size
     omp_set_schedule(omp_sched_dynamic, 0);
@@ -271,6 +241,7 @@ int main(int argc, char *argv[]) {
         if (!outputFile.is_open()) {
             throw std::ios_base::failure(std::string("Failed to open benchmark output file: ") + csvPath.string());
         }
+        // Run search benchmarks
         if(mainOptions.encodings.contains(EncoderType::NO_ENCODING))
             searchBenchmark(outputFile, EncoderType::NO_ENCODING);
         if(mainOptions.encodings.contains(EncoderType::MORTON_ENCODER_3D))
@@ -278,7 +249,7 @@ int main(int argc, char *argv[]) {
         if(mainOptions.encodings.contains(EncoderType::HILBERT_ENCODER_3D))
             searchBenchmark(outputFile, EncoderType::HILBERT_ENCODER_3D);
     } else {
-        // Output encoded point clouds to the files
+        // Output encoded point clouds to the files (for plots and such)
         // std::filesystem::path unencodedPath = mainOptions.outputDirName / "output_unencoded.csv";
         // std::filesystem::path mortonPath = mainOptions.outputDirName / "output_morton.csv";
         // std::filesystem::path hilbertPath = mainOptions.outputDirName / "output_hilbert.csv";
@@ -301,6 +272,8 @@ int main(int argc, char *argv[]) {
         // outputReorderings(unencodedFile, unencodedFileOct);  
         // outputReorderings(mortonFile, mortonFileOct, EncoderType::MORTON_ENCODER_3D);  
         // outputReorderings(hilbertFile, hilbertFileOct, EncoderType::HILBERT_ENCODER_3D);  
+        
+        // Encoding and build times benchmark
         std::filesystem::path encAndOctreeLogsPath = mainOptions.outputDirName / "enc_octree_times.csv";
         std::ofstream encAndOctreeLogsFile(encAndOctreeLogsPath);
         EncodingOctreeLog::writeCSVHeader(encAndOctreeLogsFile);

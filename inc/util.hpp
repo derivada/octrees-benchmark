@@ -37,6 +37,19 @@ size_t vectorMemorySize(const auto& vec) {
 	return sizeof(vec) + vec.size() * sizeof(typename std::decay_t<decltype(vec)>::value_type);
 }
 
+template <typename Point_t>
+std::vector<Point_t> generateGridCloud(size_t n) {
+    std::vector<Point_t> points;
+    points.reserve(n * n * n);
+    for (size_t i = 0; i < n; i++)
+        for (size_t j = 0; j < n; j++)
+            for (size_t k = 0; k < n; k++) {
+                points.push_back(Point_t(i * n * n + j * n + k, i, j, k));
+            }
+
+    return points;
+}
+
 // Memory Handling
 namespace mem
 {
