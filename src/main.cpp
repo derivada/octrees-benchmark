@@ -118,6 +118,43 @@ void approximateSearchLog(std::ofstream &outputFile, EncoderType encoding) {
     }
 }
 
+double computeLocality(std::vector<Point_t> &points, size_t windowSize) {
+    TimeWatcher tw;
+    tw.start();
+    if (points.size() < windowSize) return 0.0;
+    double locality = 0;
+    int seen = 0;
+    std::multiset<double> mx;
+    std::multiset<double> my;
+    std::multiset<double> mz;
+    for(int i = 0; i<points.size(); i++) {
+        mx.insert(points[i].getX());
+        my.insert(points[i].getY());
+        mz.insert(points[i].getZ());
+        if(i >= windowSize) {
+            double volume = (*mx.rbegin() - *mx.begin());
+            volume *= (*my.rbegin() - *my.begin());
+            volume *= (*mz.rbegin() - *mz.begin());
+            
+            if(seen == 0) {
+                locality = volume;
+            } else {
+                locality = ((locality / seen) + volume) / (seen+1);
+                seen++;
+            }
+
+            // erase old elements
+            mx.erase(mx.find(points[i-windowSize].getX()));
+            my.erase(my.find(points[i-windowSize].getY()));
+            mz.erase(mz.find(points[i-windowSize].getZ()));
+        }
+    }
+    tw.stop();
+    std::cout << "avg. bounding box size (lower is better) = " << locality << std::endl;
+    std::cout << "time to compute: " << tw.getElapsedDecimalSeconds() << std::endl;
+    return locality;
+}
+
 void outputReorderings(std::ofstream &outputFilePoints, std::ofstream &outputFileOct, EncoderType encoding = EncoderType::NO_ENCODING) {
     auto pointMetaPair = readPoints<Point_t>(mainOptions.inputFile);
     std::vector<Point_t> points = std::move(pointMetaPair.first);
@@ -126,6 +163,7 @@ void outputReorderings(std::ofstream &outputFilePoints, std::ofstream &outputFil
     auto& enc = getEncoder(encoding);
     auto [codes, box] = enc.sortPoints<Point_t>(points, metadata);
 
+    computeLocality(points, 100);
     // Output reordered points
     outputFilePoints << std::fixed << std::setprecision(3); 
     for(size_t i = 0; i<points.size(); i++) {
@@ -210,6 +248,8 @@ void encodingAndOctreeLog(std::ofstream &outputFile, EncoderType encoding) {
     std::cout << *log << std::endl;
     log->toCSV(outputFile);
 }
+
+
 
 int main(int argc, char *argv[]) {
     // Set default OpenMP schedule: dynamic and auto chunk size
