@@ -97,7 +97,8 @@ std::set<SearchAlgo> parseSearchAlgoOptions(const std::string& algoStr) {
 		{"neighborsApprox", SearchAlgo::NEIGHBORS_APPROX},
 		{"neighborsUnibn", SearchAlgo::NEIGHBORS_UNIBN},
 		{"neighborsPCLKD", SearchAlgo::NEIGHBORS_PCLKD},
-		{"neighborsPCLOct", SearchAlgo::NEIGHBORS_PCLOCT}
+		{"neighborsPCLOct", SearchAlgo::NEIGHBORS_PCLOCT},
+		{"neighborsNanoflann", SearchAlgo::NEIGHBORS_NANOFLANN}
     };
 
     std::set<SearchAlgo> selectedSearchAlgos;
@@ -126,9 +127,19 @@ std::set<SearchAlgo> parseSearchAlgoOptions(const std::string& algoStr) {
         std::exit(EXIT_FAILURE);
     }
 #endif
-
     return selectedSearchAlgos;
 }
+
+std::set<SearchStructure> getSearchStructures(std::set<SearchAlgo> &algos) {
+	std::set<SearchStructure> structures;
+
+	for (SearchAlgo algo : algos) {
+		structures.insert(getAssociatedStructure(static_cast<SearchAlgo>(algo)));
+	}
+
+	return structures;
+}
+
 
 std::set<EncoderType> parseEncodingOptions(const std::string& kernelStr) {
     static const std::unordered_map<std::string, EncoderType> encoderMap = {
@@ -242,6 +253,7 @@ void processArgs(int argc, char** argv)
 			case 'a':
 			case LongOptions::SEARCH_ALGOS:
 				mainOptions.searchAlgos = parseSearchAlgoOptions(std::string(optarg));
+				mainOptions.searchStructures = getSearchStructures(mainOptions.searchAlgos);
 				break;
 			case 'e':
 			case LongOptions::ENCODINGS:

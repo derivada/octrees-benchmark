@@ -1,5 +1,5 @@
 #pragma once
-#include "search_set.hpp"
+#include "benchmarking/search_set.hpp"
 #include "neighbor_set.hpp"
 #include <vector>
 #include <set>

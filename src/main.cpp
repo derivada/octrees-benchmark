@@ -7,8 +7,9 @@
 #include "TimeWatcher.hpp"
 #include "handlers.hpp"
 #include "main_options.hpp"
-#include "benchmarking.hpp"
-#include "octree_benchmark.hpp"
+#include "benchmarking/benchmarking.hpp"
+#include "benchmarking/neighbor_benchmarks.hpp"
+#include "benchmarking/search_set.hpp"
 #include "octree.hpp"
 #include "linear_octree.hpp"
 #include "NeighborKernels/KernelFactory.hpp"
@@ -21,6 +22,8 @@
 #include "omp.h"
 #include "encoding_octree_log.hpp"
 #include "unibnOctree.hpp"
+#include "nanoflann.hpp"
+#include "nanoflann_wrappers.hpp"
 #ifdef HAVE_PCL
 #include <pcl/point_cloud.h>
 #include <pcl/octree/octree_search.h>
@@ -48,46 +51,9 @@ void searchBenchmark(std::ofstream &outputFile, EncoderType encoding = EncoderTy
     auto [codes, box] = enc.sortPoints<Point_t>(points, metadata);
     // Prepare the search set (must be done after sorting since it indexes points)
     SearchSet searchSet = SearchSet(mainOptions.numSearches, points.size());
-
-    if(mainOptions.searchAlgos.contains(SearchAlgo::NEIGHBORS_PTR)) {
-        OctreeBenchmark<Octree, Point_t> obPointer(points, codes, box, enc, searchSet, outputFile);
-        obPointer.searchBench();
-    }
-    if(encoding != EncoderType::NO_ENCODING) {
-        OctreeBenchmark<LinearOctree, Point_t> obLinear(points,  codes, box, enc, searchSet, outputFile);
-        obLinear.searchBench();
-    }
-    if(mainOptions.searchAlgos.contains(SearchAlgo::NEIGHBORS_UNIBN)) {
-        OctreeBenchmark<unibn::Octree, Point_t> obUnibn(points, codes, box, enc, searchSet, outputFile);
-        obUnibn.searchBench();
-    }
-#ifdef HAVE_PCL
-    if(mainOptions.searchAlgos.contains(SearchAlgo::NEIGHBORS_PCLKD) 
-        || mainOptions.searchAlgos.contains(SearchAlgo::NEIGHBORS_PCLOCT)) {
-        // Convert cloud to PCL cloud
-        pcl::PointCloud<pcl::PointXYZ>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZ>);
-        cloud->width = points.size();
-        cloud->height = 1;
-        cloud->points.resize(points.size());
-        for(size_t i = 0; i<cloud->size(); i++) {
-            (*cloud)[i].x = points[i].getX();
-            (*cloud)[i].y = points[i].getY();
-            (*cloud)[i].z = points[i].getZ();
-        }
-        std::vector<pcl::PointXYZ> pointsDummy;
-        if(mainOptions.searchAlgos.contains(SearchAlgo::NEIGHBORS_PCLKD)) {
-            OctreeBenchmark<pcl::KdTreeFLANN, pcl::PointXYZ> obPCLKD(
-                    pointsDummy, codes, box, enc, cloud, searchSet, outputFile);
-            obPCLKD.searchBench();
-        }
-        
-        if(mainOptions.searchAlgos.contains(SearchAlgo::NEIGHBORS_PCLOCT)) {
-            OctreeBenchmark<pcl::octree::OctreePointCloudSearch, pcl::PointXYZ> obPCLKD(
-                    pointsDummy, codes, box, enc, cloud, searchSet, outputFile);
-            obPCLKD.searchBench();
-        }
-    }
-#endif
+    // Run the benchmarks
+    NeighborsBenchmark<Point_t> octreeBenchmarks(points, codes, box, enc, searchSet, outputFile);   
+    octreeBenchmarks.runAllBenchmarks();    
 }
 
 void approximateSearchLog(std::ofstream &outputFile, EncoderType encoding) {

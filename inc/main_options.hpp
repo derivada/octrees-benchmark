@@ -11,9 +11,37 @@
 
 namespace fs = std::filesystem;
 
+enum SearchStructure { PTR_OCTREE, LINEAR_OCTREE, UNIBN_OCTREE, PCL_OCTREE, PCL_KDTREE, NANOFLANN_KDTREE };
+
 enum SearchAlgo { NEIGHBORS_PTR, NEIGHBORS, NEIGHBORS_PRUNE, NEIGHBORS_STRUCT, 
-	NEIGHBORS_APPROX, NEIGHBORS_UNIBN, NEIGHBORS_PCLKD, NEIGHBORS_PCLOCT };
-enum EncoderType { MORTON_ENCODER_3D, HILBERT_ENCODER_3D, NO_ENCODING };
+	NEIGHBORS_APPROX, NEIGHBORS_UNIBN, NEIGHBORS_PCLKD, NEIGHBORS_PCLOCT, NEIGHBORS_NANOFLANN };
+
+constexpr SearchStructure getAssociatedStructure(SearchAlgo algo) {
+    switch (algo) {
+        case NEIGHBORS_PTR:       return PTR_OCTREE;
+        case NEIGHBORS:           return LINEAR_OCTREE;
+        case NEIGHBORS_PRUNE:     return LINEAR_OCTREE;
+        case NEIGHBORS_STRUCT:    return LINEAR_OCTREE;
+        case NEIGHBORS_APPROX:    return LINEAR_OCTREE;
+        case NEIGHBORS_UNIBN:     return UNIBN_OCTREE;
+        case NEIGHBORS_PCLKD:     return PCL_KDTREE;
+        case NEIGHBORS_PCLOCT:    return PCL_OCTREE;
+        case NEIGHBORS_NANOFLANN: return NANOFLANN_KDTREE;
+		default: return PTR_OCTREE; 
+    }
+}
+
+constexpr std::string searchStructureToString(SearchStructure structure) {
+    switch (structure) {
+		case SearchStructure::PTR_OCTREE: return "Octree";
+        case SearchStructure::LINEAR_OCTREE: return "LinearOctree";
+        case SearchStructure::UNIBN_OCTREE: return "UnibnOctree";
+        case SearchStructure::PCL_OCTREE: return "PCLOctree";
+		case SearchStructure::PCL_KDTREE: return "PCLKDTree";
+		case SearchStructure::NANOFLANN_KDTREE: return "NanoflannKDTree";
+        default: return "Unknown";
+    }
+}
 
 constexpr std::string searchAlgoToString(SearchAlgo algo) {
     switch (algo) {
@@ -25,9 +53,12 @@ constexpr std::string searchAlgoToString(SearchAlgo algo) {
 		case SearchAlgo::NEIGHBORS_UNIBN: return "neighborsUnibn";
 		case SearchAlgo::NEIGHBORS_PCLKD: return "neighborsPCLKD";
 		case SearchAlgo::NEIGHBORS_PCLOCT: return "neighborsPCLOct";
+		case SearchAlgo::NEIGHBORS_NANOFLANN: return "neighborsNanoflann";
         default: return "Unknown";
     }
 }
+
+enum EncoderType { MORTON_ENCODER_3D, HILBERT_ENCODER_3D, NO_ENCODING };
 
 constexpr std::string encoderTypeToString(EncoderType enc) {
     switch (enc) {
@@ -53,6 +84,7 @@ public:
 	
 	std::set<Kernel_t> kernels{Kernel_t::sphere, Kernel_t::circle, Kernel_t::cube, Kernel_t::square};
 	std::set<SearchAlgo> searchAlgos{SearchAlgo::NEIGHBORS_PTR, SearchAlgo::NEIGHBORS, SearchAlgo::NEIGHBORS_PRUNE, SearchAlgo::NEIGHBORS_STRUCT};
+	std::set<SearchStructure> searchStructures{SearchStructure::PTR_OCTREE, SearchStructure::LINEAR_OCTREE};
 	std::set<EncoderType> encodings{EncoderType::NO_ENCODING, EncoderType::MORTON_ENCODER_3D, EncoderType::HILBERT_ENCODER_3D};
 
 	bool debug{false};

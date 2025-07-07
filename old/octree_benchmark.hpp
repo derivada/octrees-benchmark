@@ -15,11 +15,13 @@
 #include <pcl/octree/octree_search.h>
 #include <pcl/kdtree/kdtree_flann.h>
 #endif
+#include "nanoflann.hpp"
+#include "nanoflann_wrappers.hpp"
 
 using namespace ResultChecking;
 
 template <template <typename> class Octree_t, typename Point_t>
-class OctreeBenchmark {
+class NeighborsBenchmark {
     private:
         using PointEncoder = PointEncoding::PointEncoder;
         using key_t = PointEncoding::key_t;
@@ -54,6 +56,24 @@ class OctreeBenchmark {
             return averageResultSize;
         }
 #endif
+
+        template<Kernel_t kernel>
+        size_t searchNeighNanoflann(float radii) {
+            size_t averageResultSize = 0;
+            std::vector<size_t> &searchIndexes = searchSet.searchPoints[searchSet.currentRepeat];
+
+            #pragma omp parallel for schedule(runtime) reduction(+:averageResultSize)
+            for (size_t i = 0; i < searchSet.numSearches; i++) {
+                std::vector<nanoflann::ResultItem<size_t, double>> ret_matches;
+                const double pt[3] = {points[searchIndexes[i]].getX(), points[searchIndexes[i]].getY(), points[searchIndexes[i]].getZ()};
+                const size_t nMatches = oct->template radiusSearch(&pt, radii, ret_matches);
+                averageResultSize += nMatches;
+            }
+
+            averageResultSize /= searchSet.numSearches;
+            searchSet.nextRepeat();
+            return averageResultSize;
+        }
 
         template<Kernel_t kernel>
         size_t searchNeighUnibn(float radii) {
@@ -237,7 +257,7 @@ class OctreeBenchmark {
         }
 
     public:
-        OctreeBenchmark(std::vector<Point_t>& points, std::vector<key_t>& codes, Box box, PointEncoder& enc, SearchSet& searchSet, 
+        NeighborsBenchmark(std::vector<Point_t>& points, std::vector<key_t>& codes, Box box, PointEncoder& enc, SearchSet& searchSet, 
             std::ofstream &file, bool checkResults = mainOptions.checkResults, bool useWarmup = mainOptions.useWarmup) :
             points(points), 
             enc(enc),
@@ -259,6 +279,10 @@ class OctreeBenchmark {
                 unibn::OctreeParams params;
                 params.bucketSize = mainOptions.maxPointsLeaf;
                 oct->template initialize(points, params);
+            } else if constexpr(std::is_same_v<Octree_t<Point_t>, NanoFlannKDTree<Point_t>>) {
+                NanoflannPointCloud<Point_t> npc;
+                npc.pts = std::move(points);
+                oct = std::make_unique<NanoFlannKDTree<Point_t>>(3, npc, {mainOptions.maxPointsLeaf});
             } else {
                 static_assert("Wrong constructor for this octree type");
             }
@@ -306,6 +330,18 @@ class OctreeBenchmark {
             appendToCsv(algoName, kernelStr, radius, stats, averageResultSize, numThreads);
         }
 #endif
+
+        template<Kernel_t kernel>
+        void benchmarkSearchNeighNanoflann(size_t repeats, float radius, int numThreads = omp_get_max_threads()) {
+            omp_set_num_threads(numThreads);
+            const auto kernelStr = kernelToString(kernel);
+            auto [stats, averageResultSize] = benchmarking::benchmark<size_t>(repeats, [&]() { 
+                return searchNeighNanoflann<kernel>(radius); 
+            }, useWarmup);
+            searchSet.reset();
+            appendToCsv("neighborsNanoflann", kernelStr, radius, stats, averageResultSize, numThreads);
+        }
+
 
         template<Kernel_t kernel>
         void benchmarkSearchNeighUnibn(size_t repeats, float radius, int numThreads = omp_get_max_threads()) {
@@ -417,7 +453,7 @@ class OctreeBenchmark {
 
 
 
-        void printBenchmarkLog() {
+        void printBenchmarkInfo() {
             const auto& benchmarkRadii = mainOptions.benchmarkRadii;
             const auto& repeats = mainOptions.repeats;
 
@@ -473,7 +509,7 @@ class OctreeBenchmark {
         }
 
         /// @brief Main benchmarking function
-        void searchBench() {
+        void runAllBenchmarks() {
             // Some aliases
             const auto& benchmarkRadii = mainOptions.benchmarkRadii;
             const auto& tolerances = mainOptions.approximateTolerances;
@@ -490,7 +526,7 @@ class OctreeBenchmark {
                 resultSet.resultsSearchApproxUpper.resize(searchSet.numSearches);
             }
 
-            printBenchmarkLog();
+            printBenchmarkInfo();
             size_t current = 0;
             for (size_t th = 0; th < numThreads.size(); th++) {                    
                 for (size_t r = 0; r < benchmarkRadii.size(); ++r) {
@@ -627,6 +663,18 @@ class OctreeBenchmark {
                         printBenchmarkUpdate(algoName, ++current, benchmarkRadii[r], numThreads[th]);
                     }
 #endif
+                    else if constexpr(std::is_same_v<Octree_t<Point_t>, NanoFlannKDTree<Point_t>>) {
+                         if(algos.contains(SearchAlgo::NEIGHBORS_NANOFLANN)) {
+                            for (const auto & kernel: kernels) {
+                                switch(kernel) {
+                                     case Kernel_t::sphere:
+                                        benchmarkSearchNeighNanoflann<Kernel_t::sphere>(repeats, benchmarkRadii[r], numThreads[th]);
+                                        break;
+                                }
+                            }
+                        }
+                        printBenchmarkUpdate("neighborsNanoflann", ++current, benchmarkRadii[r], numThreads[th]);
+                    }
                 }
             }
             std::cout << std::endl;
