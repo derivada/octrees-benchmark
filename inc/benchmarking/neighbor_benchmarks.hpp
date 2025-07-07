@@ -167,7 +167,8 @@ class NeighborsBenchmark {
                         for (size_t i = 0; i < searchSet.numSearches; i++) {
                             std::vector<nanoflann::ResultItem<size_t, double>> ret_matches;
                             const double pt[3] = {points[searchIndexes[i]].getX(), points[searchIndexes[i]].getY(), points[searchIndexes[i]].getZ()};
-                            const size_t nMatches = kdtree.template radiusSearch(pt, radius, ret_matches);
+                            // nanoflann expects squared radius
+                            const size_t nMatches = kdtree.template radiusSearch(pt, radius*radius, ret_matches);
                             averageResultSize += nMatches;
                         }
                     averageResultSize /= searchSet.numSearches;
@@ -186,18 +187,18 @@ class NeighborsBenchmark {
                     std::vector<size_t> &searchIndexes = searchSet.searchPoints[searchSet.currentRepeat];
 
                     #pragma omp parallel for schedule(runtime) reduction(+:averageResultSize)
-                    for (size_t i = 0; i < searchSet.numSearches; i++) {
-                        std::vector<uint32_t> results;
-                        if constexpr (Kernel == Kernel_t::sphere) {
-                            oct.template radiusNeighbors<unibn::L2Distance<Point_t>>(points[searchIndexes[i]], radius, results);
-                        } else if constexpr (Kernel == Kernel_t::cube) {
-                            oct.template radiusNeighbors<unibn::MaxDistance<Point_t>>(points[searchIndexes[i]], radius, results);
-                        } else {
-                            static_assert(Kernel == Kernel_t::sphere || Kernel == Kernel_t::cube,
-                                        "Unsupported kernel for unibn octree");
+                        for (size_t i = 0; i < searchSet.numSearches; i++) {
+                            std::vector<uint32_t> results;
+                            if constexpr (Kernel == Kernel_t::sphere) {
+                                oct.template radiusNeighbors<unibn::L2Distance<Point_t>>(points[searchIndexes[i]], radius, results);
+                            } else if constexpr (Kernel == Kernel_t::cube) {
+                                oct.template radiusNeighbors<unibn::MaxDistance<Point_t>>(points[searchIndexes[i]], radius, results);
+                            } else {
+                                static_assert(Kernel == Kernel_t::sphere || Kernel == Kernel_t::cube,
+                                            "Unsupported kernel for unibn octree");
+                            }
+                            averageResultSize += results.size();
                         }
-                        averageResultSize += results.size();
-                    }
 
                     averageResultSize /= searchSet.numSearches;
                     searchSet.nextRepeat();
