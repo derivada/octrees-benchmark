@@ -795,6 +795,150 @@ public:
         return result;
 	}
 
+    union OctantPointIndex {
+        struct {
+            uint64_t index        : 58; // MSB for point cloud or octree index
+            uint64_t depth : 5;  // octant depth if is_octant = 1, 0 otherwise
+            uint64_t isOctant    : 1;  // LSB = 1 if octant, 0 if point
+        };
+        uint64_t raw;
+    
+        OctantPointIndex(size_t idx = 0, bool octant = false, uint8_t depth = 0) : raw(0) {
+            set(idx, octant, depth);
+        }
+        
+        static constexpr uint64_t indexMask = ((1ULL << 58) - 1);
+        static constexpr uint64_t depthMask = 0x1F;
+        void set(size_t idx, bool octant, uint8_t octantDepth = 0) {
+            index = idx & indexMask;
+            depth = octantDepth & depthMask;
+            isOctant = octant ? 1 : 0;
+        }
+    
+        size_t getIndex() const { return index; }
+        uint8_t getDepth() const { return depth; }
+        bool getIsOctant() const { return isOctant != 0; }
+    };
+    
+
+    static double distPointsSquared(const Point &p, const Point &q) {
+        // compute sq distance between the points
+        double dx = p.getX() - q.getX();
+        double dy = p.getY() - q.getY();
+        double dz = p.getZ() - q.getZ();
+
+        return dx * dx + dy * dy + dz * dz;
+    }
+
+    double distPointOctantSquared(const Point& p, const Point& octCenter, const Vector& octRadius) const {
+        // Extract octant bounds
+        const double minX = octCenter.getX() - octRadius.getX();
+        const double minY = octCenter.getY() - octRadius.getY();
+        const double minZ = octCenter.getZ() - octRadius.getZ();
+        const double maxX = octCenter.getX() + octRadius.getX();
+        const double maxY = octCenter.getY() + octRadius.getY();
+        const double maxZ = octCenter.getZ() + octRadius.getZ();
+    
+        const double px = p.getX();
+        const double py = p.getY();
+        const double pz = p.getZ();
+    
+        // Clamp point to octant bounds to get the intersection with it
+        const double cx = std::max(minX, std::min(px, maxX));
+        const double cy = std::max(minY, std::min(py, maxY));
+        const double cz = std::max(minZ, std::min(pz, maxZ));
+        
+        // Compute the distance to that intersection point
+        const double dx = px - cx;
+        const double dy = py - cy;
+        const double dz = pz - cz;
+    
+        return dx * dx + dy * dy + dz * dz;
+    }
+
+    /**
+     * 
+     * Idea for Octree kNN from https://stackoverflow.com/a/41306992
+     * 
+     * priority queue with distances to center, ascending order, both octants and points can be inside it
+     * 
+     * for octants, store the cube-to-point distance
+     *  -> this is computed by observing that the closest point to it is clamp(p_c, c_min, c_max) (for each coordinate c \in {x,y,z})
+     * for points, store the regular point-to-point distance 
+     * 
+     * algo:
+     *  1. extract head of queue
+     *  2. if head is point, insert it into result
+     *  3. if head is octant, then:
+     *  3.1 if it is a leaf, push every point into queue
+     *  3.2 if it is an internal node, push the 8 suboctants with their min distances to p
+     * 
+     * TODO: implement this and check if its faster than the doubling method found in knn(), after checking its implementation
+     * and invoking neighborsPrune inside it 
+     */
+    size_t knnV2(const Point& p, const size_t k, std::vector<size_t> &indexes, std::vector<double> &dists) {
+        size_t inserted = 0;
+        auto comp = [](const std::pair<double, OctantPointIndex>& a,
+            const std::pair<double, OctantPointIndex>& b) {
+            return a.first > b.first;  // min-heap, ignore second arg.
+        };
+
+        std::priority_queue<std::pair<double, OctantPointIndex>, 
+            std::vector<std::pair<double, OctantPointIndex>>, 
+            decltype(comp)> distQueue(comp);
+        
+            
+        // push root octant, distance is 0 since point is inside bbox, and the octree index of root is always 0
+        // true in 2nd argument of OctantPointIndex constructor = is octant
+        // 3rd argument is depth, always 0 for root
+        distQueue.push(std::make_pair(0, OctantPointIndex(0, true, 0)));
+
+        while(inserted < k && !distQueue.empty()) {
+            std::pair<double, OctantPointIndex> top = distQueue.top();
+            distQueue.pop();
+            double dist = top.first;
+            uint64_t index = top.second.getIndex();
+            uint8_t depth = top.second.getDepth();
+            bool isOctant = top.second.getIsOctant();
+            // std::cout << "Current distance: " << dist << " at index " << index << " on depth " << depth << " in an octant? " << isOctant << std::endl;
+            // std::cout << "  Total inserted: " << inserted << std::endl;
+            // std::cout << "  Current queue size: " << distQueue.size() << std::endl;
+            if(isOctant) {
+                // get number of points under octant
+                size_t startIndex = this->internalRanges[index].first;
+                size_t endIndex = this->internalRanges[index].second;
+                size_t pointsInOctant = endIndex - startIndex;
+                // insert children octants or points (if it is a leaf) into queue
+                if(offsets[index] == 0) {
+                    // leaf node, push points into the queue
+                    for (size_t i = startIndex; i < endIndex; ++i) {
+                        double distToPoint = distPointsSquared(p, points[i]);
+                        distQueue.push(std::make_pair(
+                            distToPoint, OctantPointIndex(i, false))
+                        );
+                    }
+                } else {
+                    // internal node, push child octants after computing their distance to p
+                    for (int octant = 0; octant < OCTANTS_PER_NODE; ++octant) {
+                        uint32_t childOctIndex = offsets[index] + octant;
+                        const Point& childOctCenter = centers[childOctIndex];
+                        const Point& childOctRadius = precomputedRadii[depth + 1];
+                        double distToChildOctant = distPointOctantSquared(p, childOctCenter, childOctRadius);
+                        distQueue.push(std::make_pair(
+                            distToChildOctant, OctantPointIndex(childOctIndex, true, depth + 1))
+                        );
+                    }
+                }   
+            } else {
+                // Insert point directly into result
+                indexes[inserted] = index;
+                dists[inserted] = dist;
+                inserted++;
+            }
+        }
+        return inserted;
+	}
+
     uint32_t getPrecisionLevel(const Vector &toleranceVector) const {
         assert(toleranceVector.getX() > 0 && toleranceVector.getY() > 0 && toleranceVector.getZ() > 0 && "tolerance vector must be >0 in every coordinate");
         uint32_t precisionLevel = maxDepthSeen;

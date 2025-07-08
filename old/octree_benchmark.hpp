@@ -21,7 +21,7 @@
 using namespace ResultChecking;
 
 template <template <typename> class Octree_t, typename Point_t>
-class NeighborsBenchmark {
+class RadiusNeighborsBenchmark {
     private:
         using PointEncoder = PointEncoding::PointEncoder;
         using key_t = PointEncoding::key_t;
@@ -257,7 +257,7 @@ class NeighborsBenchmark {
         }
 
     public:
-        NeighborsBenchmark(std::vector<Point_t>& points, std::vector<key_t>& codes, Box box, PointEncoder& enc, SearchSet& searchSet, 
+        RadiusNeighborsBenchmark(std::vector<Point_t>& points, std::vector<key_t>& codes, Box box, PointEncoder& enc, SearchSet& searchSet, 
             std::ofstream &file, bool checkResults = mainOptions.checkResults, bool useWarmup = mainOptions.useWarmup) :
             points(points), 
             enc(enc),

@@ -7,66 +7,115 @@
 #include <vector>
 #include "omp.h"
 #include <set>
-#include "NeighborKernels/KernelFactory.hpp"
 
 namespace fs = std::filesystem;
 
-enum SearchStructure { PTR_OCTREE, LINEAR_OCTREE, UNIBN_OCTREE, PCL_OCTREE, PCL_KDTREE, NANOFLANN_KDTREE };
+enum SearchStructure { 
+	PTR_OCTREE, LINEAR_OCTREE, UNIBN_OCTREE, 
+	PCL_OCTREE, PCL_KDTREE, NANOFLANN_KDTREE 
+};
 
-enum SearchAlgo { NEIGHBORS_PTR, NEIGHBORS, NEIGHBORS_PRUNE, NEIGHBORS_STRUCT, 
-	NEIGHBORS_APPROX, NEIGHBORS_UNIBN, NEIGHBORS_PCLKD, NEIGHBORS_PCLOCT, NEIGHBORS_NANOFLANN };
+constexpr std::pair<SearchStructure, std::string_view> structureMap[] = {
+    { SearchStructure::PTR_OCTREE,       "Octree" },
+    { SearchStructure::LINEAR_OCTREE,    "LinearOctree" },
+    { SearchStructure::UNIBN_OCTREE,     "UnibnOctree" },
+    { SearchStructure::PCL_OCTREE,       "PCLOctree" },
+    { SearchStructure::PCL_KDTREE,       "PCLKDTree" },
+    { SearchStructure::NANOFLANN_KDTREE, "NanoflannKDTree" }
+};
 
-constexpr SearchStructure getAssociatedStructure(SearchAlgo algo) {
-    switch (algo) {
-        case NEIGHBORS_PTR:       return PTR_OCTREE;
-        case NEIGHBORS:           return LINEAR_OCTREE;
-        case NEIGHBORS_PRUNE:     return LINEAR_OCTREE;
-        case NEIGHBORS_STRUCT:    return LINEAR_OCTREE;
-        case NEIGHBORS_APPROX:    return LINEAR_OCTREE;
-        case NEIGHBORS_UNIBN:     return UNIBN_OCTREE;
-        case NEIGHBORS_PCLKD:     return PCL_KDTREE;
-        case NEIGHBORS_PCLOCT:    return PCL_OCTREE;
-        case NEIGHBORS_NANOFLANN: return NANOFLANN_KDTREE;
-		default: return PTR_OCTREE; 
-    }
-}
+enum SearchAlgo { 
+	NEIGHBORS_PTR, NEIGHBORS, NEIGHBORS_PRUNE,
+	NEIGHBORS_STRUCT, NEIGHBORS_APPROX, NEIGHBORS_UNIBN, 
+	NEIGHBORS_PCLKD, NEIGHBORS_PCLOCT, NEIGHBORS_NANOFLANN, 
+	KNN_V2, KNN_NANOFLANN 
+};
 
-constexpr std::string searchStructureToString(SearchStructure structure) {
-    switch (structure) {
-		case SearchStructure::PTR_OCTREE: return "Octree";
-        case SearchStructure::LINEAR_OCTREE: return "LinearOctree";
-        case SearchStructure::UNIBN_OCTREE: return "UnibnOctree";
-        case SearchStructure::PCL_OCTREE: return "PCLOctree";
-		case SearchStructure::PCL_KDTREE: return "PCLKDTree";
-		case SearchStructure::NANOFLANN_KDTREE: return "NanoflannKDTree";
-        default: return "Unknown";
-    }
-}
+constexpr std::pair<SearchAlgo, std::string_view> searchAlgoMap[] = {
+	{ SearchAlgo::NEIGHBORS_PTR, 		"neighborsPtr" },
+	{ SearchAlgo::NEIGHBORS, 			"neighbors" },
+	{ SearchAlgo::NEIGHBORS_PRUNE, 		"neighborsPrune" },
+	{ SearchAlgo::NEIGHBORS_STRUCT, 	"neighborsStruct" },
+	{ SearchAlgo::NEIGHBORS_APPROX, 	"neighborsApprox" },
+	{ SearchAlgo::NEIGHBORS_UNIBN, 		"neighborsUnibn" },
+	{ SearchAlgo::NEIGHBORS_PCLKD, 		"neighborsPCLKD" },
+	{ SearchAlgo::NEIGHBORS_PCLOCT, 	"neighborsPCLOct" },
+	{ SearchAlgo::NEIGHBORS_NANOFLANN, 	"neighborsNanoflann" },
+	{ SearchAlgo::KNN_V2, 				"KNNV2" },
+	{ SearchAlgo::KNN_NANOFLANN, 		"KNNNanoflann" }
 
-constexpr std::string searchAlgoToString(SearchAlgo algo) {
-    switch (algo) {
-		case SearchAlgo::NEIGHBORS_PTR: return "neighborsPtr";
-        case SearchAlgo::NEIGHBORS: return "neighbors";
-        case SearchAlgo::NEIGHBORS_PRUNE: return "neighborsPrune";
-        case SearchAlgo::NEIGHBORS_STRUCT: return "neighborsStruct";
-		case SearchAlgo::NEIGHBORS_APPROX: return "neighbors";
-		case SearchAlgo::NEIGHBORS_UNIBN: return "neighborsUnibn";
-		case SearchAlgo::NEIGHBORS_PCLKD: return "neighborsPCLKD";
-		case SearchAlgo::NEIGHBORS_PCLOCT: return "neighborsPCLOct";
-		case SearchAlgo::NEIGHBORS_NANOFLANN: return "neighborsNanoflann";
-        default: return "Unknown";
-    }
-}
+};
+
+constexpr std::pair<SearchAlgo, SearchStructure> algoToStructureMap[] = {
+    { SearchAlgo::NEIGHBORS_PTR,      	SearchStructure::PTR_OCTREE },
+    { SearchAlgo::NEIGHBORS,          	SearchStructure::LINEAR_OCTREE },
+    { SearchAlgo::NEIGHBORS_PRUNE,    	SearchStructure::LINEAR_OCTREE },
+    { SearchAlgo::NEIGHBORS_STRUCT,   	SearchStructure::LINEAR_OCTREE },
+    { SearchAlgo::NEIGHBORS_APPROX,   	SearchStructure::LINEAR_OCTREE },
+    { SearchAlgo::NEIGHBORS_UNIBN,    	SearchStructure::UNIBN_OCTREE },
+    { SearchAlgo::NEIGHBORS_PCLKD,    	SearchStructure::PCL_KDTREE },
+    { SearchAlgo::NEIGHBORS_PCLOCT,   	SearchStructure::PCL_OCTREE },
+    { SearchAlgo::NEIGHBORS_NANOFLANN,	SearchStructure::NANOFLANN_KDTREE },
+    { SearchAlgo::KNN_V2,             	SearchStructure::LINEAR_OCTREE },
+	{ SearchAlgo::KNN_NANOFLANN,		SearchStructure::NANOFLANN_KDTREE }
+};
 
 enum EncoderType { MORTON_ENCODER_3D, HILBERT_ENCODER_3D, NO_ENCODING };
 
-constexpr std::string encoderTypeToString(EncoderType enc) {
-    switch (enc) {
-		case EncoderType::NO_ENCODING: return "none";
-        case EncoderType::MORTON_ENCODER_3D: return "mort";
-        case EncoderType::HILBERT_ENCODER_3D: return "hilb";
-        default: return "Unknown";
+constexpr std::pair<EncoderType, std::string_view> encoderTypeMap[] = {
+    { EncoderType::NO_ENCODING,       	"none" },
+    { EncoderType::MORTON_ENCODER_3D,   "mort" },
+    { EncoderType::HILBERT_ENCODER_3D,  "hilb" }
+};
+
+enum class Kernel_t
+{
+	circle,
+	sphere,
+	square,
+	cube
+};
+
+constexpr std::pair<Kernel_t, std::string_view> kernelMap[] = {
+	{Kernel_t::sphere, "sphere"},
+	{Kernel_t::circle, "circle"},
+	{Kernel_t::cube, "cube"},
+	{Kernel_t::square, "square"}
+};
+
+constexpr SearchStructure algoToStructure(SearchAlgo algo) {
+    for (const auto& [key, val] : algoToStructureMap) {
+        if (key == algo) return val;
     }
+    return SearchStructure::PTR_OCTREE; // Default fallback
+}
+
+constexpr std::string_view searchStructureToString(SearchStructure structure) {
+    for (const auto& [key, val] : structureMap) {
+        if (key == structure) return val;
+    }
+    return "Unknown";
+}
+
+constexpr std::string_view searchAlgoToString(SearchAlgo algo) {
+    for (const auto& [key, val] : searchAlgoMap) {
+        if (key == algo) return val;
+    }
+    return "Unknown";
+}
+
+constexpr std::string_view encoderTypeToString(EncoderType enc) {
+    for (const auto& [key, val] : encoderTypeMap) {
+        if (key == enc) return val;
+    }
+    return "Unknown";
+}
+
+constexpr std::string_view kernelToString(Kernel_t kernel) {
+    for (const auto& [key, val] : kernelMap) {
+        if (key == kernel) return val;
+    }
+    return "Unknown";
 }
 
 class main_options
@@ -79,6 +128,8 @@ public:
 
 	// Benchmark parameters
 	std::vector<float> benchmarkRadii{2.5, 5.0, 7.5, 10.0};
+	std::vector<size_t> benchmarkKValues{10, 50, 250, 1000};
+
 	size_t repeats{2};
 	size_t numSearches{10000};
 	
@@ -107,6 +158,7 @@ enum LongOptions : int
 	INPUT,
 	OUTPUT,
 	RADII,
+	K_VALUES,
 	REPEATS,
 	SEARCHES,
 	KERNELS,
@@ -124,7 +176,7 @@ enum LongOptions : int
 };
 
 // Define short options
-const char* const short_opts = "h:i:o:r:s:t:b:k:a:e:cb:";
+const char* const short_opts = "h:i:o:r:v:s:t:b:k:a:e:cb:";
 
 // Define long options
 const option long_opts[] = {
@@ -132,6 +184,7 @@ const option long_opts[] = {
 	{ "input", required_argument, nullptr, LongOptions::INPUT },
 	{ "output", required_argument, nullptr, LongOptions::OUTPUT },
 	{ "radii", required_argument, nullptr, LongOptions::RADII },
+	{ "kvalues", required_argument, nullptr, LongOptions::K_VALUES },
 	{ "repeats", required_argument, nullptr, LongOptions::REPEATS },
 	{ "searches", required_argument, nullptr, LongOptions::SEARCHES },
 	{ "kernels", required_argument, nullptr, LongOptions::KERNELS},

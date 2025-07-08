@@ -37,7 +37,13 @@ class NeighborsBenchmark {
         SearchSet &searchSet;
         ResultSet<Point_t> resultSet;
 
-        inline void appendToCsv(SearchAlgo algo, const std::string& kernel, const double radius, const benchmarking::Stats<>& stats, 
+        /**
+         * main_parameter might be radius (fixed-radius searches) or k (knn searches)
+         * in any case, we write it on radius column in the csv, for simplicity
+         * kernel is "kNN" or one of the 4 kernels for radius searches
+         */
+        template <typename ParameterType>
+        inline void appendToCsv(SearchAlgo algo, std::string_view kernel, ParameterType main_parameter, const benchmarking::Stats<>& stats, 
                                 size_t averageResultSize = 0, int numThreads = omp_get_max_threads(), double tolerancePercentage = 0.0) {
             // Check if the file is empty and append header if it is
             if (outputFile.tellp() == 0) {
@@ -47,8 +53,8 @@ class NeighborsBenchmark {
             }
 
             // if the comment, exists, append it to the op. name
-            std::string fullAlgoName = searchAlgoToString(algo) + ((comment != "") ? "_" + comment : "");
-
+            std::string fullAlgoName = std::string(searchAlgoToString(algo)) + ((comment != "") ? "_" + comment : "");
+            
             // Get OpenMP runtime information
             omp_sched_t openmpSchedule;
             int openmpChunkSize;
@@ -67,13 +73,13 @@ class NeighborsBenchmark {
                 sequentialSearches = "random";
             }
             outputFile << getCurrentDate() << ',' 
-                << searchStructureToString(getAssociatedStructure(algo)) << ',' 
+                << searchStructureToString(algoToStructure(algo)) << ',' 
                 << "Point" << ','
                 << enc.getEncoderName() << ','
                 << points.size() <<  ','
                 << fullAlgoName << ',' 
                 << kernel << ',' 
-                << radius << ','
+                << main_parameter << ','
                 << searchSet.numSearches << ',' 
                 << sequentialSearches << ','
                 << stats.size() << ','
@@ -101,40 +107,20 @@ class NeighborsBenchmark {
             outputFile(file),
             checkResults(checkResults),
             useWarmup(useWarmup),
-            resultSet(searchSet) { 
-        }
+            resultSet(searchSet) {}
 
         void printBenchmarkInfo() {
-            const auto& benchmarkRadii = mainOptions.benchmarkRadii;
-            const auto& repeats = mainOptions.repeats;
-
-            // Displaying the basic information with formatting
             std::cout << std::fixed << std::setprecision(3);
             std::cout << std::left << "Starting neighbor search benchmark!\n";
-            std::cout << std::left << std::setw(LOG_FIELD_WIDTH) << "Encoder:"                  << std::setw(LOG_FIELD_WIDTH) << enc.getEncoderName() << "\n";
-            std::cout << std::left << std::setw(LOG_FIELD_WIDTH) << "Radii:";
-
-            // Outputting radii values in a similar structured format
-            for (size_t i = 0; i < benchmarkRadii.size(); ++i) {
-                if(i == 0)
-                    std::cout << "{";
-                std::cout << benchmarkRadii[i];
-                if (i != benchmarkRadii.size() - 1) {
-                    std::cout << ", ";
-                }
-            }
-            std::cout << "}" << std::endl;
-
-            // Showing other parameters
+            std::cout << std::left << std::setw(LOG_FIELD_WIDTH) << "Encoder:"                    << std::setw(LOG_FIELD_WIDTH)   << enc.getEncoderName()                               << "\n";
             std::cout << std::left << std::setw(LOG_FIELD_WIDTH) << "Number of searches per run:" << std::setw(LOG_FIELD_WIDTH)   << searchSet.numSearches                              << "\n";
-            std::cout << std::left << std::setw(LOG_FIELD_WIDTH) << "Kernels:"                    << std::setw(2*LOG_FIELD_WIDTH) << getKernelListString()                              << "\n";
-            std::cout << std::left << std::setw(LOG_FIELD_WIDTH) << "Repeats:"                    << std::setw(LOG_FIELD_WIDTH)   << repeats                                            << "\n";
+            std::cout << std::left << std::setw(LOG_FIELD_WIDTH) << "Repeats:"                    << std::setw(LOG_FIELD_WIDTH)   << mainOptions.repeats                                << "\n";
             std::cout << std::left << std::setw(LOG_FIELD_WIDTH) << "Warmup:"                     << std::setw(LOG_FIELD_WIDTH)   << (useWarmup ? "enabled" : "disabled")               << "\n";
             std::cout << std::left << std::setw(LOG_FIELD_WIDTH) << "Search set distribution:"    << std::setw(LOG_FIELD_WIDTH)   << (searchSet.sequential ? "sequential" : "random")   << "\n";
             std::cout << std::endl;
         }
 
-        void executeBenchmark(const std::function<size_t(double)>& searchCallback, std::string kernelName, SearchAlgo algo) {
+        void executeBenchmark(const std::function<size_t(double)>& searchCallback, std::string_view kernelName, SearchAlgo algo) {
             std::cout << "  Running " << searchAlgoToString(algo) << " on kernel " << kernelName << std::endl;
             const auto& radii = mainOptions.benchmarkRadii;
             const size_t repeats = mainOptions.repeats;
@@ -158,7 +144,31 @@ class NeighborsBenchmark {
             }
         }
 
-        void benchmarkNanoflannKDTree(NanoFlannKDTree<Point_t> &kdtree, std::string kernelName) {
+        void executeKNNBenchmark(const std::function<size_t(size_t)>& knnSearchCallback, std::string_view kernelName, SearchAlgo algo) {
+            std::cout << "  Running k-NN searches with " << searchAlgoToString(algo) << std::endl;
+            const auto& kValues = mainOptions.benchmarkKValues;
+            const size_t repeats = mainOptions.repeats;
+            const auto& numThreads = mainOptions.numThreads;         
+            for (size_t th = 0; th < numThreads.size(); th++) {    
+                size_t numberOfThreads = numThreads[th];                
+                omp_set_num_threads(numberOfThreads);
+                for (size_t i = 0; i < kValues.size(); i++) {
+                    size_t k = kValues[i];
+                    auto [stats, averageResultSize] = benchmarking::benchmark<size_t>(repeats, [&]() { 
+                        return knnSearchCallback(k); 
+                    }, useWarmup);
+                    searchSet.reset();
+                    appendToCsv(algo, kernelName, k, stats, averageResultSize, numberOfThreads);
+                    std::cout << std::setprecision(2);
+                    std::cout << "    (" << i + th*numThreads.size() + 1 << "/" << numThreads.size() * kValues.size() << ") " 
+                        << "k  " << std::setw(8) << k 
+                        << "Threads " << std::setw(8) << numberOfThreads
+                        << std::endl;
+                }
+            }
+        }
+
+        void benchmarkNanoflannKDTree(NanoFlannKDTree<Point_t> &kdtree, std::string_view kernelName) {
             if(mainOptions.searchAlgos.contains(SearchAlgo::NEIGHBORS_NANOFLANN)) {
                 auto neighborsNanoflannKDTree = [&](double radius) -> size_t {
                     size_t averageResultSize = 0;
@@ -178,9 +188,31 @@ class NeighborsBenchmark {
                 executeBenchmark(neighborsNanoflannKDTree, kernelName, SearchAlgo::NEIGHBORS_NANOFLANN);
             }
         }
-        
+
+        void benchmarkNanoflannKDTreeKNN(NanoFlannKDTree<Point_t> &kdtree, std::string_view kernelName) {
+            if(mainOptions.searchAlgos.contains(SearchAlgo::KNN_NANOFLANN)) {
+                auto neighborsKNNNanoflann = [&](size_t k) -> size_t {
+                    size_t averageResultSize = 0;
+                    std::vector<size_t> &searchIndexes = searchSet.searchPoints[searchSet.currentRepeat];
+                    #pragma omp parallel for schedule(runtime) reduction(+:averageResultSize)
+                        for (size_t i = 0; i < searchSet.numSearches; i++) {
+                            std::vector<size_t> indexes(k);
+                            std::vector<double> distances(k);
+                            const double pt[3] = {points[searchIndexes[i]].getX(), points[searchIndexes[i]].getY(), points[searchIndexes[i]].getZ()};
+                            // nanoflann expects squared radius
+                            const size_t nMatches = kdtree.template knnSearch(pt, k, &indexes[0], &distances[0]);
+                            averageResultSize += nMatches; // only here so the call is not optimized
+                        }
+                    averageResultSize /= searchSet.numSearches;
+                    searchSet.nextRepeat();
+                    return averageResultSize;
+                };
+                executeKNNBenchmark(neighborsKNNNanoflann, "kNN", SearchAlgo::KNN_NANOFLANN);
+            }
+        }
+
         template <Kernel_t Kernel>
-        void benchmarkUnibnOctree(unibn::Octree<Point_t> &oct, std::string kernelName) {
+        void benchmarkUnibnOctree(unibn::Octree<Point_t> &oct, std::string_view kernelName) {
             if(mainOptions.searchAlgos.contains(SearchAlgo::NEIGHBORS_UNIBN)) {
                 auto neighborsUnibn = [&](double radius) -> size_t {
                     size_t averageResultSize = 0;
@@ -222,7 +254,7 @@ class NeighborsBenchmark {
             return pclCloud;
         }
 
-        void benchmarkPCLOctree(pcl::octree::OctreePointCloudSearch<pcl::PointXYZ> &octree, pcl::PointCloud<pcl::PointXYZ> &pclCloud, std::string kernelName) {
+        void benchmarkPCLOctree(pcl::octree::OctreePointCloudSearch<pcl::PointXYZ> &octree, pcl::PointCloud<pcl::PointXYZ> &pclCloud, std::string_view kernelName) {
             if(mainOptions.searchAlgos.contains(SearchAlgo::NEIGHBORS_PCLOCT)) {
                 auto neighborsPCLOct = [&](double radius) -> size_t {
                     size_t averageResultSize = 0;
@@ -243,7 +275,7 @@ class NeighborsBenchmark {
             }
         }
 
-        void benchmarkPCLKDTree(pcl::KdTreeFLANN<pcl::PointXYZ> &kdtree, pcl::PointCloud<pcl::PointXYZ> &pclCloud, std::string kernelName) {
+        void benchmarkPCLKDTree(pcl::KdTreeFLANN<pcl::PointXYZ> &kdtree, pcl::PointCloud<pcl::PointXYZ> &pclCloud, std::string_view kernelName) {
             if(mainOptions.searchAlgos.contains(SearchAlgo::NEIGHBORS_PCLKD)) {
                 auto neighborsPCLKD = [&](double radius) -> size_t {
                     size_t averageResultSize = 0;
@@ -267,7 +299,7 @@ class NeighborsBenchmark {
 #endif
 
         template <Kernel_t kernel>
-        void benchmarkLinearOctree(LinearOctree<Point_t>& oct, const std::string& kernelName) {
+        void benchmarkLinearOctree(LinearOctree<Point_t>& oct, const std::string_view& kernelName) {
             if(mainOptions.searchAlgos.contains(SearchAlgo::NEIGHBORS)) {
                 auto neighborsSearch = [&](double radius) -> size_t {
                     size_t averageResultSize = 0;
@@ -315,8 +347,28 @@ class NeighborsBenchmark {
             }
         }
 
+        void benchmarkLinearOctreeKNN(LinearOctree<Point_t>& oct, const std::string_view& kernelName) {
+            if(mainOptions.searchAlgos.contains(SearchAlgo::KNN_V2)) {
+                auto neighborsKNNV2 = [&](size_t k) -> size_t {
+                    size_t averageResultSize = 0;
+                    std::vector<size_t> &searchIndexes = searchSet.searchPoints[searchSet.currentRepeat];
+                    #pragma omp parallel for schedule(runtime) reduction(+:averageResultSize)
+                        for(size_t i = 0; i<searchSet.numSearches; i++) {
+                            std::vector<size_t> indexes(k);
+                            std::vector<double> distances(k);
+                            const size_t nMatches = oct.template knnV2 (points[searchIndexes[i]], k, indexes, distances);
+                            averageResultSize += nMatches; // only here so the call is not optimized
+                        }
+                    averageResultSize /= searchSet.numSearches;
+                    searchSet.nextRepeat();
+                    return averageResultSize;
+                };
+                executeKNNBenchmark(neighborsKNNV2, kernelName, SearchAlgo::KNN_V2);
+            }
+        }
+
         template <Kernel_t kernel>
-        void benchmarkPtrOctree(Octree<Point_t> &oct, std::string kernelName) {
+        void benchmarkPtrOctree(Octree<Point_t> &oct, std::string_view kernelName) {
             if(mainOptions.searchAlgos.contains(SearchAlgo::NEIGHBORS_PTR)) {
                 auto neighborsPtrSearch = [&](double radius) -> size_t {
                     size_t averageResultSize = 0;
@@ -347,6 +399,7 @@ class NeighborsBenchmark {
                         break;
                 }
             }
+            benchmarkNanoflannKDTreeKNN(kdtree, "KNN");
         }
 
         void initializeBenchmarkUnibnOctree() {
@@ -423,6 +476,7 @@ class NeighborsBenchmark {
                         break;
                 }
             }
+            benchmarkLinearOctreeKNN(oct, "KNN");
         }
 
         void initializeBenchmarkPtrOctree() {

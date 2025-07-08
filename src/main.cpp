@@ -3,10 +3,10 @@
 #include <iostream>
 #include <random>
 #include <optional>
+#include "main_options.hpp"
 #include "util.hpp"
 #include "TimeWatcher.hpp"
 #include "handlers.hpp"
-#include "main_options.hpp"
 #include "benchmarking/benchmarking.hpp"
 #include "benchmarking/neighbor_benchmarks.hpp"
 #include "benchmarking/search_set.hpp"
@@ -215,7 +215,100 @@ void encodingAndOctreeLog(std::ofstream &outputFile, EncoderType encoding) {
     log->toCSV(outputFile);
 }
 
+void testKNN(EncoderType encoding = EncoderType::NO_ENCODING) {
+    // Load points and put their metadata into a separate vector
+    auto pointMetaPair = readPoints<Point_t>(mainOptions.inputFile);
+    std::vector<Point_t> points = std::move(pointMetaPair.first);
+    std::optional<std::vector<PointMetadata>> metadata = std::move(pointMetaPair.second);
+    auto& enc = getEncoder(encoding);
+    // Sort the point cloud
+    auto [codes, box] = enc.sortPoints<Point_t>(points, metadata);
+    // Build structures
+    LinearOctree<Point_t> loct(points, codes, box, enc);
+    NanoflannPointCloud<Point_t> npc(points);
+    NanoFlannKDTree<Point_t> kdtree(3, npc, {mainOptions.maxPointsLeaf});
+    TimeWatcher twLoct; 
+    TimeWatcher twNano;
+    long nanosOct = 0, nanosNano = 0;
+    bool seq = true; 
+    size_t n = 1000;
+    SearchSet ss(n, points.size(), seq);
+    auto &searchPoints = ss.searchPoints[0];
+    std::cout << "Accumulated times (s) for " << n << " kNN searches over " 
+        << std::fixed << std::setprecision(2) << points.size()
+            << " points cloud" << std::endl;
+    omp_set_num_threads(40);
+    for(size_t k = 4; k<=1e6; k*=2) {
+            twLoct.start();
+            #pragma omp parallel for schedule(runtime)
+                for(size_t i = 0; i < searchPoints.size(); i++){
+                    // Run loct
+                    std::vector<size_t> indexesLoct(k);
+                    std::vector<double> distancesLoct(k);
+                    loct.knnV2(points[searchPoints[i]], k, indexesLoct, distancesLoct);
+                }
+            twLoct.stop();
+            nanosOct += twLoct.getElapsedNanos();
+            twNano.start();
+            #pragma omp parallel for schedule(runtime)
+                for(size_t i = 0; i < searchPoints.size(); i++){
+                // Run nanoflann
+                std::vector<size_t> indexesNanoflann(k);
+                std::vector<double> distancesNanoflann(k);
+                const double pt[3] = {points[searchPoints[i]].getX(), points[searchPoints[i]].getY(), points[searchPoints[i]].getZ()};
+                kdtree.knnSearch(pt, k, &indexesNanoflann[0], &distancesNanoflann[0]);    
+            }
+            twNano.stop();
+            nanosNano += twNano.getElapsedNanos();
+            // for(size_t i = 0; i < searchPoints.size(); i++){
+            //         // Run loct
+            //         std::vector<size_t> indexesLoct(k);
+            //         std::vector<double> distancesLoct(k);
+            //         twLoct.start();
+            //         loct.knnV2(points[searchPoints[i]], k, indexesLoct, distancesLoct);
+            //         twLoct.stop();
+            //         nanosOct += twLoct.getElapsedNanos();
+            //         // Run nanoflann
+            //         std::vector<size_t> indexesNanoflann(k);
+            //         std::vector<double> distancesNanoflann(k);
+            //         const double pt[3] = {points[searchPoints[i]].getX(), points[searchPoints[i]].getY(), points[searchPoints[i]].getZ()};
+            //         twNano.start();
+            //         kdtree.knnSearch(pt, k, &indexesNanoflann[0], &distancesNanoflann[0]);
+            //         twNano.stop();
+            //         nanosNano += twNano.getElapsedNanos();
+            //         std::unordered_set<size_t> indexSetLoct;
+            //         for (auto index : indexesLoct) {
+            //             indexSetLoct.insert(index);
+            //         }
+            //         std::unordered_set<size_t> indexSetNanoflann;
+            //         for (auto index : indexesNanoflann) {
+            //             indexSetNanoflann.insert(index);
+            //         }
 
+            //         if(indexSetLoct != indexSetNanoflann) {
+            //             std::cout << "KNN results are different!" << std::endl;
+
+            //             // Optional: print differences
+            //             std::cout << "In Loct but not in nanoflann:" << std::endl;
+            //             for (size_t id : indexSetLoct) {
+            //                 if (indexSetNanoflann.find(id) == indexSetNanoflann.end()) {
+            //                     std::cout << id << std::endl;
+            //                 }
+            //             }
+
+            //             std::cout << "In nanoflann but not in Loct:" << std::endl;
+            //             for (size_t id : indexSetNanoflann) {
+            //                 if (indexSetLoct.find(id) == indexSetLoct.end()) {
+            //                     std::cout << id << std::endl;
+            //                 }
+            //             }
+            //         }
+            //     }
+        std::cout << "k = " << k << std::endl << std::fixed << std::setprecision(5);
+        std::cout << "  linear octree: "    << (double) nanosOct / 1e9  << std::endl;
+        std::cout << "  nanoflann kdtree: " << (double) nanosNano / 1e9 << std::endl;
+    }
+}
 
 int main(int argc, char *argv[]) {
     // Set default OpenMP schedule: dynamic and auto chunk size
@@ -254,29 +347,30 @@ int main(int argc, char *argv[]) {
         if(mainOptions.encodings.contains(EncoderType::HILBERT_ENCODER_3D))
             searchBenchmark(outputFile, EncoderType::HILBERT_ENCODER_3D);
     } else {
+        testKNN(HILBERT_ENCODER_3D);
         // Output encoded point clouds to the files (for plots and such)
-        std::filesystem::path unencodedPath = mainOptions.outputDirName / "output_unencoded.csv";
-        std::filesystem::path mortonPath = mainOptions.outputDirName / "output_morton.csv";
-        std::filesystem::path hilbertPath = mainOptions.outputDirName / "output_hilbert.csv";
-        std::filesystem::path unencodedPathOct = mainOptions.outputDirName / "output_unencoded_oct.csv";
-        std::filesystem::path mortonPathOct = mainOptions.outputDirName / "output_morton_oct.csv";
-        std::filesystem::path hilbertPathOct = mainOptions.outputDirName / "output_hilbert_oct.csv";
-        std::ofstream unencodedFile(unencodedPath);
-        std::ofstream mortonFile(mortonPath);
-        std::ofstream hilbertFile(hilbertPath);
-        std::ofstream unencodedFileOct(unencodedPathOct);
-        std::ofstream mortonFileOct(mortonPathOct);
-        std::ofstream hilbertFileOct(hilbertPathOct);
+        // std::filesystem::path unencodedPath = mainOptions.outputDirName / "output_unencoded.csv";
+        // std::filesystem::path mortonPath = mainOptions.outputDirName / "output_morton.csv";
+        // std::filesystem::path hilbertPath = mainOptions.outputDirName / "output_hilbert.csv";
+        // std::filesystem::path unencodedPathOct = mainOptions.outputDirName / "output_unencoded_oct.csv";
+        // std::filesystem::path mortonPathOct = mainOptions.outputDirName / "output_morton_oct.csv";
+        // std::filesystem::path hilbertPathOct = mainOptions.outputDirName / "output_hilbert_oct.csv";
+        // std::ofstream unencodedFile(unencodedPath);
+        // std::ofstream mortonFile(mortonPath);
+        // std::ofstream hilbertFile(hilbertPath);
+        // std::ofstream unencodedFileOct(unencodedPathOct);
+        // std::ofstream mortonFileOct(mortonPathOct);
+        // std::ofstream hilbertFileOct(hilbertPathOct);
         
-        if (!unencodedFile.is_open() || !mortonFile.is_open() || !hilbertFile.is_open() || 
-            !unencodedFileOct.is_open() || !mortonFileOct.is_open() || !hilbertFileOct.is_open()) {
-            throw std::ios_base::failure("Failed to open output files");
-        }
+        // if (!unencodedFile.is_open() || !mortonFile.is_open() || !hilbertFile.is_open() || 
+        //     !unencodedFileOct.is_open() || !mortonFileOct.is_open() || !hilbertFileOct.is_open()) {
+        //     throw std::ios_base::failure("Failed to open output files");
+        // }
         
-        std::cout << "Output files created successfully." << std::endl;
-        outputReorderings(unencodedFile, unencodedFileOct);  
-        outputReorderings(mortonFile, mortonFileOct, EncoderType::MORTON_ENCODER_3D);  
-        outputReorderings(hilbertFile, hilbertFileOct, EncoderType::HILBERT_ENCODER_3D);  
+        // std::cout << "Output files created successfully." << std::endl;
+        // outputReorderings(unencodedFile, unencodedFileOct);  
+        // outputReorderings(mortonFile, mortonFileOct, EncoderType::MORTON_ENCODER_3D);  
+        // outputReorderings(hilbertFile, hilbertFileOct, EncoderType::HILBERT_ENCODER_3D);  
         
         // Encoding and build times benchmark
         // std::filesystem::path encAndOctreeLogsPath = mainOptions.outputDirName / "enc_octree_times.csv";

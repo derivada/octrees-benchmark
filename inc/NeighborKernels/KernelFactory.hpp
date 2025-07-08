@@ -5,31 +5,14 @@
 #ifndef KERNELFACTORY_HPP
 #define KERNELFACTORY_HPP
 
+#include "main_options.hpp"
 #include "KernelCircle.hpp"
 #include "KernelCube.hpp"
 #include "KernelSphere.hpp"
 #include "KernelSquare.hpp"
 #include "Geometry/point.hpp"
-
 #include <memory>
 
-enum class Kernel_t // Different types of kernels to be used in the factory function
-{
-	circle,
-	sphere,
-	square,
-	cube
-};
-
-constexpr const char* kernelToString(Kernel_t kernel) {
-    switch (kernel) {
-        case Kernel_t::circle: return "Circle";
-        case Kernel_t::sphere: return "Sphere";
-        case Kernel_t::square: return "Square";
-        case Kernel_t::cube: return "Cube";
-        default: return "Unknown";
-    }
-}
 
 template<Kernel_t kernel>
 inline auto kernelFactory_ptr(const Point& center, const double radius) -> std::unique_ptr<KernelAbstract>
