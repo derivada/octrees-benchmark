@@ -215,6 +215,7 @@ void encodingAndOctreeLog(std::ofstream &outputFile, EncoderType encoding) {
     log->toCSV(outputFile);
 }
 
+/// @brief just a debugging method for checking correct knn impl
 void testKNN(EncoderType encoding = EncoderType::NO_ENCODING) {
     // Load points and put their metadata into a separate vector
     auto pointMetaPair = readPoints<Point_t>(mainOptions.inputFile);
@@ -227,9 +228,23 @@ void testKNN(EncoderType encoding = EncoderType::NO_ENCODING) {
     LinearOctree<Point_t> loct(points, codes, box, enc);
     NanoflannPointCloud<Point_t> npc(points);
     NanoFlannKDTree<Point_t> kdtree(3, npc, {mainOptions.maxPointsLeaf});
+    auto pclCloud = NeighborsBenchmark<Point_t>::convertCloudToPCL(points);
+
+    // Build the PCL Octree
+    pcl::octree::OctreePointCloudSearch<pcl::PointXYZ> pcloct(mainOptions.pclOctResolution);
+    pcl::PointCloud<pcl::PointXYZ>::Ptr cloudPtr = pclCloud.makeShared();
+    pcloct.setInputCloud(cloudPtr);
+    pcloct.addPointsFromInputCloud();
+
+    // Build the PCL Kd-tree
+    pcl::KdTreeFLANN<pcl::PointXYZ> pclkd = pcl::KdTreeFLANN<pcl::PointXYZ>();
+    pclkd.setInputCloud(cloudPtr);
+    
     TimeWatcher twLoct; 
     TimeWatcher twNano;
-    long nanosOct = 0, nanosNano = 0;
+    TimeWatcher twPcloct;
+    TimeWatcher twPclKD;
+    long nanosOct = 0, nanosNano = 0, nanosPcloct = 0, nanosPclKD = 0;
     bool seq = true; 
     size_t n = 1000;
     SearchSet ss(n, points.size(), seq);
@@ -239,74 +254,116 @@ void testKNN(EncoderType encoding = EncoderType::NO_ENCODING) {
             << " points cloud" << std::endl;
     omp_set_num_threads(40);
     for(size_t k = 4; k<=1e6; k*=2) {
-            twLoct.start();
-            #pragma omp parallel for schedule(runtime)
-                for(size_t i = 0; i < searchPoints.size(); i++){
+            for(size_t i = 0; i < searchPoints.size(); i++){
                     // Run loct
                     std::vector<size_t> indexesLoct(k);
                     std::vector<double> distancesLoct(k);
+                    twLoct.start();
                     loct.knnV2(points[searchPoints[i]], k, indexesLoct, distancesLoct);
+                    twLoct.stop();
+                    nanosOct += twLoct.getElapsedNanos();
+                    // Run nanoflann
+                    std::vector<size_t> indexesNanoflann(k);
+                    std::vector<double> distancesNanoflann(k);
+                    const double pt[3] = {points[searchPoints[i]].getX(), points[searchPoints[i]].getY(), points[searchPoints[i]].getZ()};
+                    twNano.start();
+                    kdtree.knnSearch(pt, k, &indexesNanoflann[0], &distancesNanoflann[0]);
+                    twNano.stop();
+                    nanosNano += twNano.getElapsedNanos();
+
+                    // Run PCLOCT
+                    pcl::PointXYZ searchPoint = pclCloud[searchPoints[i]];
+                    std::vector<int> indexesPcloct(k);
+                    std::vector<float> distancesPcloct(k);
+                    twPcloct.start();
+                    pcloct.nearestKSearch(searchPoint, k, indexesPcloct, distancesPcloct);
+                    twPcloct.stop();
+                    nanosPcloct += twPcloct.getElapsedNanos();
+
+                    // Run PCLKD
+                    std::vector<int> indexesPclKD(k);
+                    std::vector<float> distancesPclKD(k);
+                    twPclKD.start();
+                    pclkd.nearestKSearch(searchPoint, k, indexesPclKD, distancesPclKD);
+                    twPclKD.stop();
+                    nanosPclKD += twPclKD.getElapsedNanos();
+
+                    std::unordered_set<size_t> indexSetLoct;
+                    for (auto index : indexesLoct) {
+                        indexSetLoct.insert(index);
+                    }
+                    std::unordered_set<size_t> indexSetNanoflann;
+                    for (auto index : indexesNanoflann) {
+                        indexSetNanoflann.insert(index);
+                    }
+                    std::unordered_set<size_t> indexSetPcloct;
+                    for (auto index : indexesPcloct) {
+                        indexSetPcloct.insert(index);
+                    }
+                    std::unordered_set<size_t> indexSetPclKD;
+                    for (auto index : indexesPclKD) {
+                        indexSetPclKD.insert(index);
+                    }
+                    if(indexSetLoct != indexSetNanoflann) {
+                        std::cout << "KNN results are different for nanoflann!" << std::endl;
+
+                        // Optional: print differences
+                        std::cout << "In Loct but not in nanoflann:" << std::endl;
+                        for (size_t id : indexSetLoct) {
+                            if (indexSetNanoflann.find(id) == indexSetNanoflann.end()) {
+                                std::cout << id << std::endl;
+                            }
+                        }
+
+                        std::cout << "In nanoflann but not in Loct:" << std::endl;
+                        for (size_t id : indexSetNanoflann) {
+                            if (indexSetLoct.find(id) == indexSetLoct.end()) {
+                                std::cout << id << std::endl;
+                            }
+                        }
+                    }
+                    if(indexSetLoct != indexSetPcloct) {
+                        std::cout << "KNN results are different for pcloctree!" << std::endl;
+
+                        // Optional: print differences
+                        std::cout << "In Loct but not in pcloct:" << std::endl;
+                        for (size_t id : indexSetLoct) {
+                            if (indexSetPcloct.find(id) == indexSetPcloct.end()) {
+                                std::cout << id << std::endl;
+                            }
+                        }
+
+                        std::cout << "In pcloct but not in Loct:" << std::endl;
+                        for (size_t id : indexSetPcloct) {
+                            if (indexSetLoct.find(id) == indexSetLoct.end()) {
+                                std::cout << id << std::endl;
+                            }
+                        }
+                    }
+                    if(indexSetLoct != indexSetPclKD) {
+                        std::cout << "KNN results are different for pclkdtree!" << std::endl;
+
+                        // Optional: print differences
+                        std::cout << "In Loct but not in pclkdtree:" << std::endl;
+                        for (size_t id : indexSetLoct) {
+                            if (indexSetPclKD.find(id) == indexSetPclKD.end()) {
+                                std::cout << id << std::endl;
+                            }
+                        }
+
+                        std::cout << "In pclkdtree but not in Loct:" << std::endl;
+                        for (size_t id : indexSetPclKD) {
+                            if (indexSetLoct.find(id) == indexSetLoct.end()) {
+                                std::cout << id << std::endl;
+                            }
+                        }
+                    }
                 }
-            twLoct.stop();
-            nanosOct += twLoct.getElapsedNanos();
-            twNano.start();
-            #pragma omp parallel for schedule(runtime)
-                for(size_t i = 0; i < searchPoints.size(); i++){
-                // Run nanoflann
-                std::vector<size_t> indexesNanoflann(k);
-                std::vector<double> distancesNanoflann(k);
-                const double pt[3] = {points[searchPoints[i]].getX(), points[searchPoints[i]].getY(), points[searchPoints[i]].getZ()};
-                kdtree.knnSearch(pt, k, &indexesNanoflann[0], &distancesNanoflann[0]);    
-            }
-            twNano.stop();
-            nanosNano += twNano.getElapsedNanos();
-            // for(size_t i = 0; i < searchPoints.size(); i++){
-            //         // Run loct
-            //         std::vector<size_t> indexesLoct(k);
-            //         std::vector<double> distancesLoct(k);
-            //         twLoct.start();
-            //         loct.knnV2(points[searchPoints[i]], k, indexesLoct, distancesLoct);
-            //         twLoct.stop();
-            //         nanosOct += twLoct.getElapsedNanos();
-            //         // Run nanoflann
-            //         std::vector<size_t> indexesNanoflann(k);
-            //         std::vector<double> distancesNanoflann(k);
-            //         const double pt[3] = {points[searchPoints[i]].getX(), points[searchPoints[i]].getY(), points[searchPoints[i]].getZ()};
-            //         twNano.start();
-            //         kdtree.knnSearch(pt, k, &indexesNanoflann[0], &distancesNanoflann[0]);
-            //         twNano.stop();
-            //         nanosNano += twNano.getElapsedNanos();
-            //         std::unordered_set<size_t> indexSetLoct;
-            //         for (auto index : indexesLoct) {
-            //             indexSetLoct.insert(index);
-            //         }
-            //         std::unordered_set<size_t> indexSetNanoflann;
-            //         for (auto index : indexesNanoflann) {
-            //             indexSetNanoflann.insert(index);
-            //         }
-
-            //         if(indexSetLoct != indexSetNanoflann) {
-            //             std::cout << "KNN results are different!" << std::endl;
-
-            //             // Optional: print differences
-            //             std::cout << "In Loct but not in nanoflann:" << std::endl;
-            //             for (size_t id : indexSetLoct) {
-            //                 if (indexSetNanoflann.find(id) == indexSetNanoflann.end()) {
-            //                     std::cout << id << std::endl;
-            //                 }
-            //             }
-
-            //             std::cout << "In nanoflann but not in Loct:" << std::endl;
-            //             for (size_t id : indexSetNanoflann) {
-            //                 if (indexSetLoct.find(id) == indexSetLoct.end()) {
-            //                     std::cout << id << std::endl;
-            //                 }
-            //             }
-            //         }
-            //     }
         std::cout << "k = " << k << std::endl << std::fixed << std::setprecision(5);
         std::cout << "  linear octree: "    << (double) nanosOct / 1e9  << std::endl;
         std::cout << "  nanoflann kdtree: " << (double) nanosNano / 1e9 << std::endl;
+        std::cout << "  pcl octree: " << (double) nanosPcloct / 1e9 << std::endl;
+        std::cout << "  pcl kdtree: " << (double) nanosPclKD / 1e9 << std::endl;
     }
 }
 

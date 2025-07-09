@@ -144,7 +144,7 @@ class NeighborsBenchmark {
             }
         }
 
-        void executeKNNBenchmark(const std::function<size_t(size_t)>& knnSearchCallback, std::string_view kernelName, SearchAlgo algo) {
+        void executeKNNBenchmark(const std::function<size_t(size_t)>& knnSearchCallback, SearchAlgo algo) {
             std::cout << "  Running k-NN searches with " << searchAlgoToString(algo) << std::endl;
             const auto& kValues = mainOptions.benchmarkKValues;
             const size_t repeats = mainOptions.repeats;
@@ -158,7 +158,7 @@ class NeighborsBenchmark {
                         return knnSearchCallback(k); 
                     }, useWarmup);
                     searchSet.reset();
-                    appendToCsv(algo, kernelName, k, stats, averageResultSize, numberOfThreads);
+                    appendToCsv(algo, "KNN", k, stats, averageResultSize, numberOfThreads);
                     std::cout << std::setprecision(2);
                     std::cout << "    (" << i + th*numThreads.size() + 1 << "/" << numThreads.size() * kValues.size() << ") " 
                         << "k  " << std::setw(8) << k 
@@ -189,7 +189,7 @@ class NeighborsBenchmark {
             }
         }
 
-        void benchmarkNanoflannKDTreeKNN(NanoFlannKDTree<Point_t> &kdtree, std::string_view kernelName) {
+        void benchmarkNanoflannKDTreeKNN(NanoFlannKDTree<Point_t> &kdtree) {
             if(mainOptions.searchAlgos.contains(SearchAlgo::KNN_NANOFLANN)) {
                 auto neighborsKNNNanoflann = [&](size_t k) -> size_t {
                     size_t averageResultSize = 0;
@@ -207,7 +207,7 @@ class NeighborsBenchmark {
                     searchSet.nextRepeat();
                     return averageResultSize;
                 };
-                executeKNNBenchmark(neighborsKNNNanoflann, "kNN", SearchAlgo::KNN_NANOFLANN);
+                executeKNNBenchmark(neighborsKNNNanoflann, SearchAlgo::KNN_NANOFLANN);
             }
         }
 
@@ -241,18 +241,41 @@ class NeighborsBenchmark {
         }
         
 #ifdef HAVE_PCL
-        pcl::PointCloud<pcl::PointXYZ> convertCloudToPCL() {
+        static pcl::PointCloud<pcl::PointXYZ> convertCloudToPCL(std::vector<Point_t> &points) {
             pcl::PointCloud<pcl::PointXYZ> pclCloud;
             pclCloud.width = points.size();
             pclCloud.height = 1;
             pclCloud.points.resize(points.size());
-            for (size_t i = 0; i < points.size(); ++i) {
-                pclCloud.points[i].x = points[i].getX();
-                pclCloud.points[i].y = points[i].getY();
-                pclCloud.points[i].z = points[i].getZ();
-            }
+            #pragma omp parallel for schedule(runtime)
+                for (size_t i = 0; i < points.size(); ++i) {
+                    pclCloud.points[i].x = points[i].getX();
+                    pclCloud.points[i].y = points[i].getY();
+                    pclCloud.points[i].z = points[i].getZ();
+                }
             return pclCloud;
         }
+
+        void benchmarkPCLOctreeKNN(pcl::octree::OctreePointCloudSearch<pcl::PointXYZ> &octree, pcl::PointCloud<pcl::PointXYZ> &pclCloud) {
+            if(mainOptions.searchAlgos.contains(SearchAlgo::KNN_PCLOCT)) {
+                 auto KNN_PCLOCT = [&](size_t k) -> size_t {
+                    size_t averageResultSize = 0;
+                    std::vector<size_t> &searchIndexes = searchSet.searchPoints[searchSet.currentRepeat];
+                    #pragma omp parallel for schedule(runtime) reduction(+:averageResultSize)
+                        for(size_t i = 0; i<searchSet.numSearches; i++) {
+                            pcl::PointXYZ searchPoint = pclCloud[searchIndexes[i]];
+                            std::vector<int> indexes(k);
+                            std::vector<float> distances(k);
+                            averageResultSize += octree.nearestKSearch(searchPoint, k, indexes, distances);
+                        }
+                    averageResultSize = averageResultSize / searchSet.numSearches;
+                    searchSet.nextRepeat();
+                    return averageResultSize;
+                };
+                
+                executeKNNBenchmark(KNN_PCLOCT, SearchAlgo::KNN_PCLOCT);
+            }
+        }
+
 
         void benchmarkPCLOctree(pcl::octree::OctreePointCloudSearch<pcl::PointXYZ> &octree, pcl::PointCloud<pcl::PointXYZ> &pclCloud, std::string_view kernelName) {
             if(mainOptions.searchAlgos.contains(SearchAlgo::NEIGHBORS_PCLOCT)) {
@@ -272,6 +295,27 @@ class NeighborsBenchmark {
                 };
                 
                 executeBenchmark(neighborsPCLOct, kernelName, SearchAlgo::NEIGHBORS_PCLOCT);
+            }
+        }
+
+        void benchmarkPCLKDTreeKNN(pcl::KdTreeFLANN<pcl::PointXYZ> &kdtree, pcl::PointCloud<pcl::PointXYZ> &pclCloud) {
+            if(mainOptions.searchAlgos.contains(SearchAlgo::KNN_PCLKD)) {
+                 auto KNN_PCLKD = [&](size_t k) -> size_t {
+                    size_t averageResultSize = 0;
+                    std::vector<size_t> &searchIndexes = searchSet.searchPoints[searchSet.currentRepeat];
+                    #pragma omp parallel for schedule(runtime) reduction(+:averageResultSize)
+                        for(size_t i = 0; i<searchSet.numSearches; i++) {
+                            pcl::PointXYZ searchPoint = pclCloud[searchIndexes[i]];
+                            std::vector<int> indexes(k);
+                            std::vector<float> distances(k);
+                            averageResultSize += kdtree.nearestKSearch(searchPoint, k, indexes, distances);
+                        }
+                    averageResultSize = averageResultSize / searchSet.numSearches;
+                    searchSet.nextRepeat();
+                    return averageResultSize;
+                };
+                
+                executeKNNBenchmark(KNN_PCLKD, SearchAlgo::NEIGHBORS_PCLKD);
             }
         }
 
@@ -347,7 +391,7 @@ class NeighborsBenchmark {
             }
         }
 
-        void benchmarkLinearOctreeKNN(LinearOctree<Point_t>& oct, const std::string_view& kernelName) {
+        void benchmarkLinearOctreeKNN(LinearOctree<Point_t>& oct) {
             if(mainOptions.searchAlgos.contains(SearchAlgo::KNN_V2)) {
                 auto neighborsKNNV2 = [&](size_t k) -> size_t {
                     size_t averageResultSize = 0;
@@ -363,7 +407,7 @@ class NeighborsBenchmark {
                     searchSet.nextRepeat();
                     return averageResultSize;
                 };
-                executeKNNBenchmark(neighborsKNNV2, kernelName, SearchAlgo::KNN_V2);
+                executeKNNBenchmark(neighborsKNNV2, SearchAlgo::KNN_V2);
             }
         }
 
@@ -399,7 +443,7 @@ class NeighborsBenchmark {
                         break;
                 }
             }
-            benchmarkNanoflannKDTreeKNN(kdtree, "KNN");
+            benchmarkNanoflannKDTreeKNN(kdtree);
         }
 
         void initializeBenchmarkUnibnOctree() {
@@ -422,7 +466,7 @@ class NeighborsBenchmark {
 #ifdef HAVE_PCL
         void initializeBenchmarkPCLOctree() {
             // Convert cloud to PCL cloud
-            auto pclCloud = convertCloudToPCL();
+            auto pclCloud = convertCloudToPCL(points);
             
             // Build the PCL Octree
             pcl::octree::OctreePointCloudSearch<pcl::PointXYZ> oct(mainOptions.pclOctResolution);
@@ -437,11 +481,12 @@ class NeighborsBenchmark {
                         break;
                 }
             }
+            benchmarkPCLOctreeKNN(oct, pclCloud);
         }
         
         void initializeBenchmarkPCLKDTree() {
             // Convert cloud to PCL cloud
-            auto pclCloud = convertCloudToPCL();
+            auto pclCloud = convertCloudToPCL(points);
             
             // Build the PCL Kd-tree
             pcl::KdTreeFLANN<pcl::PointXYZ> kdtree = pcl::KdTreeFLANN<pcl::PointXYZ>();
@@ -455,6 +500,7 @@ class NeighborsBenchmark {
                         break;
                 }
             }
+            benchmarkPCLKDTreeKNN(kdtree, pclCloud);
         }
 #endif
 
@@ -476,7 +522,7 @@ class NeighborsBenchmark {
                         break;
                 }
             }
-            benchmarkLinearOctreeKNN(oct, "KNN");
+            benchmarkLinearOctreeKNN(oct);
         }
 
         void initializeBenchmarkPtrOctree() {
