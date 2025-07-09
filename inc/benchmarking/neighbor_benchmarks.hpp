@@ -96,6 +96,65 @@ class NeighborsBenchmark {
                 << openmpScheduleName
                 << std::endl;
         }
+        template <typename ParameterType>
+        inline void appendToCsv(SearchAlgo algo, std::string_view kernel, ParameterType main_parameter, const benchmarking::Stats<>& stats, 
+                                std::vector<long long> &eventValues, size_t averageResultSize = 0, 
+                                int numThreads = omp_get_max_threads(), double tolerancePercentage = 0.0
+                                ) {
+            // Check if the file is empty and append header if it is
+            if (outputFile.tellp() == 0) {
+                outputFile <<   "date,octree,point_type,encoder,npoints,operation,kernel,radius,num_searches,sequential_searches,repeats,"
+                                "accumulated,mean,median,stdev,used_warmup,warmup_time,avg_result_size,tolerance_percentage,"
+                                "openmp_threads,openmp_schedule,l1d_miss,l2d_miss,l3_miss\n";
+            }
+
+            // if the comment, exists, append it to the op. name
+            std::string fullAlgoName = std::string(searchAlgoToString(algo)) + ((comment != "") ? "_" + comment : "");
+            
+            // Get OpenMP runtime information
+            omp_sched_t openmpSchedule;
+            int openmpChunkSize;
+            omp_get_schedule(&openmpSchedule, &openmpChunkSize);
+            std::string openmpScheduleName;
+            switch (openmpSchedule) {
+                case omp_sched_static: openmpScheduleName = "static"; break;
+                case omp_sched_dynamic: openmpScheduleName = "dynamic"; break;
+                case omp_sched_guided: openmpScheduleName = "guided"; break;
+                default: openmpScheduleName; break;
+            }
+            std::string sequentialSearches;
+            if(searchSet.sequential) {
+                sequentialSearches = "sequential";
+            } else {
+                sequentialSearches = "random";
+            }
+            outputFile << getCurrentDate() << ',' 
+                << searchStructureToString(algoToStructure(algo)) << ',' 
+                << "Point" << ','
+                << enc.getEncoderName() << ','
+                << points.size() <<  ','
+                << fullAlgoName << ',' 
+                << kernel << ',' 
+                << main_parameter << ','
+                << searchSet.numSearches << ',' 
+                << sequentialSearches << ','
+                << stats.size() << ','
+                << stats.accumulated() << ',' 
+                << stats.mean() << ',' 
+                << stats.median() << ',' 
+                << stats.stdev() << ','
+                << stats.usedWarmup() << ','
+                << stats.warmupValue() << ','
+                << averageResultSize << ','
+                << tolerancePercentage << ','
+                << numThreads << ','
+                << openmpScheduleName << ','
+                << eventValues[0] << ','
+                << eventValues[1] << ','
+                << eventValues[2] << ','
+                << std::endl;
+        }
+
 
     public:
         NeighborsBenchmark(std::vector<Point_t>& points, std::vector<key_t>& codes, Box box, PointEncoder& enc, SearchSet& searchSet, 
@@ -229,7 +288,7 @@ class NeighborsBenchmark {
                             return searchCallback(radius); 
                         }, useWarmup, eventSet, eventValues.data());
                         printPapiResults(events, descriptions, eventValues);
-                        appendToCsv(algo, kernelName, radius, stats, averageResultSize, numberOfThreads);
+                        appendToCsv(algo, kernelName, radius, stats, eventValues, averageResultSize, numberOfThreads);
                     } else {
                         auto [stats, averageResultSize] = benchmarking::benchmark<size_t>(repeats, [&]() { 
                             return searchCallback(radius); 
@@ -256,11 +315,26 @@ class NeighborsBenchmark {
                 omp_set_num_threads(numberOfThreads);
                 for (size_t i = 0; i < kValues.size(); i++) {
                     size_t k = kValues[i];
-                    auto [stats, averageResultSize] = benchmarking::benchmark<size_t>(repeats, [&]() { 
-                        return knnSearchCallback(k); 
-                    }, useWarmup);
+                    if(mainOptions.cacheProfiling) {
+                        auto [events, descriptions] = buildCombinedEventList();
+                        int eventSet = initPapiEventSet(events);
+                        std::vector<long long> eventValues(events.size());
+                        if (eventSet == PAPI_NULL) {
+                            std::cout << "Failed to initialize PAPI event set." << std::endl;
+                            exit(1);
+                        }
+                        auto [stats, averageResultSize] = benchmarking::benchmark<size_t>(repeats, [&]() { 
+                            return knnSearchCallback(k); 
+                        }, useWarmup, eventSet, eventValues.data());
+                        printPapiResults(events, descriptions, eventValues);
+                        appendToCsv(algo, "KNN", k, stats, eventValues, averageResultSize, numberOfThreads);
+                    } else {
+                        auto [stats, averageResultSize] = benchmarking::benchmark<size_t>(repeats, [&]() { 
+                            return knnSearchCallback(k); 
+                        }, useWarmup);
+                        appendToCsv(algo, "KNN", k, stats, averageResultSize, numberOfThreads);
+                    }
                     searchSet.reset();
-                    appendToCsv(algo, "KNN", k, stats, averageResultSize, numberOfThreads);
                     std::cout << std::setprecision(2);
                     std::cout << "    (" << i + th*numThreads.size() + 1 << "/" << numThreads.size() * kValues.size() << ") " 
                         << "k  " << std::setw(8) << k 
