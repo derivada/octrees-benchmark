@@ -29,6 +29,7 @@
 #include <pcl/octree/octree_search.h>
 #include <pcl/kdtree/kdtree_flann.h>
 #endif
+#include "papi.h"
 
 namespace fs = std::filesystem;
 using namespace PointEncoding;
@@ -372,7 +373,12 @@ int main(int argc, char *argv[]) {
     omp_set_schedule(omp_sched_dynamic, 0);
     processArgs(argc, argv);
     std::cout << std::fixed << std::setprecision(3); 
-
+    if(mainOptions.cacheProfiling) {
+        if (PAPI_library_init(PAPI_VER_CURRENT) != PAPI_VER_CURRENT) {
+            std::cerr << "PAPI init error, can't measure cache failures" << std::endl;
+            return 1;
+        }
+    }
 
     std::cout << "Tamaño octante unibn: " << sizeof(unibn::Octree<Point_t>::Octant) << std::endl;
     std::cout << "Tamaño octante pointer: " << sizeof(Octree<Point_t>) << std::endl;

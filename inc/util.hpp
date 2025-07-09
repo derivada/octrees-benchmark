@@ -23,6 +23,9 @@
 #include <numeric>
 #include <iomanip>
 #include <cstdint>
+#include "papi.h"
+
+
 
 constexpr size_t LOG_FIELD_WIDTH = 32;
 

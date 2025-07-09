@@ -27,6 +27,10 @@ void printHelp() {
 		<< "    'neighborsUnibn'     - unibnOctree search\n"
 		<< "    'neighborsPCLKD'     - PCL KD-tree search (if available)\n"
 		<< "    'neighborsPCLOct'    - PCL Octree search (if available)\n"
+		<< "	'KNNV2' 		     - linear octree KNN searches\n"
+		<< "	'KNNNanoflann'		 - nanoflann KNN searches\n"
+		<< "	'KNNPCLKD'			 - PCL KD-tree KNN search (if available)\n"
+		<< "	'KNNPCLOCT'			 - PCL Octree KNN search (if available)\n"
 		<< "-e, --encodings: Select SFC encodings to reorder the cloud before the searches (comma-separated or 'all'). Default: all. Possible values:\n"
 		<< "    'none'  - no encoding; disables Linear Octree building for those runs\n"
 		<< "    'mort'  - Morton SFC Reordering\n"
@@ -34,6 +38,7 @@ void printHelp() {
 
 		<< "Other options:\n"
 		<< "--debug: Enable debug mode (measures octree build and encoding times)\n"
+		<< "--cache-profiling: Enable cache profiling during search algo. executions using PAPI\n"
 		<< "--check: Enable result checking (legacy option; use avg_result_size to verify correctness)\n"
 		<< "--no-warmup: Disable warmup phase\n"
 		<< "--approx-tol: Tolerance values for approximate search (comma-separated e.g., '10.0,50.0,100.0')\n"
@@ -267,6 +272,9 @@ void processArgs(int argc, char** argv)
 				break;
 			case LongOptions::DEBUG:
 				mainOptions.debug = true;
+				break;
+			case LongOptions::CACHE_PROFILING:
+				mainOptions.cacheProfiling = true;
 				break;
 			case LongOptions::CHECK:
 				mainOptions.checkResults = true;

@@ -10,6 +10,7 @@
 #include <numeric>
 #include <functional>
 #include <optional>
+#include <papi.h>
 
 namespace benchmarking
 {
@@ -86,16 +87,35 @@ class Stats
 };
 
 template<typename F>
-auto benchmark(const size_t repeats, F function, bool warmup = true)
+auto benchmark(const size_t repeats, F function, bool warmup = true, int eventSet = PAPI_NULL, long long *eventValues = nullptr)
 {
     Stats<double> stats(warmup);
 	size_t totalRepeats = repeats + warmup;
 	for (size_t i = 0; i < totalRepeats; i++)
 	{
 		TimeWatcher tw;
+		
+		// IMPORTANT: cache failures are only measured on the last repeat, when cache is the warmest
+		if(eventSet != PAPI_NULL && eventValues != nullptr && i == totalRepeats-1) {
+			if (PAPI_start(eventSet) != PAPI_OK) {
+				std::cout << "Failed to start PAPI." << std::endl;
+				exit(1);
+			}
+		}
+
 		tw.start();
 		function();
 		tw.stop();
+
+		// IMPORTANT: cache failures are only measured on the last repeat, when cache is the warmest
+		if(eventSet != PAPI_NULL && eventValues != nullptr && i == totalRepeats-1) {
+			if (PAPI_stop(eventSet, eventValues) != PAPI_OK) {
+				std::cout << "Failed to stop PAPI." << std::endl;
+				exit(1);
+			}
+		}
+
+
 		if(warmup && i == 0)
 			stats.set_warmup_value(tw.getElapsedDecimalSeconds());
 		else
@@ -106,7 +126,7 @@ auto benchmark(const size_t repeats, F function, bool warmup = true)
 
 // General case for non-void return type
 template <typename ReturnType, typename F>
-auto benchmark(const size_t repeats, F function, bool warmup = true)
+auto benchmark(const size_t repeats, F function, bool warmup = true, int eventSet = PAPI_NULL, long long *eventValues = nullptr)
 {
 	Stats<double> stats(warmup);  // Store time in double for simplicity
 	size_t totalRepeats = repeats + warmup;
@@ -114,9 +134,26 @@ auto benchmark(const size_t repeats, F function, bool warmup = true)
 	for (size_t i = 0; i < totalRepeats; i++)
 	{
 		TimeWatcher tw;
+
+		// IMPORTANT: cache failures are only measured on the last repeat, when cache is the warmest
+		if(eventSet != PAPI_NULL && eventValues != nullptr && i == totalRepeats-1) {
+			if (PAPI_start(eventSet) != PAPI_OK) {
+				std::cout << "Failed to start PAPI." << std::endl;
+				exit(1);
+			}
+		}
+
 		tw.start();
 		returnValue = function();  // Capture the return value
 		tw.stop();
+
+		// IMPORTANT: cache failures are only measured on the last repeat, when cache is the warmest
+		if(eventSet != PAPI_NULL && eventValues != nullptr && i == totalRepeats-1) {
+			if (PAPI_stop(eventSet, eventValues) != PAPI_OK) {
+				std::cout << "Failed to stop PAPI." << std::endl;
+				exit(1);
+			}
+		}
 
 		if (warmup && i == 0)
 			stats.set_warmup_value(tw.getElapsedDecimalSeconds());

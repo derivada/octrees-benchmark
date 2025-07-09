@@ -17,6 +17,7 @@
 #endif
 #include "nanoflann.hpp"
 #include "nanoflann_wrappers.hpp"
+#include "papi.h"
 
 using namespace ResultChecking;
 
@@ -120,6 +121,92 @@ class NeighborsBenchmark {
             std::cout << std::endl;
         }
 
+
+        static constexpr int CACHE_EVENTS[] = {
+            PAPI_L1_DCM, // l1d cache misses
+            PAPI_L2_DCM, // l2d cache misses
+            PAPI_L3_TCM, // l3 cache misses
+            //PAPI_L3_DCA // l3 accesses
+        };
+        
+        // Native event names (compile-time known strings)
+        static constexpr std::pair<const char*, const char*> NATIVE_EVENTS[] = {
+            //{"perf::L1-DCACHE-LOADS", "L1D cache load accesses"},
+            //{"perf::L1-DCACHE-STORES", "L1D store accesses"}
+        };
+
+        static constexpr int NUM_NATIVE_EVENTS = sizeof(NATIVE_EVENTS) / sizeof(NATIVE_EVENTS[0]);
+
+        // At runtime, convert native names to codes and combine
+        std::pair<std::vector<int>, std::vector<std::string>> buildCombinedEventList() {
+            std::vector<int> fullEventList;
+            std::vector<std::string> fullEventListDescs;
+
+            PAPI_event_info_t info;
+
+            // Add standard PAPI events first
+            for (auto ev : CACHE_EVENTS) {
+                fullEventList.push_back(ev);
+
+                if (PAPI_get_event_info(ev, &info) == PAPI_OK) {
+                    fullEventListDescs.emplace_back(info.short_descr);
+                } else {
+                    fullEventListDescs.emplace_back("Unknown PAPI event");
+                }
+            }
+
+            // Convert native event names to PAPI codes and add
+            for (int i = 0; i < NUM_NATIVE_EVENTS; ++i) {
+                int code;
+                if (PAPI_event_name_to_code(const_cast<char*>(NATIVE_EVENTS[i].first), &code) == PAPI_OK) {
+                    fullEventList.push_back(code);
+                    fullEventListDescs.push_back(NATIVE_EVENTS[i].second);
+                } else {
+                    std::cerr << "Failed to convert native event name: " << NATIVE_EVENTS[i].first << "\n";
+                }
+            }
+
+            return {fullEventList, fullEventListDescs};
+        }
+
+        void printPapiResults(const std::vector<int> &events, const std::vector<std::string> &descs, const std::vector<long long>& values) {
+            // Save original formatting
+            std::ios_base::fmtflags originalFlags = std::cout.flags();
+            std::streamsize originalPrecision = std::cout.precision();
+            
+            // Switch to scientific notation
+            std::cout << std::scientific << std::setprecision(3);
+            std::cout << "PAPI Performance Counters:\n";
+            for (size_t i = 0; i < events.size(); ++i) {
+                std::cout << "  " << descs[i] << ": "
+                        << static_cast<double>(values[i]) << "\n";
+            }
+
+            // Restore original formatting
+            std::cout.flags(originalFlags);
+            std::cout.precision(originalPrecision);
+        }
+
+        int initPapiEventSet(std::vector<int> &events) {
+            int eventSet = PAPI_NULL;
+
+            if (PAPI_create_eventset(&eventSet) != PAPI_OK) {
+                std::cerr << "Failed to create PAPI event set." << std::endl;
+                return PAPI_NULL;
+            }
+
+            for (int i = 0; i < events.size(); ++i) {
+                if (PAPI_add_event(eventSet, events[i]) != PAPI_OK) {
+                    std::cerr << "Failed to add event " << events[i] << " at index " << i << std::endl;
+                    PAPI_cleanup_eventset(eventSet);
+                    PAPI_destroy_eventset(&eventSet);
+                    return PAPI_NULL;
+                }
+            }
+            return eventSet;
+        }
+
+
         void executeBenchmark(const std::function<size_t(double)>& searchCallback, std::string_view kernelName, SearchAlgo algo) {
             std::cout << "  Running " << searchAlgoToString(algo) << " on kernel " << kernelName << std::endl;
             const auto& radii = mainOptions.benchmarkRadii;
@@ -130,11 +217,26 @@ class NeighborsBenchmark {
                 omp_set_num_threads(numberOfThreads);
                 for (size_t r = 0; r < radii.size(); r++) {
                     double radius = radii[r];
-                    auto [stats, averageResultSize] = benchmarking::benchmark<size_t>(repeats, [&]() { 
-                        return searchCallback(radius); 
-                    }, useWarmup);
+                    if(mainOptions.cacheProfiling) {
+                        auto [events, descriptions] = buildCombinedEventList();
+                        int eventSet = initPapiEventSet(events);
+                        std::vector<long long> eventValues(events.size());
+                        if (eventSet == PAPI_NULL) {
+                            std::cout << "Failed to initialize PAPI event set." << std::endl;
+                            exit(1);
+                        }
+                        auto [stats, averageResultSize] = benchmarking::benchmark<size_t>(repeats, [&]() { 
+                            return searchCallback(radius); 
+                        }, useWarmup, eventSet, eventValues.data());
+                        printPapiResults(events, descriptions, eventValues);
+                        appendToCsv(algo, kernelName, radius, stats, averageResultSize, numberOfThreads);
+                    } else {
+                        auto [stats, averageResultSize] = benchmarking::benchmark<size_t>(repeats, [&]() { 
+                            return searchCallback(radius); 
+                        }, useWarmup);
+                        appendToCsv(algo, kernelName, radius, stats, averageResultSize, numberOfThreads);
+                    }
                     searchSet.reset();
-                    appendToCsv(algo, kernelName, radius, stats, averageResultSize, numberOfThreads);
                     std::cout << std::setprecision(2);
                     std::cout << "    (" << r + th*numThreads.size() + 1 << "/" << numThreads.size() * radii.size() << ") " 
                         << "Radius  " << std::setw(8) << radius 
