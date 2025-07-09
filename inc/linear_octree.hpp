@@ -821,7 +821,7 @@ public:
     };
     
 
-    static double distPointsSquared(const Point &p, const Point &q) {
+    inline static double distPointsSquared(const Point &p, const Point &q) {
         // compute sq distance between the points
         double dx = p.getX() - q.getX();
         double dy = p.getY() - q.getY();
@@ -830,7 +830,7 @@ public:
         return dx * dx + dy * dy + dz * dz;
     }
 
-    double distPointOctantSquared(const Point& p, const Point& octCenter, const Vector& octRadius) const {
+    inline double distPointOctantSquared(const Point& p, const Point& octCenter, const Vector& octRadius) const {
         // Extract octant bounds
         const double minX = octCenter.getX() - octRadius.getX();
         const double minY = octCenter.getY() - octRadius.getY();
@@ -877,25 +877,30 @@ public:
      * and invoking neighborsPrune inside it 
      */
     size_t knnV2(const Point& p, const size_t k, std::vector<size_t> &indexes, std::vector<double> &dists) {
-        size_t inserted = 0;
+        size_t inserted = 0, pointsInQueue = 0;
+        double maxPointDistQueue = std::numeric_limits<double>::max();
         auto comp = [](const std::pair<double, OctantPointIndex>& a,
             const std::pair<double, OctantPointIndex>& b) {
             return a.first > b.first;  // min-heap, ignore second arg.
         };
-
-        std::priority_queue<std::pair<double, OctantPointIndex>, 
-            std::vector<std::pair<double, OctantPointIndex>>, 
-            decltype(comp)> distQueue(comp);
+        std::vector<std::pair<double, OctantPointIndex>> heap;
+        heap.reserve(std::max((size_t) 512, k / 2));
+        std::make_heap(heap.begin(), heap.end(), comp);
+        // std::priority_queue<std::pair<double, OctantPointIndex>, 
+        //     std::vector<std::pair<double, OctantPointIndex>>, 
+        //     decltype(comp)> distQueue(comp);
         
             
         // push root octant, distance is 0 since point is inside bbox, and the octree index of root is always 0
         // true in 2nd argument of OctantPointIndex constructor = is octant
         // 3rd argument is depth, always 0 for root
-        distQueue.push(std::make_pair(0, OctantPointIndex(0, true, 0)));
-
-        while(inserted < k && !distQueue.empty()) {
-            std::pair<double, OctantPointIndex> top = distQueue.top();
-            distQueue.pop();
+        heap.emplace_back(0.0, OctantPointIndex(0, true, 0));
+        // size_t max_heap_size = 0;
+        while(inserted < k && !heap.empty()) {
+            // max_heap_size = std::max(max_heap_size, heap.size());
+            std::pop_heap(heap.begin(), heap.end(), comp);
+            auto top = heap.back();
+            heap.pop_back();
             double dist = top.first;
             uint64_t index = top.second.getIndex();
             uint8_t depth = top.second.getDepth();
@@ -913,9 +918,8 @@ public:
                     // leaf node, push points into the queue
                     for (size_t i = startIndex; i < endIndex; ++i) {
                         double distToPoint = distPointsSquared(p, points[i]);
-                        distQueue.push(std::make_pair(
-                            distToPoint, OctantPointIndex(i, false))
-                        );
+                        heap.emplace_back(std::make_pair(distToPoint, OctantPointIndex(i, false)));
+                        std::push_heap(heap.begin(), heap.end(), comp);
                     }
                 } else {
                     // internal node, push child octants after computing their distance to p
@@ -924,9 +928,10 @@ public:
                         const Point& childOctCenter = centers[childOctIndex];
                         const Point& childOctRadius = precomputedRadii[depth + 1];
                         double distToChildOctant = distPointOctantSquared(p, childOctCenter, childOctRadius);
-                        distQueue.push(std::make_pair(
+                        heap.emplace_back(std::make_pair(
                             distToChildOctant, OctantPointIndex(childOctIndex, true, depth + 1))
                         );
+                        std::push_heap(heap.begin(), heap.end(), comp);
                     }
                 }   
             } else {
@@ -936,6 +941,7 @@ public:
                 inserted++;
             }
         }
+        // std::cout << "k = " << k << " -> " << max_heap_size << std::endl;
         return inserted;
 	}
 
