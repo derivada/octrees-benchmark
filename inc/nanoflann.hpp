@@ -1725,8 +1725,8 @@ class KDTreeSingleIndexAdaptor
         assign(dists, (DIM > 0 ? DIM : Base::dim_), zero);
         DistanceType dist = this->computeInitialDistances(*this, vec, dists);
         searchLevel(result, vec, Base::root_node_, dist, dists, epsError);
-
-        if (searchParams.sorted) {std::cout << "WARNING: sorting inside nanoflann KNN!" << std::endl; result.sort(); }
+        // Commented out: we dont want to sort the result
+        // if (searchParams.sorted) { result.sort(); }
 
         return result.full();
     }

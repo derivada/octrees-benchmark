@@ -70,16 +70,16 @@ void approximateSearchLog(std::ofstream &outputFile, EncoderType encoding) {
     float radius = 3.0;
     outputFile << "tolerance,upper,x,y,z\n";
     auto points_exact = lin_oct.searchNeighborsStruct<Kernel_t::sphere>(points[1234], radius);
-    for(const Point &p: points_exact) {
+    for(auto [idx, p]: points_exact) {
         outputFile << "0.0,exact," << p.getX() << "," << p.getY() << "," << p.getZ() << "\n";
     }
     for(float tol: tolerances) {
             auto points_upper = lin_oct.searchNeighborsApprox<Kernel_t::sphere>(points[1234], 3.0, tol, true);
             auto points_lower = lin_oct.searchNeighborsApprox<Kernel_t::sphere>(points[1234], 3.0, tol, false);
-            for(const Point &p: points_upper) {
+            for(auto [idx, p]: points_upper) {
                 outputFile << tol << ",upper," << p.getX() << "," << p.getY() << "," << p.getZ() << "\n";
             }
-            for(const Point &p: points_lower) {
+            for(auto [idx, p]: points_lower) {
                 outputFile << tol << ",lower," << p.getX() << "," << p.getY() << "," << p.getZ() << "\n";
             }
     }
@@ -232,14 +232,14 @@ void testKNN(EncoderType encoding = EncoderType::NO_ENCODING) {
     auto pclCloud = NeighborsBenchmark<Point_t>::convertCloudToPCL(points);
 
     // Build the PCL Octree
-    pcl::octree::OctreePointCloudSearch<pcl::PointXYZ> pcloct(mainOptions.pclOctResolution);
-    pcl::PointCloud<pcl::PointXYZ>::Ptr cloudPtr = pclCloud.makeShared();
-    pcloct.setInputCloud(cloudPtr);
-    pcloct.addPointsFromInputCloud();
+    // pcl::octree::OctreePointCloudSearch<pcl::PointXYZ> pcloct(mainOptions.pclOctResolution);
+    // pcl::PointCloud<pcl::PointXYZ>::Ptr cloudPtr = pclCloud.makeShared();
+    // pcloct.setInputCloud(cloudPtr);
+    // pcloct.addPointsFromInputCloud();
 
-    // Build the PCL Kd-tree
-    pcl::KdTreeFLANN<pcl::PointXYZ> pclkd = pcl::KdTreeFLANN<pcl::PointXYZ>();
-    pclkd.setInputCloud(cloudPtr);
+    // // Build the PCL Kd-tree
+    // pcl::KdTreeFLANN<pcl::PointXYZ> pclkd = pcl::KdTreeFLANN<pcl::PointXYZ>();
+    // pclkd.setInputCloud(cloudPtr);
     
     TimeWatcher twLoct; 
     TimeWatcher twNano;
@@ -247,7 +247,7 @@ void testKNN(EncoderType encoding = EncoderType::NO_ENCODING) {
     TimeWatcher twPclKD;
     long nanosOct = 0, nanosNano = 0, nanosPcloct = 0, nanosPclKD = 0;
     bool seq = true; 
-    size_t n = 1000;
+    size_t n = 10000;
     SearchSet ss(n, points.size(), seq);
     auto &searchPoints = ss.searchPoints[0];
     std::cout << "Accumulated times (s) for " << n << " kNN searches over " 
@@ -271,94 +271,101 @@ void testKNN(EncoderType encoding = EncoderType::NO_ENCODING) {
                     kdtree.knnSearch(pt, k, &indexesNanoflann[0], &distancesNanoflann[0]);
                     twNano.stop();
                     nanosNano += twNano.getElapsedNanos();
+                    
+                    // // Run PCLOCT
+                    // pcl::PointXYZ searchPoint = pclCloud[searchPoints[i]];
+                    // std::vector<int> indexesPcloct(k);
+                    // std::vector<float> distancesPcloct(k);
+                    // twPcloct.start();
+                    // pcloct.nearestKSearch(searchPoint, k, indexesPcloct, distancesPcloct);
+                    // twPcloct.stop();
+                    // nanosPcloct += twPcloct.getElapsedNanos();
 
-                    // Run PCLOCT
-                    pcl::PointXYZ searchPoint = pclCloud[searchPoints[i]];
-                    std::vector<int> indexesPcloct(k);
-                    std::vector<float> distancesPcloct(k);
-                    twPcloct.start();
-                    pcloct.nearestKSearch(searchPoint, k, indexesPcloct, distancesPcloct);
-                    twPcloct.stop();
-                    nanosPcloct += twPcloct.getElapsedNanos();
+                    // // Run PCLKD
+                    // std::vector<int> indexesPclKD(k);
+                    // std::vector<float> distancesPclKD(k);
+                    // twPclKD.start();
+                    // pclkd.nearestKSearch(searchPoint, k, indexesPclKD, distancesPclKD);
+                    // twPclKD.stop();
+                    // nanosPclKD += twPclKD.getElapsedNanos();
 
-                    // Run PCLKD
-                    std::vector<int> indexesPclKD(k);
-                    std::vector<float> distancesPclKD(k);
-                    twPclKD.start();
-                    pclkd.nearestKSearch(searchPoint, k, indexesPclKD, distancesPclKD);
-                    twPclKD.stop();
-                    nanosPclKD += twPclKD.getElapsedNanos();
+                    // std::unordered_set<size_t> indexSetLoct;
+                    // for (auto index : indexesLoct) {
+                    //     indexSetLoct.insert(index);
+                    // }
+                    // std::unordered_set<size_t> indexSetNanoflann;
+                    // for (auto index : indexesNanoflann) {
+                    //     indexSetNanoflann.insert(index);
+                    // }
+                    // std::unordered_set<size_t> indexSetPcloct;
+                    // for (auto index : indexesPcloct) {
+                    //     indexSetPcloct.insert(index);
+                    // }
+                    // std::unordered_set<size_t> indexSetPclKD;
+                    // for (auto index : indexesPclKD) {
+                    //     indexSetPclKD.insert(index);
+                    // }
+                    // if(indexSetLoct != indexSetNanoflann) {
+                    //     std::cout << "KNN results are different for nanoflann!" << std::endl;
 
-                    std::unordered_set<size_t> indexSetLoct;
-                    for (auto index : indexesLoct) {
-                        indexSetLoct.insert(index);
-                    }
-                    std::unordered_set<size_t> indexSetNanoflann;
-                    for (auto index : indexesNanoflann) {
-                        indexSetNanoflann.insert(index);
-                    }
-                    std::unordered_set<size_t> indexSetPcloct;
-                    for (auto index : indexesPcloct) {
-                        indexSetPcloct.insert(index);
-                    }
-                    std::unordered_set<size_t> indexSetPclKD;
-                    for (auto index : indexesPclKD) {
-                        indexSetPclKD.insert(index);
-                    }
-                    if(indexSetLoct != indexSetNanoflann) {
-                        std::cout << "KNN results are different for nanoflann!" << std::endl;
+                    //     // Optional: print differences
+                    //     std::cout << "In Loct but not in nanoflann:" << std::endl;
+                    //     for (size_t id : indexSetLoct) {
+                    //         if (indexSetNanoflann.find(id) == indexSetNanoflann.end()) {
+                    //             std::cout << id << std::endl;
+                    //         }
+                    //     }
 
-                        // Optional: print differences
-                        std::cout << "In Loct but not in nanoflann:" << std::endl;
-                        for (size_t id : indexSetLoct) {
-                            if (indexSetNanoflann.find(id) == indexSetNanoflann.end()) {
-                                std::cout << id << std::endl;
-                            }
-                        }
+                    //     std::cout << "In nanoflann but not in Loct:" << std::endl;
+                    //     for (size_t id : indexSetNanoflann) {
+                    //         if (indexSetLoct.find(id) == indexSetLoct.end()) {
+                    //             std::cout << id << std::endl;
+                    //         }
+                    //     }
+                    //     std::cout << std::setprecision(7) << std::fixed;
+                    //     std::cout << std::setw(10) << "index loct"<< std::setw(10) << "dist loct" 
+                    //     << std::setw(10) << "index nano"<< std::setw(10) << "dist nano" << std::endl;
+                    //     for(int i = 0; i<k; i++) {
+                    //         std::cout << std::setw(10) << indexesLoct[i]<< std::setw(10) << distancesLoct[i] << 
+                    //             std::setw(10) << indexesNanoflann[i] << std::setw(10) << distancesNanoflann[i] << std::endl;
+                    //     }
+                    // }
+                    // if(indexSetLoct != indexSetPcloct) {
+                    //     std::cout << "KNN results are different for pcloctree!" << std::endl;
 
-                        std::cout << "In nanoflann but not in Loct:" << std::endl;
-                        for (size_t id : indexSetNanoflann) {
-                            if (indexSetLoct.find(id) == indexSetLoct.end()) {
-                                std::cout << id << std::endl;
-                            }
-                        }
-                    }
-                    if(indexSetLoct != indexSetPcloct) {
-                        std::cout << "KNN results are different for pcloctree!" << std::endl;
+                    //     // Optional: print differences
+                    //     std::cout << "In Loct but not in pcloct:" << std::endl;
+                    //     for (size_t id : indexSetLoct) {
+                    //         if (indexSetPcloct.find(id) == indexSetPcloct.end()) {
+                    //             std::cout << id << std::endl;
+                    //         }
+                    //     }
 
-                        // Optional: print differences
-                        std::cout << "In Loct but not in pcloct:" << std::endl;
-                        for (size_t id : indexSetLoct) {
-                            if (indexSetPcloct.find(id) == indexSetPcloct.end()) {
-                                std::cout << id << std::endl;
-                            }
-                        }
+                    //     std::cout << "In pcloct but not in Loct:" << std::endl;
+                    //     for (size_t id : indexSetPcloct) {
+                    //         if (indexSetLoct.find(id) == indexSetLoct.end()) {
+                    //             std::cout << id << std::endl;
+                    //         }
+                    //     }
+                    // }
+                    // if(indexSetLoct != indexSetPclKD) {
+                    //     std::cout << "KNN results are different for pclkdtree!" << std::endl;
 
-                        std::cout << "In pcloct but not in Loct:" << std::endl;
-                        for (size_t id : indexSetPcloct) {
-                            if (indexSetLoct.find(id) == indexSetLoct.end()) {
-                                std::cout << id << std::endl;
-                            }
-                        }
-                    }
-                    if(indexSetLoct != indexSetPclKD) {
-                        std::cout << "KNN results are different for pclkdtree!" << std::endl;
+                    //     // Optional: print differences
+                    //     std::cout << "In Loct but not in pclkdtree:" << std::endl;
+                    //     for (size_t id : indexSetLoct) {
+                    //         if (indexSetPclKD.find(id) == indexSetPclKD.end()) {
+                    //             std::cout << id << std::endl;
+                    //         }
+                    //     }
 
-                        // Optional: print differences
-                        std::cout << "In Loct but not in pclkdtree:" << std::endl;
-                        for (size_t id : indexSetLoct) {
-                            if (indexSetPclKD.find(id) == indexSetPclKD.end()) {
-                                std::cout << id << std::endl;
-                            }
-                        }
-
-                        std::cout << "In pclkdtree but not in Loct:" << std::endl;
-                        for (size_t id : indexSetPclKD) {
-                            if (indexSetLoct.find(id) == indexSetLoct.end()) {
-                                std::cout << id << std::endl;
-                            }
-                        }
-                    }
+                    //     std::cout << "In pclkdtree but not in Loct:" << std::endl;
+                    //     for (size_t id : indexSetPclKD) {
+                    //         if (indexSetLoct.find(id) == indexSetLoct.end()) {
+                    //             std::cout << id << std::endl;
+                    //         }
+                    //     }
+                    // }
                 }
         std::cout << "k = " << k << std::endl << std::fixed << std::setprecision(5);
         std::cout << "  linear octree: "    << (double) nanosOct / 1e9  << std::endl;

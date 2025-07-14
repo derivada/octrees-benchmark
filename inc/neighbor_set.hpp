@@ -89,77 +89,70 @@ class NeighborSet {
 
         /// @brief Iterator for traversing the NeighborSet efficiently.
         class Iterator {
-            public:
-                using iterator_category = std::forward_iterator_tag;
-                using value_type = Point_t;
-                using difference_type = std::ptrdiff_t;
-                using pointer = const Point_t*;
-                using reference = const Point_t&;
+        public:
+            using iterator_category = std::forward_iterator_tag;
+            using value_type = std::pair<size_t, const Point_t&>;
+            using difference_type = std::ptrdiff_t;
+            using pointer = value_type*;        // not usually needed
+            using reference = value_type;       // return by value here
 
-                /**
-                 * @brief Constructs an iterator for a given NeighborSet.
-                 * @param result Reference to the NeighborSet.
-                 * @param currentRange Initial range index.
-                 */
-                Iterator(const NeighborSet& result, size_t currentRange)
-                        : result(result), currentRange(currentRange), 
-                        currentIndex((currentRange < result.ranges.size()) ? result.ranges[currentRange].first : SIZE_MAX) {
-                    updateCurrentPoint();
-                }
-        
-                reference operator*() const { return *currentPoint; }
-                pointer operator->() const { return currentPoint; }
-                
-                Iterator& operator++() {
-                    ++currentIndex;
-                    updateCurrentPoint();
-                    return *this;
-                }
-        
-                Iterator operator++(int) {
-                    Iterator temp = *this;
-                    ++(*this);
-                    return temp;
-                }
-        
-                bool operator==(const Iterator& other) const {
-                    return currentIndex == other.currentIndex;
-                }
-        
-                bool operator!=(const Iterator& other) const { return !(*this == other); }
-        
-            private:
-                const NeighborSet& result;
-                pointer currentPoint = nullptr;
+            Iterator(const NeighborSet& result, size_t currentRange)
+                : result(result), currentRange(currentRange), 
+                currentIndex((currentRange < result.ranges.size()) ? result.ranges[currentRange].first : SIZE_MAX) {
+                updateCurrentPoint();
+            }
 
-                /// @brief Index of the current range in ranges.
-                size_t currentRange;
-                /// @brief Current index within the range.
-                size_t currentIndex;
-                
-                /// @brief Updates the iterator to point to the next valid position.
-                void updateCurrentPoint() {
-                    // Skip empty ranges by advancing currentRange until a valid one is found
-                    while ( currentRange < result.ranges.size() && 
-                            currentIndex >= result.ranges[currentRange].second) {
-                        ++currentRange;
-                        if (currentRange < result.ranges.size()) {
-                            currentIndex = result.ranges[currentRange].first;
-                        }
+            // Return pair (index, point)
+            reference operator*() const { 
+                return { currentIndex, *currentPoint }; 
+            }
+
+            // Usually operator-> returns pointer to value_type, but for simplicity, omit or implement if needed
+            // pointer operator->() const { ... }
+
+            Iterator& operator++() {
+                ++currentIndex;
+                updateCurrentPoint();
+                return *this;
+            }
+
+            Iterator operator++(int) {
+                Iterator temp = *this;
+                ++(*this);
+                return temp;
+            }
+
+            bool operator==(const Iterator& other) const {
+                return currentIndex == other.currentIndex;
+            }
+
+            bool operator!=(const Iterator& other) const { return !(*this == other); }
+
+        private:
+            const NeighborSet& result;
+            const Point_t* currentPoint = nullptr;
+            size_t currentRange;
+            size_t currentIndex;
+
+            void updateCurrentPoint() {
+                while (currentRange < result.ranges.size() &&
+                    currentIndex >= result.ranges[currentRange].second) {
+                    ++currentRange;
+                    if (currentRange < result.ranges.size()) {
+                        currentIndex = result.ranges[currentRange].first;
                     }
-                
-                    // If we exited the loop because we ran out of ranges, stop iteration
-                    if (currentRange >= result.ranges.size()) {
-                        currentPoint = nullptr;
-                        currentIndex = SIZE_MAX; // reset to invalid index
-                        return;
-                    }
-                
-                    // Update current point
-                    currentPoint = &(*result.points)[currentIndex];
                 }
-            };
-        
+
+                if (currentRange >= result.ranges.size()) {
+                    currentPoint = nullptr;
+                    currentIndex = SIZE_MAX;
+                    return;
+                }
+
+                currentPoint = &(*result.points)[currentIndex];
+            }
+        };
+                
         Iterator begin() const {
             return Iterator(*this, 0);
         }

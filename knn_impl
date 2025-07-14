@@ -1,0 +1,160 @@
+    struct KNNContext {
+        const Point& searchCenter;
+        const std::vector<Point_t>& points;
+        const std::vector<Point>& centers;
+        const std::vector<Point>& precomputedRadii;
+        KNNContext(const LinearOctree& octree, const Point& searchCenter) :
+            searchCenter(searchCenter),
+            points(octree.points),
+            centers(octree.centers),
+            precomputedRadii(octree.precomputedRadii) {}
+    };
+
+    struct KNNPrioQueueElement {
+        union {
+            struct {
+                uint64_t index : 58;
+                uint64_t depth : 5;
+                uint64_t isOctant : 1;
+            };
+            uint64_t raw = 0;
+        };
+        double minDist = 0.0;
+        double maxDist = 0.0;
+        
+        KNNPrioQueueElement(size_t idx, bool octant, uint8_t depth, const KNNContext& knnContext) {
+            setIndex(idx, octant, depth);
+            setDistances(knnContext);
+        }
+        
+        static constexpr uint64_t indexMask = ((1ULL << 58) - 1);
+        static constexpr uint64_t depthMask = 0x1F;
+        void setIndex(size_t idx, bool octant, uint8_t octantDepth = 0) {
+            index = idx & indexMask;
+            depth = octantDepth & depthMask;
+            isOctant = octant ? 1 : 0;
+        }
+
+        void setDistances(const KNNContext& knnContext) {
+            const Point& p = knnContext.searchCenter;
+            if(isOctant) {
+                const Point& octCenter = knnContext.centers[index];
+                const Point& octRadius = knnContext.precomputedRadii[depth];
+                const double minX = octCenter.getX() - octRadius.getX();
+                const double minY = octCenter.getY() - octRadius.getY();
+                const double minZ = octCenter.getZ() - octRadius.getZ();
+                const double maxX = octCenter.getX() + octRadius.getX();
+                const double maxY = octCenter.getY() + octRadius.getY();
+                const double maxZ = octCenter.getZ() + octRadius.getZ();
+            
+                const double px = p.getX();
+                const double py = p.getY();
+                const double pz = p.getZ();
+            
+                // min dist: clamp point to octant bounds to get the intersection with it
+                const double cx = std::max(minX, std::min(px, maxX));
+                const double cy = std::max(minY, std::min(py, maxY));
+                const double cz = std::max(minZ, std::min(pz, maxZ));
+                const double dx = px - cx;
+                const double dy = py - cy;
+                const double dz = pz - cz;
+            
+                minDist = dx * dx + dy * dy + dz * dz;
+
+                // max dist: select the farthest point within the box from p
+                const double fx = (px < octCenter.getX()) ? maxX : minX;
+                const double fy = (py < octCenter.getY()) ? maxY : minY;
+                const double fz = (pz < octCenter.getZ()) ? maxZ : minZ;
+                const double dfx = px - fx;
+                const double dfy = py - fy;
+                const double dfz = pz - fz;
+
+                maxDist = dfx * dfx + dfy * dfy + dfz * dfz;
+            } else {
+                const Point& q = knnContext.points[index];
+                double dx = p.getX() - q.getX();
+                double dy = p.getY() - q.getY();
+                double dz = p.getZ() - q.getZ();
+                const double d = dx * dx + dy * dy + dz * dz;
+                minDist = d;
+                maxDist = d;
+            }
+        }
+
+        // decreasing order in minDist
+        bool operator<(const KNNPrioQueueElement& other) const {
+            return this->minDist > other.minDist;
+        }
+    };
+    
+    /**
+     * 
+     * Idea for Octree kNN from https://stackoverflow.com/a/41306992
+     * 
+     * priority queue with distances to center, ascending order, both octants and points can be inside it
+     * 
+     * for octants, store the cube-to-point distance
+     *  -> this is computed by observing that the closest point to it is clamp(p_c, c_min, c_max) (for each coordinate c \in {x,y,z})
+     * for points, store the regular point-to-point distance 
+     * 
+     * algo:
+     *  1. extract head of queue
+     *  2. if head is point, insert it into result
+     *  3. if head is octant, then:
+     *  3.1 if it is a leaf, push every point into queue
+     *  3.2 if it is an internal node, push the 8 suboctants with their min distances to p
+     * 
+     * TODO: implement this and check if its faster than the doubling method found in knn(), after checking its implementation
+     * and invoking neighborsPrune inside it 
+     */
+    size_t knnV2(const Point& p, const size_t k, std::vector<size_t> &indexes, std::vector<double> &dists) {
+        size_t inserted = 0, pointsInQueue = 0;
+        KNNContext context(*this, p);
+        double maxPointDistQueue = std::numeric_limits<double>::max();
+        std::vector<KNNPrioQueueElement> heap;
+        heap.reserve(k);
+        std::make_heap(heap.begin(), heap.end());
+        
+        // push root octant
+        heap.emplace_back(0, true, 0, context);
+        std::push_heap(heap.begin(), heap.end());
+        
+        while(inserted < k && !heap.empty()) {
+            std::cout << "heap size:  " << heap.size() << std::endl;
+            std::pop_heap(heap.begin(), heap.end());
+            KNNPrioQueueElement top = heap.back();
+            std::cout << "top extracted: " << top.minDist << "," << top.maxDist 
+            << " \n octant? " << top.isOctant 
+            << "\n index: " << top.index 
+            << "\n depth: " << top.depth << std::endl;
+            heap.pop_back();
+            size_t index = top.index;
+            if(top.isOctant) {
+                // Get number of points under octant
+                size_t startIndex = this->internalRanges[index].first;
+                size_t endIndex = this->internalRanges[index].second;
+                size_t pointsInOctant = endIndex - startIndex;
+                // Insert children octants or points (if it is a leaf) into queue
+                if(offsets[index] == 0) {
+                    // Leaf node, push points into the queue
+                    for (size_t i = startIndex; i < endIndex; ++i) {
+                        heap.emplace_back(i, false, 0, context);
+                        std::push_heap(heap.begin(), heap.end());
+                    }
+                } else {
+                    // Internal node, push child octants after computing their distance to p
+                    for (int octant = 0; octant < OCTANTS_PER_NODE; ++octant) {
+                        uint32_t childOctIndex = offsets[index] + octant;
+                        heap.emplace_back(childOctIndex, true, top.depth + 1, context);
+                        std::push_heap(heap.begin(), heap.end());
+                    }
+                }   
+            } else {
+                // Insert point directly into result
+                indexes[inserted] = index;
+                dists[inserted] = top.minDist;
+                inserted++;
+            }
+        }
+        return inserted;
+	}

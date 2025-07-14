@@ -16,32 +16,41 @@ datasets_build=(
 )
 
 # Variables comúnes
-FOLDER="out_tfg_v3"
+FOLDER="out_knn"
 THREADS="1,4,8,12,16,20,24,28,32,36,40"
 KERNELS_3D="cube,sphere"
 N_SEARCHES="10000"
 TOLERANCES="5.0,10.0,25.0,50.0,75.0"
 NUM_THREADS="1,4,8,12,16,20,24,28,32,36,40"
-FULL_NO_PCLKD="neighbors,neighborsPrune,neighborsPtr,neighborsStruct"
-FULL_ALGOS="neighbors,neighborsPrune,neighborsPtr,neighborsStruct,neighborsPCLKD,neighborsUnibn,neighborsPCLOct"
+FULL_OURS="neighbors,neighborsPrune,neighborsPtr,neighborsStruct"
+FULL_ALGOS_RADIUS="neighbors,neighborsPrune,neighborsPtr,neighborsStruct,neighborsPCLKD,neighborsUnibn,neighborsPCLOct,neighborsNanoflann"
+FULL_ALGOS_KNN="KNNV2,KNNNanoflann,KNNPCLKD,KNNPCLOCT"
 set -e
 mkdir -p "$FOLDER"
 
+K_VALUES="5,10,25,50,75,100,200,300,400,500,600,700,800,900,1000,1250,1500,1750,2000"
 # Búsquedas aleatorias
 for data in "${datasets_low_density[@]}"; do
-  ./build/octrees-benchmark --kernels "all" -i "$data" -o "$FOLDER/subset" -r "0.5,1.0,2.0,3.0" -s "$N_SEARCHES" --repeats 5 -a "neighborsNanoflann"
+  # ./build/octrees-benchmark --kernels "all" -i "$data" -o "$FOLDER/subset" -r "0.5,1.0,2.0,3.0" -s "$N_SEARCHES" --repeats 5 -a "$FULL_ALGOS_RADIUS" --cache-profiling
+  ./build/octrees-benchmark --kernels "all" -i "$data" -o "$FOLDER/subset" -v "$K_VALUES" -s "$N_SEARCHES" --repeats 5 -a "$FULL_ALGOS_KNN"
 done
 for data in "${datasets_high_density[@]}"; do
-  ./build/octrees-benchmark --kernels "all" -i "$data" -o "$FOLDER/subset" -r "0.01,0.05,0.1,0.2" -s "$N_SEARCHES" --repeats 5 -a "neighborsNanoflann"
+  # ./build/octrees-benchmark --kernels "all" -i "$data" -o "$FOLDER/subset" -r "0.01,0.05,0.1,0.2" -s "$N_SEARCHES" --repeats 5 -a "$FULL_ALGOS_RADIUS" --cache-profiling
+  ./build/octrees-benchmark --kernels "all" -i "$data" -o "$FOLDER/subset" -v "$K_VALUES" -s "$N_SEARCHES" --repeats 5 -a "$FULL_ALGOS_KNN"
 done
 
-# Búsquedas completas
-# ./build/octrees-benchmark --kernels "sphere" -i "data/semantic3d/bildstein_station1_xyz_intensity_rgb.las" -o "$FOLDER/full" -r "0.01,0.05,0.1" -s "all" --sequential --repeats 1 --no-warmup -a "neighborsPCLOct"
-# ./build/octrees-benchmark --kernels "sphere" -i "data/dales_las/test/5080_54400.las" -o "$FOLDER/full" -r "15.0" -s "all" --sequential --repeats 1 --no-warmup -a "neighborsPCLOct"
-# ./build/octrees-benchmark --kernels "sphere" -i "data/paris_lille/Lille_0.las" -o "$FOLDER/full" -r "3.0" -s "all" --sequential --repeats 1 --no-warmup -a "neighborsPCLOct"
-# ./build/octrees-benchmark --kernels "sphere" -i "data/paris_lille/Paris_Luxembourg_6.las" -o "$FOLDER/full" -r "3.0" -s "all" --sequential --repeats 1 --no-warmup -a "neighborsPCLOct"
-# ./build/octrees-benchmark --kernels "sphere" -i "data/semantic3d/sg27_station8_intensity_rgb.las" -o "$FOLDER/full" -r "0.01,0.025,0.05" -s "all" --sequential --repeats 1 --no-warmup -a "neighborsPCLOct"
-# ./build/octrees-benchmark --kernels "sphere" -i "data/speulderbos/Speulderbos_2017_TLS.las" -o "$FOLDER/full" -r "0.25" -s "all" --sequential --repeats 1 --no-warmup -a "neighborsPCLOct"
+# TODO: Búsquedas completas kNN
+
+# Búsquedas completas radius search
+# ./build/octrees-benchmark --kernels "sphere" -i "data/semantic3d/bildstein_station1_xyz_intensity_rgb.las" -o "$FOLDER/full" -r "0.01,0.05,0.1" -s "all" --sequential --repeats 1  -a "$FULL_OURS" --cache-profiling
+# ./build/octrees-benchmark --kernels "sphere" -i "data/dales_las/test/5080_54400.las" -o "$FOLDER/full" -r "5.0,10.0,15.0" -s "all" --sequential --repeats 1  -a "$FULL_OURS" --cache-profiling
+# ./build/octrees-benchmark --kernels "sphere" -i "data/paris_lille/Lille_0.las" -o "$FOLDER/full" -r "0.5,1.5,3.0" -s "all" --sequential --repeats 1  -a "$FULL_OURS" --cache-profiling
+# ./build/octrees-benchmark --kernels "sphere" -i "data/paris_lille/Paris_Luxembourg_6.las" -o "$FOLDER/full" -r "0.5,1.5,3.0" -s "all" --sequential --repeats 1  -a "$FULL_OURS" --cache-profiling
+# ./build/octrees-benchmark --kernels "sphere" -i "data/semantic3d/sg27_station8_intensity_rgb.las" -o "$FOLDER/full" -r "0.01,0.025,0.05" -s "all" --sequential --repeats 1  -a "$FULL_OURS" --cache-profiling
+# ./build/octrees-benchmark --kernels "sphere" -i "data/speulderbos/Speulderbos_2017_TLS.las" -o "$FOLDER/full" -r "0.05,0.10,0.25" -s "all" --sequential --repeats 1  -a "$FULL_OURS" --cache-profiling
+
+
+
 
 # # Búsquedas aproximadas
 # ./build/octrees-benchmark --kernels "sphere" -i "data/paris_lille/Lille_0.las" -o "$FOLDER/approx_full" -r "3.0" -s "all" --sequential --repeats 1 --no-warmup -a "neighborsStruct,neighborsApprox" --approx-tol "$TOLERANCES"

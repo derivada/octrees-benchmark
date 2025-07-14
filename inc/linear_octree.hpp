@@ -738,6 +738,52 @@ public:
         return ptsInside;
 	}
 
+    // with result as (dist, index) vector
+    template<typename Kernel>
+    [[nodiscard]] std::vector<std::pair<double, size_t>> neighborsDists(const Kernel& k) const {
+        std::vector<std::pair<double, size_t>> result;
+        auto checkBoxIntersect = [&](uint32_t nodeIndex, uint32_t currDepth) {
+            auto nodeCenter = this->centers[nodeIndex];
+            auto nodeRadii = this->precomputedRadii[currDepth];
+            switch (k.boxIntersect(nodeCenter, nodeRadii)) {
+                case KernelAbstract::IntersectionJudgement::INSIDE: {
+                    // Completely inside, all add points and prune
+                    size_t startIndex = this->internalRanges[nodeIndex].first;
+                    size_t endIndex = this->internalRanges[nodeIndex].second;
+                    auto* startPtr = points.data() + startIndex;
+                    auto* endPtr = points.data() + endIndex;
+                    for (; startPtr != endPtr; ++startPtr) {
+                        result.push_back(std::make_pair(sqDist(*startPtr, k.center()), startPtr->id()));
+                    }
+                    return false;
+                }
+                case KernelAbstract::IntersectionJudgement::OVERLAP:
+                    // Overlaps but not inside, keep descending
+                    return true;
+                default:
+                    // Completely outside, prune
+                    return false;
+            }
+        };
+        
+        auto findAndInsertPoints = [&](uint32_t nodeIndex) {
+            // Reached a leaf, add all points inside the kernel
+            size_t startIndex = this->internalRanges[nodeIndex].first;
+            size_t endIndex = this->internalRanges[nodeIndex].second;
+            auto* startPtr = points.data() + startIndex;
+            auto* endPtr = points.data() + endIndex;
+            for (; startPtr != endPtr; ++startPtr) {
+                if (k.isInside(*startPtr)) {
+                    result.push_back(std::make_pair(sqDist(*startPtr, k.center()), startPtr->id()));
+                }
+            }
+        };
+        
+        singleTraversal(checkBoxIntersect, findAndInsertPoints);
+        return result;
+	}
+    
+
     /**
      * @brief Search neighbors function. Similar to neighbors(), but returns a list-of-ranges wrapper structure containing the neighbours. 
      * This structure implements a forward iterator and can thus be used in a loop. It is way faster as it does not need to copy
@@ -795,29 +841,28 @@ public:
         return result;
 	}
 
-    union OctantPointIndex {
-        struct {
-            uint64_t index        : 58; // MSB for point cloud or octree index
-            uint64_t depth : 5;  // octant depth if is_octant = 1, 0 otherwise
-            uint64_t isOctant    : 1;  // LSB = 1 if octant, 0 if point
-        };
-        uint64_t raw;
+    struct OctantPointIndex {
+        uint64_t index        : 58;
+        uint64_t depth        : 5;
+        uint64_t isOctant     : 1;
     
-        OctantPointIndex(size_t idx = 0, bool octant = false, uint8_t depth = 0) : raw(0) {
-            set(idx, octant, depth);
+        double sqDist = 0.0;
+    
+        OctantPointIndex(size_t idx, bool octant, uint8_t depth_, double dist) 
+            : index(0), depth(0), isOctant(0), sqDist(dist) {
+            set(idx, octant, depth_);
         }
-        
-        static constexpr uint64_t indexMask = ((1ULL << 58) - 1);
-        static constexpr uint64_t depthMask = 0x1F;
+    
         void set(size_t idx, bool octant, uint8_t octantDepth = 0) {
-            index = idx & indexMask;
-            depth = octantDepth & depthMask;
+            index = idx & ((1ULL << 58) - 1);
+            depth = octantDepth & 0x1F;
             isOctant = octant ? 1 : 0;
         }
     
-        size_t getIndex() const { return index; }
-        uint8_t getDepth() const { return depth; }
-        bool getIsOctant() const { return isOctant != 0; }
+        bool operator<(const OctantPointIndex& other) const {
+            // Note: std::priority_queue uses max heap by default, so invert comparison for min-heap behavior
+            return this->sqDist > other.sqDist;
+        }
     };
     
 
@@ -830,7 +875,7 @@ public:
         return dx * dx + dy * dy + dz * dz;
     }
 
-    inline double distPointOctantSquared(const Point& p, const Point& octCenter, const Vector& octRadius) const {
+    inline static double distPointOctantSquared(const Point& p, const Point& octCenter, const Vector& octRadius) {
         // Extract octant bounds
         const double minX = octCenter.getX() - octRadius.getX();
         const double minY = octCenter.getY() - octRadius.getY();
@@ -856,6 +901,7 @@ public:
         return dx * dx + dy * dy + dz * dz;
     }
 
+
     /**
      * 
      * Idea for Octree kNN from https://stackoverflow.com/a/41306992
@@ -877,73 +923,182 @@ public:
      * and invoking neighborsPrune inside it 
      */
     size_t knnV2(const Point& p, const size_t k, std::vector<size_t> &indexes, std::vector<double> &dists) {
-        size_t inserted = 0, pointsInQueue = 0;
-        double maxPointDistQueue = std::numeric_limits<double>::max();
-        auto comp = [](const std::pair<double, OctantPointIndex>& a,
-            const std::pair<double, OctantPointIndex>& b) {
-            return a.first > b.first;  // min-heap, ignore second arg.
-        };
-        std::vector<std::pair<double, OctantPointIndex>> heap;
+        // Initialize the min-distances heap with the root octant
+        std::vector<OctantPointIndex> heap;
         heap.reserve(std::max((size_t) 512, k / 2));
-        std::make_heap(heap.begin(), heap.end(), comp);
-        // std::priority_queue<std::pair<double, OctantPointIndex>, 
-        //     std::vector<std::pair<double, OctantPointIndex>>, 
-        //     decltype(comp)> distQueue(comp);
-        
-            
-        // push root octant, distance is 0 since point is inside bbox, and the octree index of root is always 0
-        // true in 2nd argument of OctantPointIndex constructor = is octant
-        // 3rd argument is depth, always 0 for root
-        heap.emplace_back(0.0, OctantPointIndex(0, true, 0));
-        // size_t max_heap_size = 0;
-        while(inserted < k && !heap.empty()) {
-            // max_heap_size = std::max(max_heap_size, heap.size());
-            std::pop_heap(heap.begin(), heap.end(), comp);
-            auto top = heap.back();
+        std::make_heap(heap.begin(), heap.end());
+        heap.emplace_back(0, true, 0, 0.0);
+
+        // Extract nearest octant/point until we insert k points
+        // NOTE: No need to check heap.empty() since 
+        // we have, at the very least, maxPoints points and 1 octant
+        size_t inserted = 0, maxPoints = std::min(points.size(), k);
+        while(inserted < maxPoints) {
+            std::pop_heap(heap.begin(), heap.end());
+            OctantPointIndex top = heap.back();
             heap.pop_back();
-            double dist = top.first;
-            uint64_t index = top.second.getIndex();
-            uint8_t depth = top.second.getDepth();
-            bool isOctant = top.second.getIsOctant();
-            // std::cout << "Current distance: " << dist << " at index " << index << " on depth " << depth << " in an octant? " << isOctant << std::endl;
-            // std::cout << "  Total inserted: " << inserted << std::endl;
-            // std::cout << "  Current queue size: " << distQueue.size() << std::endl;
-            if(isOctant) {
-                // get number of points under octant
-                size_t startIndex = this->internalRanges[index].first;
-                size_t endIndex = this->internalRanges[index].second;
-                size_t pointsInOctant = endIndex - startIndex;
-                // insert children octants or points (if it is a leaf) into queue
-                if(offsets[index] == 0) {
-                    // leaf node, push points into the queue
+            // std::cout 
+            //     << "Current distance: " 
+            //     << top.sqDist << " at index " 
+            //     << top.index << " on depth " << top.depth 
+            //     << " is an octant? " << top.isOctant << std::endl
+            //     << "  Total inserted: " << inserted << std::endl
+            //     << "  Current queue size: " << heap.size() << std::endl;
+            if(top.isOctant) {
+                if(offsets[top.index] == 0) {
+                    // Leaf node, push points into the queue
+                    size_t startIndex = this->internalRanges[top.index].first;
+                    size_t endIndex = this->internalRanges[top.index].second;
                     for (size_t i = startIndex; i < endIndex; ++i) {
-                        double distToPoint = distPointsSquared(p, points[i]);
-                        heap.emplace_back(std::make_pair(distToPoint, OctantPointIndex(i, false)));
-                        std::push_heap(heap.begin(), heap.end(), comp);
+                        double sqDist = distPointsSquared(p, points[i]);
+                        heap.emplace_back(i, false, 0, sqDist);
+                        std::push_heap(heap.begin(), heap.end());
                     }
                 } else {
-                    // internal node, push child octants after computing their distance to p
+                    // Internal node, push child octants into the queue
+                    uint8_t childDepth = top.depth + 1;
                     for (int octant = 0; octant < OCTANTS_PER_NODE; ++octant) {
-                        uint32_t childOctIndex = offsets[index] + octant;
-                        const Point& childOctCenter = centers[childOctIndex];
-                        const Point& childOctRadius = precomputedRadii[depth + 1];
-                        double distToChildOctant = distPointOctantSquared(p, childOctCenter, childOctRadius);
-                        heap.emplace_back(std::make_pair(
-                            distToChildOctant, OctantPointIndex(childOctIndex, true, depth + 1))
-                        );
-                        std::push_heap(heap.begin(), heap.end(), comp);
+                        size_t childOctIndex = offsets[top.index] + octant;
+                        double sqDist = distPointOctantSquared(p, centers[childOctIndex], precomputedRadii[childDepth]);
+                        heap.emplace_back(childOctIndex, true, childDepth, sqDist);
+                        std::push_heap(heap.begin(), heap.end());
                     }
                 }   
             } else {
                 // Insert point directly into result
-                indexes[inserted] = index;
-                dists[inserted] = dist;
+                indexes[inserted] = top.index;
+                dists[inserted] = top.sqDist;
                 inserted++;
             }
         }
-        // std::cout << "k = " << k << " -> " << max_heap_size << std::endl;
         return inserted;
 	}
+
+    struct PointCandidates {
+        size_t pointIndex;
+        double pointDist;
+        PointCandidates(size_t index, double dist): pointIndex(index), pointDist(dist) {}
+        bool operator<(const PointCandidates& other) const {
+            return pointDist < other.pointDist;
+        }
+    };
+    template<typename T, typename Container, typename Compare>
+    void debugPriorityQueue(std::priority_queue<T, Container, Compare> pq) {
+        std::cout << "Priority Queue contents (top to bottom):" << std::endl;
+        while (!pq.empty()) {
+            std::cout << pq.top().pointDist << " ";
+            pq.pop();
+        }
+        std::cout << std::endl;
+    }
+
+
+    struct KNNOctantQueueElement {
+        union {
+            struct {
+                uint64_t index : 58;
+                uint64_t depth : 6;
+            };
+            uint64_t raw = 0;
+        };
+        double dist = 0.0;
+
+        KNNOctantQueueElement(size_t idx, uint8_t depth, double minDist): dist(minDist) {
+            setIndex(idx, depth);
+        }
+        
+        static constexpr uint64_t indexMask = ((1ULL << 59) - 1);
+        static constexpr uint64_t depthMask = 0x3F;
+        void setIndex(size_t idx, uint8_t octantDepth = 0) {
+            index = idx & indexMask;
+            depth = octantDepth & depthMask;
+        }
+
+        // decreasing order in minDist
+        bool operator<(const KNNOctantQueueElement& other) const {
+            return this->dist > other.dist;
+        }
+    };
+
+    size_t knnV3(const Point& p, const size_t k, std::vector<size_t> &indexes, std::vector<double> &dists) {
+        std::vector<std::pair<double, size_t>> distsIndexes;
+        distsIndexes.reserve(k+1);
+        double maxSqDist = std::numeric_limits<double>::max();
+        std::cout << std::fixed << std::setprecision(3);
+        std::vector<KNNOctantQueueElement> octantHeap;
+        std::priority_queue<PointCandidates> pointCandidates;
+        octantHeap.reserve(8);
+        std::make_heap(octantHeap.begin(), octantHeap.end());
+        auto comp = [](const std::pair<double, size_t>& a, const std::pair<double, size_t>& b) {
+            return a.first < b.first; // max-heap by dist
+        };
+
+        // push root octant
+        octantHeap.emplace_back(0, 0, 0);
+        std::push_heap(octantHeap.begin(), octantHeap.end());
+        
+        while(!octantHeap.empty()) {
+            std::pop_heap(octantHeap.begin(), octantHeap.end());
+            auto top = octantHeap.back();
+            octantHeap.pop_back();
+            size_t minDist = top.dist;
+            size_t index = top.index;
+            size_t depth = top.depth;
+            // maybe the octant was pushed before this was updated
+            if(top.dist > maxSqDist) {
+                continue; 
+            }
+
+            // Get number of points under octant
+            size_t startIndex = this->internalRanges[index].first;
+            size_t endIndex = this->internalRanges[index].second;
+            size_t pointsInOctant = endIndex - startIndex;
+
+            // leaf
+            if(offsets[index] == 0) {
+                // Leaf node, push points into the result
+                // Leaf node: examine points
+                for (size_t i = startIndex; i < endIndex; ++i) {
+                    double dist = sqDist(points[i], p);
+                    if (dist > maxSqDist)
+                        continue;
+
+                    distsIndexes.emplace_back(dist, i);
+                    std::push_heap(distsIndexes.begin(), distsIndexes.end(), comp);
+
+                    if (distsIndexes.size() > k) {
+                        std::pop_heap(distsIndexes.begin(), distsIndexes.end(), comp);
+                        distsIndexes.pop_back();
+                    }
+
+                    if (distsIndexes.size() == k) {
+                        maxSqDist = distsIndexes.front().first;
+                    }
+                }
+            } else {
+                // internal node
+                for (int octant = 0; octant < OCTANTS_PER_NODE; ++octant) {
+                    size_t childOctIndex = offsets[index] + octant;
+                    const Point& childOctantCenter = centers[childOctIndex];
+                    const Vector& childOctantRadii = precomputedRadii[depth + 1];
+                    double octDist = distPointOctantSquared(p, childOctantCenter, childOctantRadii);
+                    if(octDist <= maxSqDist){
+                        // std::cout << "Pushed " << childOctIndex << " " << depth+1 << " " << octDist << std::endl;
+                        octantHeap.emplace_back(childOctIndex, depth + 1, octDist);
+                        std::push_heap(octantHeap.begin(), octantHeap.end());
+                    }
+                }
+            }   
+        }
+        // Separate results into two vectors: indexes and distances
+        for(int i = 0; i<distsIndexes.size(); i++) {
+            dists[i] = distsIndexes[i].first;
+            indexes[i] = distsIndexes[i].second;
+        }
+
+        return distsIndexes.size();
+    }
+
 
     uint32_t getPrecisionLevel(const Vector &toleranceVector) const {
         assert(toleranceVector.getX() > 0 && toleranceVector.getY() > 0 && toleranceVector.getZ() > 0 && "tolerance vector must be >0 in every coordinate");
@@ -1095,6 +1250,41 @@ public:
             r *= 2;
         }
         return knn;
+    }
+
+    // surely a bad idea
+    size_t binarySearchKNN(const Point& p, const size_t k, std::vector<size_t> &indexes, std::vector<double> &dists) {
+        const double rMax = box.radii().getMaxCoordinate();
+        double rLow = 0.0;
+        double rHigh = 100.0;
+        const double epsilon = 1e-3;  // precision for radius convergence
+
+        NeighborSet<Point_t> neighs;
+        while (rHigh - rLow > epsilon) {
+            double rMid = (rLow + rHigh) / 2.0;
+
+            // Query neighbors within radius rMid
+            neighs = searchNeighborsStruct<Kernel_t::sphere>(p, rMid);
+
+            size_t count = neighs.size();
+            // std::cout << "rMid = " << rMid << " count = " << count << std::endl;
+            if (count < k) {
+                // Not enough neighbors: increase radius
+                rLow = rMid;
+            } else {
+                // Enough or more neighbors: try smaller radius
+                rHigh = rMid;
+                if(count == k) break; // good enough
+            }
+        }
+        size_t i = 0;
+        for (auto [idx, pt] : neighs) {
+            indexes[i] = idx;
+            dists[i] = distPointsSquared(pt, p);
+            i++;
+            if(i == k) break;
+        }
+        return neighs.size();
     }
 
 	/**

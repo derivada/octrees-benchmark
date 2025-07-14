@@ -151,7 +151,7 @@ class NeighborsBenchmark {
                 << openmpScheduleName << ','
                 << eventValues[0] << ','
                 << eventValues[1] << ','
-                << eventValues[2] << ','
+                << eventValues[2]
                 << std::endl;
         }
 
