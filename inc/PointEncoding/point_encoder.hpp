@@ -5,7 +5,7 @@
 #include <cstdint>
 #include <optional>
 #include "Geometry/PointMetadata.hpp"
-#include "encoding_octree_log.hpp"
+#include "benchmarking/encoding_log.hpp"
 #include "TimeWatcher.hpp"
 #include <bitset>
 
@@ -68,7 +68,7 @@ public:
      */
     template <typename Point_t>
     std::vector<key_t> sortPoints(std::vector<Point_t> &points, 
-        std::optional<std::vector<PointMetadata>> &meta_opt, const Box &bbox, std::shared_ptr<EncodingOctreeLog> log = nullptr) const {
+        std::optional<std::vector<PointMetadata>> &meta_opt, const Box &bbox, std::shared_ptr<EncodingLog> log = nullptr) const {
         size_t n = points.size();
         // Choose 4, 8 or 16. 16 is less passes but requires more memory for the histograms and it offers better performance in most cases.
         constexpr int BITS_PER_PASS = 16;
@@ -164,7 +164,7 @@ public:
      */
     template <typename Point_t>
     std::pair<std::vector<key_t>, Box> sortPoints(std::vector<Point_t> &points, 
-        std::optional<std::vector<PointMetadata>> &meta_opt, std::shared_ptr<EncodingOctreeLog> log = nullptr) const {
+        std::optional<std::vector<PointMetadata>> &meta_opt, std::shared_ptr<EncodingLog> log = nullptr) const {
         // Find the bbox
         TimeWatcher tw;
         tw.start();
@@ -174,8 +174,6 @@ public:
         tw.stop();
         if(log) {
             log->boundingBoxTime = tw.getElapsedDecimalSeconds();
-            log->encoderType = getShortEncoderName();
-            log->cloudSize = points.size();
         }
         // Call the regular sortPoints with metadata
         return std::make_pair(sortPoints<Point_t>(points, meta_opt, bbox, log), bbox);

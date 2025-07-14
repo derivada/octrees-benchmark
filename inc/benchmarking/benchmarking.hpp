@@ -30,7 +30,7 @@ class Stats
 	mutable bool computed_stdev_{};
 	mutable T    stdev_{};
 
-	const bool warmup;
+	bool warmup;
 
 	public:
 	Stats(bool warmup): warmup(warmup) {}

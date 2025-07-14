@@ -143,6 +143,7 @@ public:
 	std::set<EncoderType> encodings{EncoderType::NO_ENCODING, EncoderType::MORTON_ENCODER_3D, EncoderType::HILBERT_ENCODER_3D};
 
 	bool debug{false};
+	bool buildEncBenchmarks{false};
 	bool cacheProfiling{false};
 	bool checkResults{false};
 	bool useWarmup{true};
@@ -171,6 +172,7 @@ enum LongOptions : int
 	ENCODINGS,
 	
 	DEBUG,
+	BUILD_ENC,
 	CACHE_PROFILING,
 	CHECK,
 	NO_WARMUP,
@@ -198,6 +200,7 @@ const option long_opts[] = {
 	{ "encodings", required_argument, nullptr, LongOptions::ENCODINGS },
 
 	{ "debug", no_argument, nullptr, LongOptions::DEBUG },
+	{ "build-enc", no_argument, nullptr, LongOptions::BUILD_ENC },
 	{ "cache-profiling", no_argument, nullptr, LongOptions::CACHE_PROFILING },
 	{ "check", no_argument, nullptr, LongOptions::CHECK },
 	{ "no-warmup", no_argument, nullptr, LongOptions::NO_WARMUP },

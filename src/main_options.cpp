@@ -38,6 +38,7 @@ void printHelp() {
 
 		<< "Other options:\n"
 		<< "--debug: Enable debug mode (measures octree build and encoding times)\n"
+		<< "--build-enc: Run benchmarks for the encoding and build of selected structures (the ones with a representative on -a / --search-algo)\n"
 		<< "--cache-profiling: Enable cache profiling during search algo. executions using PAPI\n"
 		<< "--check: Enable result checking (legacy option; use avg_result_size to verify correctness)\n"
 		<< "--no-warmup: Disable warmup phase\n"
@@ -272,6 +273,9 @@ void processArgs(int argc, char** argv)
 				break;
 			case LongOptions::DEBUG:
 				mainOptions.debug = true;
+				break;
+			case LongOptions::BUILD_ENC:
+				mainOptions.buildEncBenchmarks = true;
 				break;
 			case LongOptions::CACHE_PROFILING:
 				mainOptions.cacheProfiling = true;

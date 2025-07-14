@@ -14,10 +14,11 @@
 #include <pcl/point_cloud.h>
 #include <pcl/octree/octree_search.h>
 #include <pcl/kdtree/kdtree_flann.h>
+#include "pcl_cloud_reader.hpp"
 #endif
 #include "nanoflann.hpp"
 #include "nanoflann_wrappers.hpp"
-#include "papi.h"
+#include "papi_events.hpp"
 
 using namespace ResultChecking;
 
@@ -179,93 +180,7 @@ class NeighborsBenchmark {
             std::cout << std::left << std::setw(LOG_FIELD_WIDTH) << "Search set distribution:"    << std::setw(LOG_FIELD_WIDTH)   << (searchSet.sequential ? "sequential" : "random")   << "\n";
             std::cout << std::endl;
         }
-
-
-        static constexpr int CACHE_EVENTS[] = {
-            PAPI_L1_DCM, // l1d cache misses
-            PAPI_L2_DCM, // l2d cache misses
-            PAPI_L3_TCM, // l3 cache misses
-            //PAPI_L3_DCA // l3 accesses
-        };
         
-        // Native event names (compile-time known strings)
-        static constexpr std::pair<const char*, const char*> NATIVE_EVENTS[] = {
-            //{"perf::L1-DCACHE-LOADS", "L1D cache load accesses"},
-            //{"perf::L1-DCACHE-STORES", "L1D store accesses"}
-        };
-
-        static constexpr int NUM_NATIVE_EVENTS = sizeof(NATIVE_EVENTS) / sizeof(NATIVE_EVENTS[0]);
-
-        // At runtime, convert native names to codes and combine
-        std::pair<std::vector<int>, std::vector<std::string>> buildCombinedEventList() {
-            std::vector<int> fullEventList;
-            std::vector<std::string> fullEventListDescs;
-
-            PAPI_event_info_t info;
-
-            // Add standard PAPI events first
-            for (auto ev : CACHE_EVENTS) {
-                fullEventList.push_back(ev);
-
-                if (PAPI_get_event_info(ev, &info) == PAPI_OK) {
-                    fullEventListDescs.emplace_back(info.short_descr);
-                } else {
-                    fullEventListDescs.emplace_back("Unknown PAPI event");
-                }
-            }
-
-            // Convert native event names to PAPI codes and add
-            for (int i = 0; i < NUM_NATIVE_EVENTS; ++i) {
-                int code;
-                if (PAPI_event_name_to_code(const_cast<char*>(NATIVE_EVENTS[i].first), &code) == PAPI_OK) {
-                    fullEventList.push_back(code);
-                    fullEventListDescs.push_back(NATIVE_EVENTS[i].second);
-                } else {
-                    std::cerr << "Failed to convert native event name: " << NATIVE_EVENTS[i].first << "\n";
-                }
-            }
-
-            return {fullEventList, fullEventListDescs};
-        }
-
-        void printPapiResults(const std::vector<int> &events, const std::vector<std::string> &descs, const std::vector<long long>& values) {
-            // Save original formatting
-            std::ios_base::fmtflags originalFlags = std::cout.flags();
-            std::streamsize originalPrecision = std::cout.precision();
-            
-            // Switch to scientific notation
-            std::cout << std::scientific << std::setprecision(3);
-            std::cout << "PAPI Performance Counters:\n";
-            for (size_t i = 0; i < events.size(); ++i) {
-                std::cout << "  " << descs[i] << ": "
-                        << static_cast<double>(values[i]) << "\n";
-            }
-
-            // Restore original formatting
-            std::cout.flags(originalFlags);
-            std::cout.precision(originalPrecision);
-        }
-
-        int initPapiEventSet(std::vector<int> &events) {
-            int eventSet = PAPI_NULL;
-
-            if (PAPI_create_eventset(&eventSet) != PAPI_OK) {
-                std::cerr << "Failed to create PAPI event set." << std::endl;
-                return PAPI_NULL;
-            }
-
-            for (int i = 0; i < events.size(); ++i) {
-                if (PAPI_add_event(eventSet, events[i]) != PAPI_OK) {
-                    std::cerr << "Failed to add event " << events[i] << " at index " << i << std::endl;
-                    PAPI_cleanup_eventset(eventSet);
-                    PAPI_destroy_eventset(&eventSet);
-                    return PAPI_NULL;
-                }
-            }
-            return eventSet;
-        }
-
-
         void executeBenchmark(const std::function<size_t(double)>& searchCallback, std::string_view kernelName, SearchAlgo algo) {
             std::cout << "  Running " << searchAlgoToString(algo) << " on kernel " << kernelName << std::endl;
             const auto& radii = mainOptions.benchmarkRadii;
@@ -417,19 +332,6 @@ class NeighborsBenchmark {
         }
         
 #ifdef HAVE_PCL
-        static pcl::PointCloud<pcl::PointXYZ> convertCloudToPCL(std::vector<Point_t> &points) {
-            pcl::PointCloud<pcl::PointXYZ> pclCloud;
-            pclCloud.width = points.size();
-            pclCloud.height = 1;
-            pclCloud.points.resize(points.size());
-            #pragma omp parallel for schedule(runtime)
-                for (size_t i = 0; i < points.size(); ++i) {
-                    pclCloud.points[i].x = points[i].getX();
-                    pclCloud.points[i].y = points[i].getY();
-                    pclCloud.points[i].z = points[i].getZ();
-                }
-            return pclCloud;
-        }
 
         void benchmarkPCLOctreeKNN(pcl::octree::OctreePointCloudSearch<pcl::PointXYZ> &octree, pcl::PointCloud<pcl::PointXYZ> &pclCloud) {
             if(mainOptions.searchAlgos.contains(SearchAlgo::KNN_PCLOCT)) {
@@ -735,7 +637,7 @@ class NeighborsBenchmark {
                         initializeBenchmarkPtrOctree();
                     break;
                     case SearchStructure::LINEAR_OCTREE:
-                        if(enc.getShortEncoderName() == "none") {
+                        if(enc.getShortEncoderName() == encoderTypeToString(EncoderType::NO_ENCODING)) {
                             std::cout << "Skipping Linear Octree since point cloud was not reordered!" << std::endl;
                         } else {
                             initializeBenchmarkLinearOctree();

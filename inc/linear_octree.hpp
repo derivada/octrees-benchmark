@@ -11,7 +11,7 @@
 #include "TimeWatcher.hpp"
 #include "Geometry/Box.hpp"
 #include "neighbor_set.hpp"
-#include "encoding_octree_log.hpp"
+#include "benchmarking/build_log.hpp"
 #include "main_options.hpp"
 
 /**
@@ -449,7 +449,7 @@ public:
                         std::vector<key_t>& codes,
                         Box box,
                         PointEncoder& enc,
-                        std::shared_ptr<EncodingOctreeLog> log = nullptr)
+                        std::shared_ptr<BuildLog> log = nullptr)
         : points(points), enc(enc), codes(codes), box(box)  {
         static_assert(!std::is_same_v<std::decay_t<PointEncoder>, PointEncoding::NoEncoding>,
             "Encoder cannot be an instance of NoEncoding when using LinearOctree.");
@@ -466,7 +466,7 @@ public:
         buildOctreeLeaves(leaf);
         tw.stop();
         if(log)
-            log->octreeLeafTime = tw.getElapsedDecimalSeconds();
+            log->linearOctreeLeafTime = tw.getElapsedDecimalSeconds();
         
         // Internal part construction
         tw.start();
@@ -475,15 +475,13 @@ public:
         computeGeometry(inter);
         tw.stop();
         if(log)
-            log->octreeInternalTime = tw.getElapsedDecimalSeconds();
+            log->linearOctreeInternalTime = tw.getElapsedDecimalSeconds();
 
 
         // Output extra info from the build
         if (log) {
-            log->octreeTime = log->octreeLeafTime + log->octreeInternalTime;
-            log->max_leaf_points = mainOptions.maxPointsLeaf;
-            log->min_octant_radius = MIN_OCTANT_RADIUS;
-            log->octreeType = "LinearOctree";
+            log->buildTime = log->linearOctreeLeafTime + log->linearOctreeInternalTime;
+            log->maxLeafPoints = mainOptions.maxPointsLeaf;
             log->memoryUsed = computeMemoryFootprint();
             log->totalNodes = nTotal;
             log->leafNodes = nLeaf;

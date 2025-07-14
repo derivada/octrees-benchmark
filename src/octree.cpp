@@ -75,7 +75,7 @@ Octree<Point_t>::Octree(Vector center, Vector radii, std::vector<Point_t>& point
 
 /// @brief Fill the missing data in the octree log for the Pointer-based Octree 
 template <typename Point_t>
-void Octree<Point_t>::logOctreeData(std::shared_ptr<EncodingOctreeLog> log) const 
+void Octree<Point_t>::logOctreeData(std::shared_ptr<BuildLog> log) const 
 {	
 	std::vector<std::pair<std::reference_wrapper<const Octree>, size_t>> toVisit;
 	toVisit.emplace_back(std::cref(*this), 0);

@@ -1,3 +1,4 @@
+#pragma once
 #include "point_encoder.hpp"
 #include "hilbert_encoder_3d.hpp"
 #include "morton_encoder_3d.hpp"

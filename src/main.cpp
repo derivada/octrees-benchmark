@@ -20,7 +20,6 @@
 #include "PointEncoding/point_encoder_factory.hpp"
 #include "result_checking.hpp"
 #include "omp.h"
-#include "encoding_octree_log.hpp"
 #include "unibnOctree.hpp"
 #include "nanoflann.hpp"
 #include "nanoflann_wrappers.hpp"
@@ -28,8 +27,10 @@
 #include <pcl/point_cloud.h>
 #include <pcl/octree/octree_search.h>
 #include <pcl/kdtree/kdtree_flann.h>
+#include "pcl_cloud_reader.hpp"
 #endif
 #include "papi.h"
+#include "benchmarking/enc_build_benchmarks.hpp"
 
 namespace fs = std::filesystem;
 using namespace PointEncoding;
@@ -55,6 +56,19 @@ void searchBenchmark(std::ofstream &outputFile, EncoderType encoding = EncoderTy
     // Run the benchmarks
     NeighborsBenchmark<Point_t> octreeBenchmarks(points, codes, box, enc, searchSet, outputFile);   
     octreeBenchmarks.runAllBenchmarks();    
+}
+
+/**
+ * @brief Benchmark encoding times for each different encoder (Morton, Hilbert) and build times of the structures under each
+ * of this encodings (or without them if possible)
+ */
+void buildEncodingBenchmark(std::ofstream &encodingFile, std::ofstream &buildFile) {
+    // Load points and put their metadata into a separate vector
+    auto pointMetaPair = readPoints<Point_t>(mainOptions.inputFile);
+    std::vector<Point_t> points = std::move(pointMetaPair.first);
+    std::optional<std::vector<PointMetadata>> metadata = std::move(pointMetaPair.second);
+    EncodingBuildBenchmarks<Point_t> encBuildBenchmarks(points, metadata, encodingFile, buildFile);
+    encBuildBenchmarks.runEncodingBuildBenchmarks();
 }
 
 void approximateSearchLog(std::ofstream &outputFile, EncoderType encoding) {
@@ -144,78 +158,6 @@ void outputReorderings(std::ofstream &outputFilePoints, std::ofstream &outputFil
     }
 }
 
-
-template <template <typename> class Octree_t>
-void encodingAndOctreeLog(std::ofstream &outputFile, EncoderType encoding) {
-    std::shared_ptr<EncodingOctreeLog> log = std::make_shared<EncodingOctreeLog>();
-    log->pointType = "Point";
-    auto pointMetaPair = readPoints<Point_t>(mainOptions.inputFile);
-    std::vector<Point_t> points = std::move(pointMetaPair.first);
-    std::optional<std::vector<PointMetadata>> metadata = std::move(pointMetaPair.second);
-    auto& enc = getEncoder(encoding);
-    double totalBbox = 0.0, totalEnc = 0.0, totalSort = 0.0;
-    std::vector<uint64_t> codes; Box box;
-    if(mainOptions.repeats == 0)
-        return;
-    if(mainOptions.useWarmup) {
-        auto [codesWarmup, boxWarmup] = enc.sortPoints<Point_t>(points, metadata, log);
-        std::cout << "encoding warmup times - bbox: " << log->boundingBoxTime 
-            << " enc:  " << log->encodingTime << " sort: " << log->sortingTime << std::endl;
-    }
-    for(int i = 0; i<mainOptions.repeats; i++) {
-        auto [codesRepeat, boxRepeat] = enc.sortPoints<Point_t>(points, metadata, log);
-        totalBbox += log->boundingBoxTime, totalEnc += log->encodingTime, totalSort += log->sortingTime;
-        std::cout << "encoding repeat #" << i << " times - bbox: " << log->boundingBoxTime 
-            << " enc:  " << log->encodingTime << " sort: " << log->sortingTime << std::endl;
-        if(i == mainOptions.repeats - 1) {
-            codes = std::move(codesRepeat);
-            box = std::move(boxRepeat);
-        }
-    }
-    log->boundingBoxTime = totalBbox / mainOptions.repeats;
-    log->encodingTime = totalEnc / mainOptions.repeats;
-    log->sortingTime = totalSort / mainOptions.repeats;
-    if constexpr (std::is_same_v<Octree_t<Point_t>, LinearOctree<Point_t>>) {
-        double totalInternal = 0.0, totalLeaf = 0.0;
-        if(mainOptions.useWarmup) {
-            LinearOctree<Point_t> oct(points, codes, box, enc, log);
-        }
-        for(int i = 0; i<mainOptions.repeats; i++) {
-            LinearOctree<Point_t> oct(points, codes, box, enc, log);
-            totalLeaf += log->octreeLeafTime, totalInternal += log->octreeInternalTime;
-        }
-        log->octreeLeafTime = totalLeaf / mainOptions.repeats;
-        log->octreeInternalTime = totalInternal / mainOptions.repeats;
-    } else if constexpr (std::is_same_v<Octree_t<Point_t>, Octree<Point_t>>) {
-        // only measure total time for pointer-based Octree, we do it here
-        auto stats = benchmarking::benchmark(mainOptions.repeats, 
-            [&]() { Octree<Point_t> oct(points, box); }, mainOptions.useWarmup);
-        log->octreeTime = stats.mean();
-        log->octreeType = "Octree";
-        log->max_leaf_points = mainOptions.maxPointsLeaf;
-        Octree<Point_t> oct(points, box);
-        oct.logOctreeData(log);
-    } else if constexpr (std::is_same_v<Octree_t<Point_t>, unibn::Octree<Point_t>>) {
-        auto stats = benchmarking::benchmark(mainOptions.repeats, [&]() { 
-            auto oct = unibn::Octree<Point_t>();
-            unibn::OctreeParams params;
-            params.bucketSize = mainOptions.maxPointsLeaf;
-            oct.initialize(points, params);    
-        }, mainOptions.useWarmup);   
-        log->octreeTime = stats.mean();
-        log->octreeType = "unibnOctree";
-        log->max_leaf_points = mainOptions.maxPointsLeaf;
-        auto oct = unibn::Octree<Point_t>();
-        unibn::OctreeParams params;
-        params.bucketSize = mainOptions.maxPointsLeaf;
-        oct.initialize(points, params);  
-        oct.logOctreeData(log);
-    }
-
-    std::cout << *log << std::endl;
-    log->toCSV(outputFile);
-}
-
 /// @brief just a debugging method for checking correct knn impl
 void testKNN(EncoderType encoding = EncoderType::NO_ENCODING) {
     // Load points and put their metadata into a separate vector
@@ -229,7 +171,7 @@ void testKNN(EncoderType encoding = EncoderType::NO_ENCODING) {
     LinearOctree<Point_t> loct(points, codes, box, enc);
     NanoflannPointCloud<Point_t> npc(points);
     NanoFlannKDTree<Point_t> kdtree(3, npc, {mainOptions.maxPointsLeaf});
-    auto pclCloud = NeighborsBenchmark<Point_t>::convertCloudToPCL(points);
+    auto pclCloud = convertCloudToPCL(points);
 
     // Build the PCL Octree
     // pcl::octree::OctreePointCloudSearch<pcl::PointXYZ> pcloct(mainOptions.pclOctResolution);
@@ -386,10 +328,7 @@ int main(int argc, char *argv[]) {
             return 1;
         }
     }
-
-    std::cout << "Tamaño octante unibn: " << sizeof(unibn::Octree<Point_t>::Octant) << std::endl;
-    std::cout << "Tamaño octante pointer: " << sizeof(Octree<Point_t>) << std::endl;
-
+    
     // Handle input file
     fs::path inputFile = mainOptions.inputFile;
     std::string fileName = inputFile.stem();
@@ -402,20 +341,30 @@ int main(int argc, char *argv[]) {
 
     using namespace PointEncoding;
     if(!mainOptions.debug) {
-        // Open the benchmark output file
-        std::string csvFilename = mainOptions.inputFileName + "-" + getCurrentDate() + ".csv";
-        std::filesystem::path csvPath = mainOptions.outputDirName / csvFilename;
-        std::ofstream outputFile = std::ofstream(csvPath, std::ios::app);
-        if (!outputFile.is_open()) {
-            throw std::ios_base::failure(std::string("Failed to open benchmark output file: ") + csvPath.string());
+        if(mainOptions.buildEncBenchmarks) {
+            std::string csvFilenameEnc = mainOptions.inputFileName + "-" + getCurrentDate() + "-encoding.csv";
+            std::string csvFilenameBuild = mainOptions.inputFileName + "-" + getCurrentDate() + "-build.csv";
+            std::filesystem::path csvPathEnc = mainOptions.outputDirName / csvFilenameEnc;
+            std::filesystem::path csvPathBuild = mainOptions.outputDirName / csvFilenameBuild;
+            std::ofstream outputFileEnc = std::ofstream(csvPathEnc, std::ios::app);
+            std::ofstream outputFileBuild = std::ofstream(csvPathBuild, std::ios::app);
+            buildEncodingBenchmark(outputFileEnc, outputFileBuild);
+        } else {
+            // Open the benchmark output file
+            std::string csvFilename = mainOptions.inputFileName + "-" + getCurrentDate() + ".csv";
+            std::filesystem::path csvPath = mainOptions.outputDirName / csvFilename;
+            std::ofstream outputFile = std::ofstream(csvPath, std::ios::app);
+            if (!outputFile.is_open()) {
+                throw std::ios_base::failure(std::string("Failed to open benchmark output file: ") + csvPath.string());
+            }
+            // Run search benchmarks
+            if(mainOptions.encodings.contains(EncoderType::NO_ENCODING))
+                searchBenchmark(outputFile, EncoderType::NO_ENCODING);
+            if(mainOptions.encodings.contains(EncoderType::MORTON_ENCODER_3D))
+                searchBenchmark(outputFile, EncoderType::MORTON_ENCODER_3D);
+            if(mainOptions.encodings.contains(EncoderType::HILBERT_ENCODER_3D))
+                searchBenchmark(outputFile, EncoderType::HILBERT_ENCODER_3D);   
         }
-        // Run search benchmarks
-        if(mainOptions.encodings.contains(EncoderType::NO_ENCODING))
-            searchBenchmark(outputFile, EncoderType::NO_ENCODING);
-        if(mainOptions.encodings.contains(EncoderType::MORTON_ENCODER_3D))
-            searchBenchmark(outputFile, EncoderType::MORTON_ENCODER_3D);
-        if(mainOptions.encodings.contains(EncoderType::HILBERT_ENCODER_3D))
-            searchBenchmark(outputFile, EncoderType::HILBERT_ENCODER_3D);
     } else {
         testKNN(HILBERT_ENCODER_3D);
         // Output encoded point clouds to the files (for plots and such)
@@ -441,26 +390,6 @@ int main(int argc, char *argv[]) {
         // outputReorderings(unencodedFile, unencodedFileOct);  
         // outputReorderings(mortonFile, mortonFileOct, EncoderType::MORTON_ENCODER_3D);  
         // outputReorderings(hilbertFile, hilbertFileOct, EncoderType::HILBERT_ENCODER_3D);  
-        
-        // Encoding and build times benchmark
-        // std::filesystem::path encAndOctreeLogsPath = mainOptions.outputDirName / "enc_octree_times.csv";
-        // std::ofstream encAndOctreeLogsFile(encAndOctreeLogsPath);
-        // EncodingOctreeLog::writeCSVHeader(encAndOctreeLogsFile);
-        // if(mainOptions.encodings.contains(EncoderType::NO_ENCODING)) {
-        //     encodingAndOctreeLog<Octree>(encAndOctreeLogsFile, EncoderType::NO_ENCODING);
-        //     encodingAndOctreeLog<unibn::Octree>(encAndOctreeLogsFile, EncoderType::NO_ENCODING);
-        // }
-        // if(mainOptions.encodings.contains(EncoderType::MORTON_ENCODER_3D)) {
-        //     encodingAndOctreeLog<LinearOctree>(encAndOctreeLogsFile, EncoderType::MORTON_ENCODER_3D);
-        //     encodingAndOctreeLog<Octree>(encAndOctreeLogsFile, EncoderType::MORTON_ENCODER_3D);
-        //     encodingAndOctreeLog<unibn::Octree>(encAndOctreeLogsFile, EncoderType::MORTON_ENCODER_3D);
-        // }
-
-        // if(mainOptions.encodings.contains(EncoderType::HILBERT_ENCODER_3D)) {
-        //     encodingAndOctreeLog<LinearOctree>(encAndOctreeLogsFile, EncoderType::HILBERT_ENCODER_3D);
-        //     encodingAndOctreeLog<Octree>(encAndOctreeLogsFile, EncoderType::HILBERT_ENCODER_3D);
-        //     encodingAndOctreeLog<unibn::Octree>(encAndOctreeLogsFile, EncoderType::HILBERT_ENCODER_3D);
-        // }
     }
 
     return EXIT_SUCCESS;

@@ -27,7 +27,7 @@
 #include <cstring>  // memset.
 #include <limits>
 #include <vector>
-#include "encoding_octree_log.hpp"
+#include "benchmarking/build_log.hpp"
 
 // needed for gtest access to protected/private members ...
 namespace
@@ -283,10 +283,10 @@ class Octree
   };
 
   /// @brief Added auxiliary function for computing the memory footprint of this unibnOctree
-  void logOctreeData(std::shared_ptr<EncodingOctreeLog> log) const;
+  void logOctreeData(std::shared_ptr<BuildLog> log) const;
 
   /// @brief Added auxiliary function for computing the memory footprint of this unibnOctree
-  void logOctreeData(std::shared_ptr<EncodingOctreeLog> log, Octant* root, size_t currDepth) const;
+  void logOctreeData(std::shared_ptr<BuildLog> log, Octant* root, size_t currDepth) const;
 
  protected:
   
@@ -860,7 +860,7 @@ bool Octree<PointT, ContainerT>::inside(const PointT& query, double radius, cons
 }
 
 template <typename PointT, typename ContainerT>
-void Octree<PointT, ContainerT>::logOctreeData(std::shared_ptr<EncodingOctreeLog> log) const {
+void Octree<PointT, ContainerT>::logOctreeData(std::shared_ptr<BuildLog> log) const {
   log->memoryUsed = successors_.size() * sizeof(uint32_t);
   std::cout << log->memoryUsed << std::endl;
   log->minRadiusAtMaxDepth = 1e18;
@@ -869,7 +869,7 @@ void Octree<PointT, ContainerT>::logOctreeData(std::shared_ptr<EncodingOctreeLog
 }
 
 template <typename PointT, typename ContainerT>
-void Octree<PointT, ContainerT>::logOctreeData(std::shared_ptr<EncodingOctreeLog> log, Octant* octant, size_t currDepth) const
+void Octree<PointT, ContainerT>::logOctreeData(std::shared_ptr<BuildLog> log, Octant* octant, size_t currDepth) const
 {
   log->memoryUsed += sizeof(Octant);
   if (octant->isLeaf) {
