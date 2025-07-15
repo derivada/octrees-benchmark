@@ -97,9 +97,8 @@ class Box
 };
 
 
-template<typename Point_t>
-inline Point mbb(const std::vector<Point_t>& points, Vector& maxRadius)
-requires std::is_base_of_v<Point, Point_t>
+template<PointContainer Container>
+inline Point mbb(const Container& points, Vector& maxRadius)
 {
 	double minX = std::numeric_limits<double>::max();
 	double minY = std::numeric_limits<double>::max();
@@ -143,51 +142,6 @@ requires std::is_base_of_v<Point, Point_t>
 	return midpoint(min, max);
 }
 
-template<typename Point_t>
-inline Point mbb(const std::vector<Point_t*>& points, Vector& maxRadius)
-requires std::is_base_of_v<Point, Point_t>
-{
-	double minX = std::numeric_limits<double>::max();
-	double minY = std::numeric_limits<double>::max();
-	double minZ = std::numeric_limits<double>::max();
-	double maxX = -std::numeric_limits<double>::max();
-	double maxY = -std::numeric_limits<double>::max();
-	double maxZ = -std::numeric_limits<double>::max();
-
-	#pragma omp parallel
-	{
-		double localMinX = minX, localMinY = minY, localMinZ = minZ;
-		double localMaxX = maxX, localMaxY = maxY, localMaxZ = maxZ;
-
-		#pragma omp for schedule(static) nowait
-		for (size_t i = 0; i < points.size(); ++i) {
-			const Point* p = points[i];
-			localMinX = std::min(localMinX, p->getX());
-			localMaxX = std::max(localMaxX, p->getX());
-			localMinY = std::min(localMinY, p->getY());
-			localMaxY = std::max(localMaxY, p->getY());
-			localMinZ = std::min(localMinZ, p->getZ());
-			localMaxZ = std::max(localMaxZ, p->getZ());
-		}
-
-		#pragma omp critical
-		{
-			minX = std::min(minX, localMinX);
-			maxX = std::max(maxX, localMaxX);
-			minY = std::min(minY, localMinY);
-			maxY = std::max(maxY, localMaxY);
-			minZ = std::min(minZ, localMinZ);
-			maxZ = std::max(maxZ, localMaxZ);
-		}
-	}
-
-	Point min(minX, minY, minZ);
-	Point max(maxX, maxY, maxZ);
-	Box box(std::pair<Point, Point>{ min, max });
-
-	maxRadius = box.radii();
-	return midpoint(min, max);
-}
 
 inline void makeBox(const Point& p, double radius, Vector& min, Vector& max)
 {

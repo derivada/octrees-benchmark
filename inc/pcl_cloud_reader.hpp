@@ -1,8 +1,10 @@
 #pragma once
 #ifdef HAVE_PCL
 #include <pcl/point_cloud.h>
-template <typename Point_t>
-pcl::PointCloud<pcl::PointXYZ> convertCloudToPCL(std::vector<Point_t> &points) {
+#include "point_containers.hpp"
+
+template <PointContainer Container>
+pcl::PointCloud<pcl::PointXYZ> convertCloudToPCL(Container &points) {
     pcl::PointCloud<pcl::PointXYZ> pclCloud;
     pclCloud.width = points.size();
     pclCloud.height = 1;

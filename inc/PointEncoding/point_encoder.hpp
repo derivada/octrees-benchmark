@@ -46,8 +46,8 @@ public:
     /// @brief A wrapper for doing PointEncoding::getAnchorCoords + encode in one single step     
     virtual key_t encodeFromPoint(const Point& p, const Box& bbox) const = 0;
 
-    template <typename Point_t>
-    std::vector<key_t> encodePoints(const std::vector<Point_t> &points, const Box &bbox) const {
+    template <PointContainer Container>
+    std::vector<key_t> encodePoints(const Container &points, const Box &bbox) const {
         std::vector<key_t> codes(points.size());
         #pragma omp parallel for schedule(static)
             for(size_t i = 0; i < points.size(); i++) {
@@ -66,8 +66,8 @@ public:
      * be needed
      * 
      */
-    template <typename Point_t>
-    std::vector<key_t> sortPoints(std::vector<Point_t> &points, 
+    template <PointContainer Container>
+    std::vector<key_t> sortPoints(Container &points, 
         std::optional<std::vector<PointMetadata>> &meta_opt, const Box &bbox, std::shared_ptr<EncodingLog> log = nullptr) const {
         size_t n = points.size();
         // Choose 4, 8 or 16. 16 is less passes but requires more memory for the histograms and it offers better performance in most cases.
@@ -79,7 +79,7 @@ public:
         TimeWatcher tw;
         tw.start();
     
-        std::vector<Point_t> buffer(n);
+        Container buffer(n);
         std::vector<PointMetadata> metadata_buffer;
         if (meta_opt) metadata_buffer.resize(n);
     
@@ -123,7 +123,7 @@ public:
                     size_t encoded_key = encodeFromPoint(points[i], bbox);
                     size_t bucket = (encoded_key >> shift) & BUCKET_MASK;
                     size_t pos = localOffset[bucket]++;
-                    buffer[pos] = points[i];
+                    buffer.set(pos, points[i]);
                     if (meta_opt) metadata_buffer[pos] = (*meta_opt)[i];
                 }
             }
@@ -162,8 +162,8 @@ public:
      * @param meta_opt The optional metadata of the point cloud (if Lpoint is used, it is contained on the struct). 
      * meta_opt is a parallel array to points and will be sorted in the same order
      */
-    template <typename Point_t>
-    std::pair<std::vector<key_t>, Box> sortPoints(std::vector<Point_t> &points, 
+    template <PointContainer Container>
+    std::pair<std::vector<key_t>, Box> sortPoints(Container &points, 
         std::optional<std::vector<PointMetadata>> &meta_opt, std::shared_ptr<EncodingLog> log = nullptr) const {
         // Find the bbox
         TimeWatcher tw;
@@ -176,7 +176,7 @@ public:
             log->boundingBoxTime = tw.getElapsedDecimalSeconds();
         }
         // Call the regular sortPoints with metadata
-        return std::make_pair(sortPoints<Point_t>(points, meta_opt, bbox, log), bbox);
+        return std::make_pair(sortPoints<Container>(points, meta_opt, bbox, log), bbox);
     }
 
 

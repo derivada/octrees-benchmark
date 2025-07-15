@@ -6,8 +6,9 @@
 #include "util.hpp"
 #include "LasFileReader.hpp"
 #include "LasFileReaderParallel.hpp"
-#include "TxtFileReader.hpp"
+// #include "TxtFileReader.hpp"
 #include <filesystem>
+#include "point_containers.hpp"
 
 namespace fs = std::filesystem;
 
@@ -42,15 +43,17 @@ class FileReaderFactory
 	 * @param numCols Number of columns of the txt file. Default = 0
 	 * @return
 	 */
-	template <typename Point_t>
-	static std::shared_ptr<FileReader<Point_t>> makeReader(FileReader_t type, const fs::path& path)
+	template <PointContainer Container>
+	static std::shared_ptr<FileReader<Container>> makeReader(FileReader_t type, const fs::path& path)
 	{
 		switch (type)
 		{
 			case txt_t:
-				return std::make_shared<TxtFileReader<Point_t>>(path);
+				std::cout << "Txtfilereader not available after SoA refactor\n";
+				return nullptr;
+				//return std::make_shared<TxtFileReader<PointContainer>>(path);
 			case las_t:
-				return std::make_shared<LasFileReaderParallel<Point_t>>(path);
+				return std::make_shared<LasFileReaderParallel<Container>>(path);
 			default:
 				std::cout << "Unable to create specialized FileReader\n";
 				exit(-2);

@@ -18,13 +18,13 @@
  * @brief Specialization of FileRead to read .las/.laz files. Reads the LAS file in parallel after retrieving the
  * amount of points from it, using LAsreader seek() method to skip ahead for each thread.
  */
-template <typename Point_t>
-class LasFileReaderParallel : public FileReader<Point_t>
+template <PointContainer Container>
+class LasFileReaderParallel : public FileReader<Container>
 {
 	public:
 	// ***  CONSTRUCTION / DESTRUCTION  *** //
 	// ************************************ //
-	LasFileReaderParallel(const fs::path& path) : FileReader<Point_t>(path){};
+	LasFileReaderParallel(const fs::path& path) : FileReader<Container>(path){};
 	~LasFileReaderParallel(){};
 
 	/// @brief Helper to create a new LASreader for each thread and seek the file to the correct position
@@ -65,14 +65,14 @@ class LasFileReaderParallel : public FileReader<Point_t>
 	 * @brief Reads the points contained in the .las/.laz file
 	 * @return Vector of point_t
 	 */
-	std::vector<Point_t> read() {
+	Container read() {
 		// TODO: Use extended_point_records para LAS v1.4
 		// https://gitlab.citius.usc.es/oscar.garcia/las-shapefile-classifier/-/blob/master/lasreader_wrapper.cc
 		auto lasreader = createReaderAndSeek();
 		auto pci = readPointCloudInfo(lasreader);
 		closeReader(lasreader);
 
-		std::vector<Point_t> points(pci.totalPoints);
+		Container points(pci.totalPoints);
 		int num_threads = omp_get_max_threads();
 		size_t points_per_thread = pci.totalPoints / num_threads;
 
@@ -84,38 +84,45 @@ class LasFileReaderParallel : public FileReader<Point_t>
 			LASreader* reader = createReaderAndSeek(start);
 			for (size_t i = start; i < end; ++i) {
 				if (!reader->read_point()) break;
-				points[i] = Point_t(
+				points.set(i, Point(
 					i,
 					static_cast<double>(reader->point.get_X() * pci.xScale + pci.xOffset),
 					static_cast<double>(reader->point.get_Y() * pci.yScale + pci.yOffset),
-					static_cast<double>(reader->point.get_Z() * pci.zScale + pci.zOffset),
-					static_cast<double>(reader->point.get_intensity()),
-					static_cast<unsigned short>(reader->point.get_return_number()),
-					static_cast<unsigned short>(reader->point.get_number_of_returns()),
-					static_cast<unsigned short>(reader->point.get_scan_direction_flag()),
-					static_cast<unsigned short>(reader->point.get_edge_of_flight_line()),
-					static_cast<unsigned short>(reader->point.get_classification()),
-					static_cast<char>(reader->point.get_scan_angle_rank()),
-					static_cast<unsigned short>(reader->point.get_user_data()),
-					static_cast<unsigned short>(reader->point.get_point_source_ID()),
-					static_cast<unsigned int>(reader->point.get_R()),
-					static_cast<unsigned int>(reader->point.get_G()),
-					static_cast<unsigned int>(reader->point.get_B())
-				);
+					static_cast<double>(reader->point.get_Z() * pci.zScale + pci.zOffset)
+				));
+
+				// points[i] = Point(
+				// 	i,
+				// 	static_cast<double>(reader->point.get_X() * pci.xScale + pci.xOffset),
+				// 	static_cast<double>(reader->point.get_Y() * pci.yScale + pci.yOffset),
+				// 	static_cast<double>(reader->point.get_Z() * pci.zScale + pci.zOffset),
+				// static_cast<double>(reader->point.get_intensity()),
+				// static_cast<unsigned short>(reader->point.get_return_number()),
+				// static_cast<unsigned short>(reader->point.get_number_of_returns()),
+				// static_cast<unsigned short>(reader->point.get_scan_direction_flag()),
+				// static_cast<unsigned short>(reader->point.get_edge_of_flight_line()),
+				// static_cast<unsigned short>(reader->point.get_classification()),
+				// static_cast<char>(reader->point.get_scan_angle_rank()),
+				// static_cast<unsigned short>(reader->point.get_user_data()),
+				// static_cast<unsigned short>(reader->point.get_point_source_ID()),
+				// static_cast<unsigned int>(reader->point.get_R()),
+				// static_cast<unsigned int>(reader->point.get_G()),
+				// static_cast<unsigned int>(reader->point.get_B())
+				// );
 			}
 			closeReader(reader);
 		}
 		return points;
 	}
 	
-	std::pair<std::vector<Point_t>, std::vector<PointMetadata>> readMeta() {
+	std::pair<Container, std::vector<PointMetadata>> readMeta() {
 		// TODO: Use extended_point_records para LAS v1.4
 		// https://gitlab.citius.usc.es/oscar.garcia/las-shapefile-classifier/-/blob/master/lasreader_wrapper.cc
 		auto lasreader = createReaderAndSeek();
 		auto pci = readPointCloudInfo(lasreader);
 		closeReader(lasreader);
 
-		std::vector<Point_t> points(pci.totalPoints);
+		Container points(pci.totalPoints);
 		std::vector<PointMetadata> metadata(pci.totalPoints);
 		int num_threads = omp_get_max_threads();
 		size_t points_per_thread = pci.totalPoints / num_threads;
@@ -128,12 +135,12 @@ class LasFileReaderParallel : public FileReader<Point_t>
 			LASreader* reader = createReaderAndSeek(start);
 			for (size_t i = start; i < end; ++i) {
 				if (!reader->read_point()) break;
-				points[i] = Point_t(
+				points.set(i, Point(
 					i,
 					static_cast<double>(reader->point.get_X() * pci.xScale + pci.xOffset),
 					static_cast<double>(reader->point.get_Y() * pci.yScale + pci.yOffset),
 					static_cast<double>(reader->point.get_Z() * pci.zScale + pci.zOffset)
-				);
+				));
 				metadata[i] = PointMetadata(
 					static_cast<double>(reader->point.get_intensity()),
 					static_cast<unsigned short>(reader->point.get_return_number()),

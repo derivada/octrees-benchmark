@@ -1,6 +1,7 @@
 #pragma once
 #include <vector>
 #include <iterator>
+#include "point_containers.hpp"
 
 /**
  * @brief A structure that stores a set of neighboring points within a linear octree.
@@ -11,11 +12,11 @@
  *
  * @tparam Point_t The type representing a point in the dataset.
  */
-template <typename Point_t>
+template <PointContainer Container>
 class NeighborSet {
     public:
         /// @brief Reference to the external point cloud.
-        std::vector<Point_t>* points = nullptr;
+        Container* points = nullptr;
 
         /// @brief Ranges of indices defining neighborhoods.
         std::vector<std::pair<size_t, size_t>> ranges;
@@ -30,7 +31,7 @@ class NeighborSet {
          * @brief Constructs a NeighborSet with a reference to an existing point cloud.
          * @param points Reference to the point cloud.
          */        
-        NeighborSet(std::vector<Point_t>* points)
+        NeighborSet(Container* points)
             : points(points), ranges() {}
 
         /// @brief Copy constructor
@@ -91,7 +92,7 @@ class NeighborSet {
         class Iterator {
         public:
             using iterator_category = std::forward_iterator_tag;
-            using value_type = std::pair<size_t, const Point_t&>;
+            using value_type = std::pair<size_t, const Point&>;
             using difference_type = std::ptrdiff_t;
             using pointer = value_type*;        // not usually needed
             using reference = value_type;       // return by value here
@@ -130,7 +131,7 @@ class NeighborSet {
 
         private:
             const NeighborSet& result;
-            const Point_t* currentPoint = nullptr;
+            const Point* currentPoint = nullptr;
             size_t currentRange;
             size_t currentIndex;
 

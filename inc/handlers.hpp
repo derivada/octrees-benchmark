@@ -26,6 +26,7 @@
 #include "Geometry/PointMetadata.hpp"
 #include <optional>
 #include "TimeWatcher.hpp"
+#include "point_containers.hpp"
 
 namespace fs = std::filesystem;
 
@@ -38,11 +39,11 @@ void createDirectory(const fs::path& dirName) {
 	if (!fs::is_directory(dirName)) { fs::create_directories(dirName); }
 }
 
-template<typename Point_t>
-void pointCloudReadLog(const std::vector<Point_t> &points, TimeWatcher &tw, const fs::path& fileName) {
-    auto mem_size = (sizeof(std::vector<Point_t>) + (sizeof(Point_t) * points.size())) / (1024.0 * 1024.0);
+template<PointContainer Container>
+void pointCloudReadLog(const Container &points, TimeWatcher &tw, const fs::path& fileName) {
+    auto mem_size = (sizeof(Container) + (sizeof(Point) * points.size())) / (1024.0 * 1024.0);
     const std::string mem_size_str = std::to_string(mem_size) + " MB";
-    const std::string point_size_str =  std::to_string(sizeof(Point_t)) + " bytes";
+    const std::string point_size_str =  std::to_string(sizeof(Point)) + " bytes";
     const std::string time_elapsed_str = std::to_string(tw.getElapsedDecimalSeconds()) + " seconds";
     std::cout << std::fixed << std::setprecision(3); 
     std::cout << std::left << std::setw(LOG_FIELD_WIDTH) << "Point cloud read:"           << std::setw(LOG_FIELD_WIDTH) << fileName.stem()                   			  << "\n";
@@ -50,13 +51,13 @@ void pointCloudReadLog(const std::vector<Point_t> &points, TimeWatcher &tw, cons
     std::cout << std::left << std::setw(LOG_FIELD_WIDTH) << "Number of read points:"      << std::setw(LOG_FIELD_WIDTH) << points.size()                                  << "\n";
     std::cout << std::left << std::setw(LOG_FIELD_WIDTH) << "Size of point type:"         << std::setw(LOG_FIELD_WIDTH) << point_size_str                                 << "\n";
     std::cout << std::left << std::setw(LOG_FIELD_WIDTH) << "Points vector size:"         << std::setw(LOG_FIELD_WIDTH) << mem_size_str                                   << "\n";
-    std::cout << std::left << std::setw(LOG_FIELD_WIDTH) << "Alligned to cache lines?:"  	<< std::setw(LOG_FIELD_WIDTH) << (checkMemoryAlligned(points) ? "Yes" : "No") << "\n";
+    // TODO std::cout << std::left << std::setw(LOG_FIELD_WIDTH) << "Alligned to cache lines?:"  	<< std::setw(LOG_FIELD_WIDTH) << (checkMemoryAlligned(points) ? "Yes" : "No") << "\n";
     std::cout << std::endl;
 }
 
 /// @brief The optional will be null if Point_t does not require metadata (is not Point)
-template <typename Point_t>
-std::pair<std::vector<Point_t>, std::optional<std::vector<PointMetadata>>> readPoints(const fs::path& fileName) {
+template <PointContainer Container>
+std::pair<Container, std::optional<std::vector<PointMetadata>>> readPoints(const fs::path& fileName) {
 	// Open the file and create the reader
 	auto fExt = fileName.extension();
 	FileReader_t readerType = chooseReaderType(fExt);
@@ -65,20 +66,13 @@ std::pair<std::vector<Point_t>, std::optional<std::vector<PointMetadata>>> readP
 		std::cout << "Uncompatible file format\n";
 		exit(-1);
 	}
-	std::shared_ptr<FileReader<Point_t>> fileReader = FileReaderFactory::makeReader<Point_t>(readerType, fileName);
+	std::shared_ptr<FileReader<Container>> fileReader = FileReaderFactory::makeReader<Container>(readerType, fileName);
 	TimeWatcher tw;
     tw.start();
-    if constexpr (std::is_same_v<Point_t, Point>) {
-		auto [points, metadata] = fileReader->readMeta();
-		tw.stop();
-        pointCloudReadLog(points, tw, fileName);
-        return std::make_pair(points, std::optional<std::vector<PointMetadata>>(metadata));
-    } else {
-		auto points = fileReader->read();
-        tw.stop();
-        pointCloudReadLog(points, tw, fileName);
-        return std::make_pair(points, std::nullopt);
-    }
+    auto [points, metadata] = fileReader->readMeta();
+    tw.stop();
+    pointCloudReadLog(points, tw, fileName);
+    return std::make_pair(points, std::optional<std::vector<PointMetadata>>(metadata));
 }
 
 

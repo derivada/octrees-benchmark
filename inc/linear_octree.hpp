@@ -13,6 +13,7 @@
 #include "neighbor_set.hpp"
 #include "benchmarking/build_log.hpp"
 #include "main_options.hpp"
+#include "point_containers.hpp"
 
 /**
 * @class LinearOctree
@@ -29,7 +30,7 @@
 * 
 */
 
-template <typename Point_t>
+template <PointContainer Container>
 class LinearOctree {
 
 private:
@@ -124,7 +125,7 @@ private:
      * @details At the beginning of the octree construction, this points are encoded and then sorted in-place in the order given by their
      * encodings. Therefore, this array is altered inside this class. This is done to  locality that Morton/Hilbert
      */
-    std::vector<Point_t> &points;
+    Container &points;
 
     /// @brief The global bounding box of the octree
     Box box;
@@ -445,7 +446,7 @@ public:
      * @details The points will be sorted in-place by the order given by the encoding to allow
      * spatial data locality
      */
-    explicit LinearOctree(std::vector<Point_t>& points,
+    explicit LinearOctree(Container& points,
                         std::vector<key_t>& codes,
                         Box box,
                         PointEncoder& enc,
@@ -693,8 +694,8 @@ public:
      * @return Points inside the given kernel type. Actually the same as ptsInside.
      */
     template<typename Kernel>
-    [[nodiscard]] std::vector<Point_t*> neighbors(const Kernel& k) const {
-        std::vector<Point_t*> ptsInside;
+    [[nodiscard]] std::vector<size_t> neighbors(const Kernel& k) const {
+        std::vector<size_t> ptsInside;
         auto checkBoxIntersect = [&](uint32_t nodeIndex, uint32_t currDepth) {
             auto nodeCenter = this->centers[nodeIndex];
             auto nodeRadii = this->precomputedRadii[currDepth];
@@ -703,10 +704,8 @@ public:
                     // Completely inside, all add points and prune
                     size_t startIndex = this->internalRanges[nodeIndex].first;
                     size_t endIndex = this->internalRanges[nodeIndex].second;
-                    auto* startPtr = points.data() + startIndex;
-                    auto* endPtr = points.data() + endIndex;
-                    for (; startPtr != endPtr; ++startPtr) {
-                        ptsInside.push_back(startPtr);
+                    for (size_t i = startIndex; i < endIndex; ++i) {
+                        ptsInside.push_back(i);
                     }
                     return false;
                 }
@@ -723,11 +722,9 @@ public:
             // Reached a leaf, add all points inside the kernel
             size_t startIndex = this->internalRanges[nodeIndex].first;
             size_t endIndex = this->internalRanges[nodeIndex].second;
-            auto* startPtr = points.data() + startIndex;
-            auto* endPtr = points.data() + endIndex;
-            for (; startPtr != endPtr; ++startPtr) {
-                if (k.isInside(*startPtr)) {
-                    ptsInside.push_back(startPtr);
+            for (size_t i = startIndex; i < endIndex; ++i) {
+                if (k.isInside(points[i])) {
+                    ptsInside.push_back(i);
                 }
             }
         };
@@ -737,49 +734,49 @@ public:
 	}
 
     // with result as (dist, index) vector
-    template<typename Kernel>
-    [[nodiscard]] std::vector<std::pair<double, size_t>> neighborsDists(const Kernel& k) const {
-        std::vector<std::pair<double, size_t>> result;
-        auto checkBoxIntersect = [&](uint32_t nodeIndex, uint32_t currDepth) {
-            auto nodeCenter = this->centers[nodeIndex];
-            auto nodeRadii = this->precomputedRadii[currDepth];
-            switch (k.boxIntersect(nodeCenter, nodeRadii)) {
-                case KernelAbstract::IntersectionJudgement::INSIDE: {
-                    // Completely inside, all add points and prune
-                    size_t startIndex = this->internalRanges[nodeIndex].first;
-                    size_t endIndex = this->internalRanges[nodeIndex].second;
-                    auto* startPtr = points.data() + startIndex;
-                    auto* endPtr = points.data() + endIndex;
-                    for (; startPtr != endPtr; ++startPtr) {
-                        result.push_back(std::make_pair(sqDist(*startPtr, k.center()), startPtr->id()));
-                    }
-                    return false;
-                }
-                case KernelAbstract::IntersectionJudgement::OVERLAP:
-                    // Overlaps but not inside, keep descending
-                    return true;
-                default:
-                    // Completely outside, prune
-                    return false;
-            }
-        };
+    // template<typename Kernel>
+    // [[nodiscard]] std::vector<std::pair<double, size_t>> neighborsDists(const Kernel& k) const {
+    //     std::vector<std::pair<double, size_t>> result;
+    //     auto checkBoxIntersect = [&](uint32_t nodeIndex, uint32_t currDepth) {
+    //         auto nodeCenter = this->centers[nodeIndex];
+    //         auto nodeRadii = this->precomputedRadii[currDepth];
+    //         switch (k.boxIntersect(nodeCenter, nodeRadii)) {
+    //             case KernelAbstract::IntersectionJudgement::INSIDE: {
+    //                 // Completely inside, all add points and prune
+    //                 size_t startIndex = this->internalRanges[nodeIndex].first;
+    //                 size_t endIndex = this->internalRanges[nodeIndex].second;
+    //                 auto* startPtr = points.data() + startIndex;
+    //                 auto* endPtr = points.data() + endIndex;
+    //                 for (; startPtr != endPtr; ++startPtr) {
+    //                     result.push_back(std::make_pair(sqDist(*startPtr, k.center()), startPtr->id()));
+    //                 }
+    //                 return false;
+    //             }
+    //             case KernelAbstract::IntersectionJudgement::OVERLAP:
+    //                 // Overlaps but not inside, keep descending
+    //                 return true;
+    //             default:
+    //                 // Completely outside, prune
+    //                 return false;
+    //         }
+    //     };
         
-        auto findAndInsertPoints = [&](uint32_t nodeIndex) {
-            // Reached a leaf, add all points inside the kernel
-            size_t startIndex = this->internalRanges[nodeIndex].first;
-            size_t endIndex = this->internalRanges[nodeIndex].second;
-            auto* startPtr = points.data() + startIndex;
-            auto* endPtr = points.data() + endIndex;
-            for (; startPtr != endPtr; ++startPtr) {
-                if (k.isInside(*startPtr)) {
-                    result.push_back(std::make_pair(sqDist(*startPtr, k.center()), startPtr->id()));
-                }
-            }
-        };
+    //     auto findAndInsertPoints = [&](uint32_t nodeIndex) {
+    //         // Reached a leaf, add all points inside the kernel
+    //         size_t startIndex = this->internalRanges[nodeIndex].first;
+    //         size_t endIndex = this->internalRanges[nodeIndex].second;
+    //         auto* startPtr = points.data() + startIndex;
+    //         auto* endPtr = points.data() + endIndex;
+    //         for (; startPtr != endPtr; ++startPtr) {
+    //             if (k.isInside(*startPtr)) {
+    //                 result.push_back(std::make_pair(sqDist(*startPtr, k.center()), startPtr->id()));
+    //             }
+    //         }
+    //     };
         
-        singleTraversal(checkBoxIntersect, findAndInsertPoints);
-        return result;
-	}
+    //     singleTraversal(checkBoxIntersect, findAndInsertPoints);
+    //     return result;
+	// }
     
 
     /**
@@ -793,8 +790,8 @@ public:
      * @return Points inside the given kernel type. Actually the same as ptsInside.
      */
     template<typename Kernel>
-    [[nodiscard]] NeighborSet<Point_t> neighborsStruct(const Kernel& k) {
-        NeighborSet<Point_t> result(&points);
+    [[nodiscard]] NeighborSet<Container> neighborsStruct(const Kernel& k) {
+        NeighborSet<Container> result(&points);
         auto checkBoxIntersect = [&](uint32_t nodeIndex, uint32_t currDepth) {
             auto nodeCenter = this->centers[nodeIndex];
             auto nodeRadii = this->precomputedRadii[currDepth];
@@ -817,16 +814,15 @@ public:
             // Reached a leaf, add all points inside the kernel
             size_t startIndex = this->internalRanges[nodeIndex].first;
             size_t endIndex = this->internalRanges[nodeIndex].second;
-            auto* startPtr = points.data() + startIndex;
-            auto* endPtr = points.data() + endIndex;
-            size_t rangeStart = startIndex, rangeEnd = startIndex;
-            for (; startPtr != endPtr; ++startPtr, ++rangeEnd) {
-                if (!k.isInside(*startPtr)) {
+            size_t rangeStart = startIndex;
+            size_t rangeEnd = startIndex;
+            for (size_t i = startIndex; i < endIndex; ++i, ++rangeEnd) {
+                if (!k.isInside(points[i])) {
                     if (rangeStart < rangeEnd) {
-                        // Store the last valid range. Ranges are exclusive on the right, i.e. (2,4) has points 2 and 3.
-                        result.addRange(rangeStart, rangeEnd); 
+                        // Store the last valid range [rangeStart, rangeEnd)
+                        result.addRange(rangeStart, rangeEnd);
                     }
-                    rangeStart = rangeEnd + 1; // Reset the range start to the next point
+                    rangeStart = rangeEnd + 1;  // start next range after current point
                 }
             }
             // Insert the last range if it was open
@@ -980,7 +976,7 @@ public:
             return pointDist < other.pointDist;
         }
     };
-    template<typename T, typename Container, typename Compare>
+    template<typename T, typename Compare>
     void debugPriorityQueue(std::priority_queue<T, Container, Compare> pq) {
         std::cout << "Priority Queue contents (top to bottom):" << std::endl;
         while (!pq.empty()) {
@@ -1126,8 +1122,8 @@ public:
     }
 
     template<typename Kernel>
-    [[nodiscard]] NeighborSet<Point_t> neighborsApprox(const Kernel& k, uint32_t precisionLevel, bool upperBound) {
-        NeighborSet<Point_t> result(&points);
+    [[nodiscard]] NeighborSet<Container> neighborsApprox(const Kernel& k, uint32_t precisionLevel, bool upperBound) {
+        NeighborSet<Container> result(&points);
         auto checkBoxIntersect = [&](uint32_t nodeIndex, uint32_t currDepth) {
             auto nodeCenter = this->centers[nodeIndex];
             auto nodeRadii = this->precomputedRadii[currDepth];
@@ -1159,16 +1155,17 @@ public:
             // Reached a leaf, add all points inside the kernel
             size_t startIndex = this->internalRanges[nodeIndex].first;
             size_t endIndex = this->internalRanges[nodeIndex].second;
-            auto* startPtr = points.data() + startIndex;
-            auto* endPtr = points.data() + endIndex;
-            size_t rangeStart = startIndex, rangeEnd = startIndex;
-            for (; startPtr != endPtr; ++startPtr, ++rangeEnd) {
-                if (!k.isInside(*startPtr)) {
+
+            size_t rangeStart = startIndex;
+            size_t rangeEnd = startIndex;
+
+            for (size_t i = startIndex; i < endIndex; ++i, ++rangeEnd) {
+                if (!k.isInside(points[i])) {
                     if (rangeStart < rangeEnd) {
-                        // Store the last valid range. Ranges are exclusive on the right, i.e. (2,4) has points 2 and 3.
-                        result.addRange(rangeStart, rangeEnd); 
+                        // Store the last valid range [rangeStart, rangeEnd)
+                        result.addRange(rangeStart, rangeEnd);
                     }
-                    rangeStart = rangeEnd + 1; // Reset the range start to the next point
+                    rangeStart = rangeEnd + 1;  // start next range after current point
                 }
             }
             // Insert the last range if it was open
@@ -1182,33 +1179,33 @@ public:
 	}
     
     template<typename Kernel>
-    [[nodiscard]] NeighborSet<Point_t> neighborsApprox(const Kernel& k, const Vector &toleranceVector, bool upperBound) {
+    [[nodiscard]] NeighborSet<Container> neighborsApprox(const Kernel& k, const Vector &toleranceVector, bool upperBound) {
         return neighborsApprox(k, getPrecisionLevel(toleranceVector), upperBound);
     }
 
     template<Kernel_t kernel_type = Kernel_t::square>
-	[[nodiscard]] inline NeighborSet<Point_t> searchNeighborsApprox(const Point& p, double radius, const Vector &toleranceVector, bool upperBound) {
+	[[nodiscard]] inline NeighborSet<Container> searchNeighborsApprox(const Point& p, double radius, const Vector &toleranceVector, bool upperBound) {
 		const auto kernel = kernelFactory<kernel_type>(p, radius);
 		return neighborsApprox(kernel, toleranceVector, upperBound);
 	}
 	template<Kernel_t kernel_type = Kernel_t::cube>
-	[[nodiscard]] inline NeighborSet<Point_t> searchNeighborsApprox(const Point& p, const Vector& radii, const Vector &toleranceVector, bool upperBound) {
+	[[nodiscard]] inline NeighborSet<Container> searchNeighborsApprox(const Point& p, const Vector& radii, const Vector &toleranceVector, bool upperBound) {
 		const auto kernel = kernelFactory<kernel_type>(p, radii);
 		return neighborsApprox(kernel, toleranceVector, upperBound);
 	}
 
     template<typename Kernel>
-    [[nodiscard]] NeighborSet<Point_t> neighborsApprox(const Kernel& k, double tolerancePercentage, bool upperBound) {
+    [[nodiscard]] NeighborSet<Container> neighborsApprox(const Kernel& k, double tolerancePercentage, bool upperBound) {
         return neighborsApprox(k, getPrecisionLevel(k.radii(), tolerancePercentage), upperBound);
     }
 
     template<Kernel_t kernel_type = Kernel_t::square>
-	[[nodiscard]] inline NeighborSet<Point_t> searchNeighborsApprox(const Point& p, double radius, double tolerancePercentage, bool upperBound) {
+	[[nodiscard]] inline NeighborSet<Container> searchNeighborsApprox(const Point& p, double radius, double tolerancePercentage, bool upperBound) {
 		const auto kernel = kernelFactory<kernel_type>(p, radius);
 		return neighborsApprox(kernel, tolerancePercentage, upperBound);
 	}
 	template<Kernel_t kernel_type = Kernel_t::cube>
-	[[nodiscard]] inline NeighborSet<Point_t> searchNeighborsApprox(const Point& p, const Vector& radii, double tolerancePercentage, bool upperBound) {
+	[[nodiscard]] inline NeighborSet<Container> searchNeighborsApprox(const Point& p, const Vector& radii, double tolerancePercentage, bool upperBound) {
 		const auto kernel = kernelFactory<kernel_type>(p, radii);
 		return neighborsApprox(kernel, tolerancePercentage, upperBound);
 	}
@@ -1220,35 +1217,35 @@ public:
      * @param maxNeighs
      * @return
      */
-    std::vector<Point_t*> KNN(const Point& p, const size_t k, const size_t maxNeighs) const {
-        std::vector<Point_t*> knn{};
-        std::unordered_map<size_t, bool> wasAdded{};
+    // std::vector<Point_t*> KNN(const Point& p, const size_t k, const size_t maxNeighs) const {
+    //     std::vector<Point_t*> knn{};
+    //     std::unordered_map<size_t, bool> wasAdded{};
 
-        double r = 1.0;
+    //     double r = 1.0;
 
-        size_t nmax = std::min(k, maxNeighs);
-        const double rMax = box.radii().getMaxCoordinate(); // Use maximum radius as an upper bound
+    //     size_t nmax = std::min(k, maxNeighs);
+    //     const double rMax = box.radii().getMaxCoordinate(); // Use maximum radius as an upper bound
 
-        while (knn.size() <= nmax && r <= rMax)
-        {
-            auto neighs = searchNeighbors<Kernel_t::sphere>(p, r);
+    //     while (knn.size() <= nmax && r <= rMax)
+    //     {
+    //         auto neighs = searchNeighbors<Kernel_t::sphere>(p, r);
 
-            // Add all the points if there is room for them on proximity order
-            if (knn.size() + neighs.size() > nmax) {
-                std::sort(neighs.begin(), neighs.end(),
-                        [&p](Point_t* a, Point_t* b) { return a->distance3D(p) < b->distance3D(p); });
-            }
+    //         // Add all the points if there is room for them on proximity order
+    //         if (knn.size() + neighs.size() > nmax) {
+    //             std::sort(neighs.begin(), neighs.end(),
+    //                     [&p](Point_t* a, Point_t* b) { return a->distance3D(p) < b->distance3D(p); });
+    //         }
 
-            for (const auto& n : neighs)  {
-                if (!wasAdded[n->id()]) {
-                    wasAdded[n->id()] = true;
-                    knn.push_back(n); // Conditional inserting?
-                }
-            }
-            r *= 2;
-        }
-        return knn;
-    }
+    //         for (const auto& n : neighs)  {
+    //             if (!wasAdded[n->id()]) {
+    //                 wasAdded[n->id()] = true;
+    //                 knn.push_back(n); // Conditional inserting?
+    //             }
+    //         }
+    //         r *= 2;
+    //     }
+    //     return knn;
+    // }
 
     // surely a bad idea
     size_t binarySearchKNN(const Point& p, const size_t k, std::vector<size_t> &indexes, std::vector<double> &dists) {
@@ -1257,7 +1254,7 @@ public:
         double rHigh = 100.0;
         const double epsilon = 1e-3;  // precision for radius convergence
 
-        NeighborSet<Point_t> neighs;
+        NeighborSet<Container> neighs;
         while (rHigh - rLow > epsilon) {
             double rMid = (rLow + rHigh) / 2.0;
 
@@ -1292,7 +1289,7 @@ public:
      * @return Points inside the given kernel type
      */
 	template<Kernel_t kernel_type = Kernel_t::square>
-	[[nodiscard]] inline std::vector<Point_t*> searchNeighbors(const Point& p, double radius) const {
+	[[nodiscard]] inline std::vector<size_t> searchNeighbors(const Point& p, double radius) const {
 		const auto kernel = kernelFactory<kernel_type>(p, radius);
 		return neighbors(kernel);
 	}
@@ -1303,19 +1300,19 @@ public:
      * @return Points inside the given kernel type
      */
 	template<Kernel_t kernel_type = Kernel_t::cube>
-	[[nodiscard]] inline std::vector<Point_t*> searchNeighbors(const Point& p, const Vector& radii) const {
+	[[nodiscard]] inline std::vector<size_t> searchNeighbors(const Point& p, const Vector& radii) const {
 		const auto kernel = kernelFactory<kernel_type>(p, radii);
 		return neighbors(kernel);
 	}
 
     template<Kernel_t kernel_type = Kernel_t::square>
-	[[nodiscard]] inline NeighborSet<Point_t> searchNeighborsStruct(const Point& p, double radius) {
+	[[nodiscard]] inline NeighborSet<Container> searchNeighborsStruct(const Point& p, double radius) {
 		const auto kernel = kernelFactory<kernel_type>(p, radius);
 		return neighborsStruct(kernel);
 	}
 
 	template<Kernel_t kernel_type = Kernel_t::cube>
-	[[nodiscard]] inline NeighborSet<Point_t> searchNeighborsStruct(const Point& p, const Vector& radii) {
+	[[nodiscard]] inline NeighborSet<Container> searchNeighborsStruct(const Point& p, const Vector& radii) {
 		const auto kernel = kernelFactory<kernel_type>(p, radii);
 		return neighborsStruct(kernel);
 	}
@@ -1327,7 +1324,7 @@ public:
 	 * @param outerRingRadii Radii of the outer part of the ring
 	 * @return The points located between the inner ring and the outer ring
 	 */
-	[[nodiscard]] std::vector<Point_t*> searchNeighborsRing(const Point_t& p, const Vector& innerRingRadii,
+	[[nodiscard]] std::vector<size_t> searchNeighborsRing(const Point& p, const Vector& innerRingRadii,
 	                                                       const Vector& outerRingRadii) const {
 		// Search points within "outerRingRadii"
 		const auto outerKernel = kernelFactory<Kernel_t::cube>(p, outerRingRadii);
@@ -1341,8 +1338,8 @@ public:
     // OLD IMPLEMENTATIONS KEPT FOR COMPARISON AND TESTING PURPOSES
     // ALSO THE OLD IMPL CAN TAKE AN ARBITRARY CONDITION ON THE SEARCHES, WHILE THE NEW CAN'T
     template<typename Kernel, typename Function>
-    [[nodiscard]] std::vector<Point_t*> neighborsOld(const Kernel& k, Function&& condition) const {
-        std::vector<Point_t*> ptsInside;
+    [[nodiscard]] std::vector<size_t> neighborsOld(const Kernel& k, Function&& condition) const {
+        std::vector<size_t> ptsInside;
 
         auto intersectsKernel = [&](uint32_t nodeIndex, uint32_t nodeDepth) {
             return k.boxOverlap(this->centers[nodeIndex], this->precomputedRadii[nodeDepth]);
@@ -1352,11 +1349,9 @@ public:
             // Reached a leaf, add all points inside the kernel
             size_t startIndex = this->internalRanges[nodeIndex].first;
             size_t endIndex = this->internalRanges[nodeIndex].second;
-            auto* startPtr = points.data() + startIndex;
-            auto* endPtr = points.data() + endIndex;
-            for (; startPtr != endPtr; ++startPtr) {
-                if (k.isInside(*startPtr) && condition(*startPtr)) {
-                    ptsInside.push_back(startPtr);
+            for (size_t i = startIndex; i < endIndex; ++i) {
+                if (k.isInside(points[i]) && condition(points[i])) {
+                    ptsInside.push_back(i);
                 }
             }
         };
@@ -1364,30 +1359,30 @@ public:
         return ptsInside;
 	}
     template<Kernel_t kernel_type = Kernel_t::square>
-	[[nodiscard]] inline std::vector<Point_t*> searchNeighborsOld(const Point& p, double radius) const {
+	[[nodiscard]] inline std::vector<size_t> searchNeighborsOld(const Point& p, double radius) const {
 		const auto kernel = kernelFactory<kernel_type>(p, radius);
-		constexpr auto dummyCondition = [](const Point_t&) { return true; };
+		constexpr auto dummyCondition = [](const Point&) { return true; };
 		return neighborsOld(kernel, dummyCondition);
 	}
 	template<Kernel_t kernel_type = Kernel_t::cube>
-	[[nodiscard]] inline std::vector<Point_t*> searchNeighborsOld(const Point& p, const Vector& radii) const {
+	[[nodiscard]] inline std::vector<size_t> searchNeighborsOld(const Point& p, const Vector& radii) const {
 		const auto kernel = kernelFactory<kernel_type>(p, radii);
-		constexpr auto dummyCondition = [](const Point_t&) { return true; };
+		constexpr auto dummyCondition = [](const Point&) { return true; };
 		return neighborsOld(kernel, dummyCondition);
 	}
 	template<Kernel_t kernel_type = Kernel_t::square, class Function>
-	[[nodiscard]] inline std::vector<Point_t*> searchNeighborsOld(const Point& p, double radius, Function&& condition) const {
+	[[nodiscard]] inline std::vector<size_t> searchNeighborsOld(const Point& p, double radius, Function&& condition) const {
 		const auto kernel = kernelFactory<kernel_type>(p, radius);
 		return neighborsOld(kernel, std::forward<Function&&>(condition));
 	}
 	template<Kernel_t kernel_type = Kernel_t::square, class Function>
-	[[nodiscard]] inline std::vector<Point_t*> searchNeighborsOld(const Point& p, const Vector& radii,
+	[[nodiscard]] inline std::vector<size_t> searchNeighborsOld(const Point& p, const Vector& radii,
 	                                                          Function&& condition) const {
 		const auto kernel = kernelFactory<kernel_type>(p, radii);
 		return neighborsOld(kernel, std::forward<Function&&>(condition));
 	}
 
-	[[nodiscard]] std::vector<Point_t*> searchNeighborsRingOld(const Point_t& p, const Vector& innerRingRadii,
+	[[nodiscard]] std::vector<size_t> searchNeighborsRingOld(const Point& p, const Vector& innerRingRadii,
 	                                                       const Vector& outerRingRadii) const {
 		const auto outerKernel = kernelFactory<Kernel_t::cube>(p, outerRingRadii);
 		const auto innerKernel = kernelFactory<Kernel_t::cube>(p, innerRingRadii);

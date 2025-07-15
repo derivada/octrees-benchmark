@@ -20,12 +20,13 @@
 #include "build_log.hpp"
 #include "../PointEncoding/point_encoder_factory.hpp"
 #include "../PointEncoding/point_encoder.hpp"
+#include "point_containers.hpp"
 
-template <typename Point_t>
+template <PointContainer Container>
 class EncodingBuildBenchmarks {
     using key_t = size_t;
     private:
-        std::vector<Point_t>& points;
+        Container& points;
         std::optional<std::vector<PointMetadata>> &metadata;
         std::vector<key_t> codes;
         std::ostream& outputEncoding;
@@ -33,7 +34,7 @@ class EncodingBuildBenchmarks {
         Box box;
 
     public:
-        EncodingBuildBenchmarks(std::vector<Point_t> &points, std::optional<std::vector<PointMetadata>> &metadata, 
+        EncodingBuildBenchmarks(Container &points, std::optional<std::vector<PointMetadata>> &metadata, 
             std::ostream &outputEncoding, std::ostream& outputBuild): 
             points(points), metadata(metadata), outputEncoding(outputEncoding), outputBuild(outputBuild) {}
         
@@ -63,11 +64,11 @@ class EncodingBuildBenchmarks {
                 case SearchStructure::PTR_OCTREE: {
                     size_t currRepeat = 0;
                     auto stats = benchmarking::benchmark(mainOptions.repeats, [&]() { 
-                        Octree<Point_t> oct(points, box);
+                        Octree oct(points, box);
                     }, mainOptions.useWarmup, eventSet, eventValues.data());
                     log->buildTime = stats.mean();
                     // extra build for logging (not counted towards total time)
-                    Octree<Point_t> oct(points, box);
+                    Octree oct(points, box);
                     oct.logOctreeData(log);
                     break;
                 }
@@ -79,7 +80,7 @@ class EncodingBuildBenchmarks {
                     } else {
                         bool insideWarmup = mainOptions.useWarmup;
                         auto stats = benchmarking::benchmark(mainOptions.repeats, [&]() { 
-                            LinearOctree<Point_t> oct(points, codes, box, enc, log);
+                            LinearOctree oct(points, codes, box, enc, log);
                             if(insideWarmup)
                                 totalLeaf += log->linearOctreeLeafTime, totalInternal += log->linearOctreeInternalTime;
                             insideWarmup = false;
@@ -117,18 +118,18 @@ class EncodingBuildBenchmarks {
 #endif
                 case SearchStructure::UNIBN_OCTREE: {
                     auto stats = benchmarking::benchmark(mainOptions.repeats, [&]() { 
-                        unibn::Octree<Point_t> oct;
+                        unibn::Octree<Point, Container> oct;
                         unibn::OctreeParams params;
                         params.bucketSize = mainOptions.maxPointsLeaf;
-                        oct.initialize(points, params);
+                        oct.initialize(points, params); // TODO
                     }, mainOptions.useWarmup, eventSet, eventValues.data());
                     log->buildTime = stats.mean();
                     break;
                 }
                 case SearchStructure::NANOFLANN_KDTREE: {
-                    NanoflannPointCloud<Point_t> npc(points);
+                    NanoflannPointCloud<Container> npc(points); // TODO
                     auto stats = benchmarking::benchmark(mainOptions.repeats, [&]() { 
-                        NanoFlannKDTree<Point_t> kdtree(3, npc, {mainOptions.maxPointsLeaf});
+                        NanoFlannKDTree<Container> kdtree(3, npc, {mainOptions.maxPointsLeaf});
                     }, mainOptions.useWarmup, eventSet, eventValues.data());
                     log->buildTime = stats.mean();
                     break;
@@ -148,11 +149,11 @@ class EncodingBuildBenchmarks {
             auto& enc = PointEncoding::getEncoder(encoding);
             if(mainOptions.useWarmup) {
                 auto pointsCopy = points;
-                auto [codesWarmup, boxWarmup] = enc.sortPoints<Point_t>(pointsCopy, metadata, log);
+                auto [codesWarmup, boxWarmup] = enc.sortPoints(pointsCopy, metadata, log);
             }
             for(int i = 0; i<mainOptions.repeats; i++) {
                 auto pointsCopy = points;
-                auto [codesRepeat, boxRepeat] = enc.sortPoints<Point_t>(pointsCopy, metadata, log);
+                auto [codesRepeat, boxRepeat] = enc.sortPoints(pointsCopy, metadata, log);
                 totalBbox += log->boundingBoxTime;
                 totalEnc += log->encodingTime;
                 totalSort += log->sortingTime;

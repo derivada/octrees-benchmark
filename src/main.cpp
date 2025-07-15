@@ -18,7 +18,6 @@
 #include "Geometry/Lpoint.hpp"
 #include "Geometry/PointMetadata.hpp"
 #include "PointEncoding/point_encoder_factory.hpp"
-#include "result_checking.hpp"
 #include "omp.h"
 #include "unibnOctree.hpp"
 #include "nanoflann.hpp"
@@ -31,12 +30,13 @@
 #endif
 #include "papi.h"
 #include "benchmarking/enc_build_benchmarks.hpp"
+#include "point_containers.hpp"
 
 namespace fs = std::filesystem;
 using namespace PointEncoding;
 
-// Set the point type to be used here (Lpoint or Point). If Point is set, we will create separate LiDAR metadata vector)
-using Point_t = Point;
+// CHOOSE PointsAoS (wrapper around std::vector<Point>) or PointsSoA (separate arrays for each coordinate, for SIMD)
+using Container = PointsSoA;
 
 /**
  * @brief Benchmark neighSearch and numNeighSearch for a given octree configuration (point type + encoder).
@@ -44,17 +44,17 @@ using Point_t = Point;
  */
 void searchBenchmark(std::ofstream &outputFile, EncoderType encoding = EncoderType::NO_ENCODING) {
     // Load points and put their metadata into a separate vector
-    auto pointMetaPair = readPoints<Point_t>(mainOptions.inputFile);
-    std::vector<Point_t> points = std::move(pointMetaPair.first);
+    auto pointMetaPair = readPoints<Container>(mainOptions.inputFile);
+    Container points = std::move(pointMetaPair.first);
     std::optional<std::vector<PointMetadata>> metadata = std::move(pointMetaPair.second);
 
     auto& enc = getEncoder(encoding);
     // Sort the point cloud
-    auto [codes, box] = enc.sortPoints<Point_t>(points, metadata);
+    auto [codes, box] = enc.sortPoints(points, metadata);
     // Prepare the search set (must be done after sorting since it indexes points)
     SearchSet searchSet = SearchSet(mainOptions.numSearches, points.size());
     // Run the benchmarks
-    NeighborsBenchmark<Point_t> octreeBenchmarks(points, codes, box, enc, searchSet, outputFile);   
+    NeighborsBenchmark octreeBenchmarks(points, codes, box, enc, searchSet, outputFile);   
     octreeBenchmarks.runAllBenchmarks();    
 }
 
@@ -64,87 +64,87 @@ void searchBenchmark(std::ofstream &outputFile, EncoderType encoding = EncoderTy
  */
 void buildEncodingBenchmark(std::ofstream &encodingFile, std::ofstream &buildFile) {
     // Load points and put their metadata into a separate vector
-    auto pointMetaPair = readPoints<Point_t>(mainOptions.inputFile);
-    std::vector<Point_t> points = std::move(pointMetaPair.first);
+    auto pointMetaPair = readPoints<Container>(mainOptions.inputFile);
+    Container points = std::move(pointMetaPair.first);
     std::optional<std::vector<PointMetadata>> metadata = std::move(pointMetaPair.second);
-    EncodingBuildBenchmarks<Point_t> encBuildBenchmarks(points, metadata, encodingFile, buildFile);
+    EncodingBuildBenchmarks encBuildBenchmarks(points, metadata, encodingFile, buildFile);
     encBuildBenchmarks.runEncodingBuildBenchmarks();
 }
 
-void approximateSearchLog(std::ofstream &outputFile, EncoderType encoding) {
-    assert(encoding != EncoderType::NO_ENCODING);
-    auto pointMetaPair = readPoints<Point_t>(mainOptions.inputFile);
-    std::vector<Point_t> points = std::move(pointMetaPair.first);
-    std::optional<std::vector<PointMetadata>> metadata = std::move(pointMetaPair.second);
-    auto& enc = getEncoder(encoding);
-    auto [codes, box] = enc.sortPoints<Point_t>(points, metadata);
+// TODO
+// void approximateSearchLog(std::ofstream &outputFile, EncoderType encoding) {
+//     assert(encoding != EncoderType::NO_ENCODING);
+//     auto pointMetaPair = readPoints<Container>(mainOptions.inputFile);
+//     Container points = std::move(pointMetaPair.first);
+//     std::optional<std::vector<PointMetadata>> metadata = std::move(pointMetaPair.second);
+//     auto& enc = getEncoder(encoding);
+//     auto [codes, box] = enc.sortPoints(points, metadata);
 
-    auto lin_oct = LinearOctree<Point_t>(points, codes, box, enc);
-    std::array<float, 5> tolerances = {5.0, 10.0, 25.0, 50.0, 100.0};
-    float radius = 3.0;
-    outputFile << "tolerance,upper,x,y,z\n";
-    auto points_exact = lin_oct.searchNeighborsStruct<Kernel_t::sphere>(points[1234], radius);
-    for(auto [idx, p]: points_exact) {
-        outputFile << "0.0,exact," << p.getX() << "," << p.getY() << "," << p.getZ() << "\n";
-    }
-    for(float tol: tolerances) {
-            auto points_upper = lin_oct.searchNeighborsApprox<Kernel_t::sphere>(points[1234], 3.0, tol, true);
-            auto points_lower = lin_oct.searchNeighborsApprox<Kernel_t::sphere>(points[1234], 3.0, tol, false);
-            for(auto [idx, p]: points_upper) {
-                outputFile << tol << ",upper," << p.getX() << "," << p.getY() << "," << p.getZ() << "\n";
-            }
-            for(auto [idx, p]: points_lower) {
-                outputFile << tol << ",lower," << p.getX() << "," << p.getY() << "," << p.getZ() << "\n";
-            }
-    }
-}
-
-double computeLocality(std::vector<Point_t> &points, size_t windowSize) {
-    TimeWatcher tw;
-    tw.start();
-    if (points.size() < windowSize) return 0.0;
-    double locality = 0;
-    int seen = 0;
-    std::multiset<double> mx;
-    std::multiset<double> my;
-    std::multiset<double> mz;
-    for(int i = 0; i<points.size(); i++) {
-        mx.insert(points[i].getX());
-        my.insert(points[i].getY());
-        mz.insert(points[i].getZ());
-        if(i >= windowSize) {
-            double volume = (*mx.rbegin() - *mx.begin());
-            volume *= (*my.rbegin() - *my.begin());
-            volume *= (*mz.rbegin() - *mz.begin());
+//     auto lin_oct = LinearOctree(points, codes, box, enc);
+//     std::array<float, 5> tolerances = {5.0, 10.0, 25.0, 50.0, 100.0};
+//     float radius = 3.0;
+//     outputFile << "tolerance,upper,x,y,z\n";
+//     auto points_exact = lin_oct.searchNeighborsStruct<Kernel_t::sphere>(points[1234], radius);
+//     for(auto [idx, p]: points_exact) {
+//         outputFile << "0.0,exact," << p.getX() << "," << p.getY() << "," << p.getZ() << "\n";
+//     }
+//     for(float tol: tolerances) {
+//             auto points_upper = lin_oct.searchNeighborsApprox<Kernel_t::sphere>(points[1234], 3.0, tol, true);
+//             auto points_lower = lin_oct.searchNeighborsApprox<Kernel_t::sphere>(points[1234], 3.0, tol, false);
+//             for(auto [idx, p]: points_upper) {
+//                 outputFile << tol << ",upper," << p.getX() << "," << p.getY() << "," << p.getZ() << "\n";
+//             }
+//             for(auto [idx, p]: points_lower) {
+//                 outputFile << tol << ",lower," << p.getX() << "," << p.getY() << "," << p.getZ() << "\n";
+//             }
+//     }
+// }
+// double computeLocality(std::vector<Point> &points, size_t windowSize) {
+//     TimeWatcher tw;
+//     tw.start();
+//     if (points.size() < windowSize) return 0.0;
+//     double locality = 0;
+//     int seen = 0;
+//     std::multiset<double> mx;
+//     std::multiset<double> my;
+//     std::multiset<double> mz;
+//     for(int i = 0; i<points.size(); i++) {
+//         mx.insert(points[i].getX());
+//         my.insert(points[i].getY());
+//         mz.insert(points[i].getZ());
+//         if(i >= windowSize) {
+//             double volume = (*mx.rbegin() - *mx.begin());
+//             volume *= (*my.rbegin() - *my.begin());
+//             volume *= (*mz.rbegin() - *mz.begin());
             
-            if(seen == 0) {
-                locality = volume;
-            } else {
-                locality = ((locality / seen) + volume) / (seen+1);
-                seen++;
-            }
+//             if(seen == 0) {
+//                 locality = volume;
+//             } else {
+//                 locality = ((locality / seen) + volume) / (seen+1);
+//                 seen++;
+//             }
 
-            // erase old elements
-            mx.erase(mx.find(points[i-windowSize].getX()));
-            my.erase(my.find(points[i-windowSize].getY()));
-            mz.erase(mz.find(points[i-windowSize].getZ()));
-        }
-    }
-    tw.stop();
-    std::cout << "avg. bounding box size (lower is better) = " << locality << std::endl;
-    std::cout << "time to compute: " << tw.getElapsedDecimalSeconds() << std::endl;
-    return locality;
-}
+//             // erase old elements
+//             mx.erase(mx.find(points[i-windowSize].getX()));
+//             my.erase(my.find(points[i-windowSize].getY()));
+//             mz.erase(mz.find(points[i-windowSize].getZ()));
+//         }
+//     }
+//     tw.stop();
+//     std::cout << "avg. bounding box size (lower is better) = " << locality << std::endl;
+//     std::cout << "time to compute: " << tw.getElapsedDecimalSeconds() << std::endl;
+//     return locality;
+// }
 
 void outputReorderings(std::ofstream &outputFilePoints, std::ofstream &outputFileOct, EncoderType encoding = EncoderType::NO_ENCODING) {
-    auto pointMetaPair = readPoints<Point_t>(mainOptions.inputFile);
-    std::vector<Point_t> points = std::move(pointMetaPair.first);
+    auto pointMetaPair = readPoints<Container>(mainOptions.inputFile);
+    Container points = std::move(pointMetaPair.first);
     std::optional<std::vector<PointMetadata>> metadata = std::move(pointMetaPair.second);
 
     auto& enc = getEncoder(encoding);
-    auto [codes, box] = enc.sortPoints<Point_t>(points, metadata);
+    auto [codes, box] = enc.sortPoints(points, metadata);
 
-    computeLocality(points, 100);
+    // computeLocality(points, 100);
     // Output reordered points
     outputFilePoints << std::fixed << std::setprecision(3); 
     for(size_t i = 0; i<points.size(); i++) {
@@ -153,7 +153,7 @@ void outputReorderings(std::ofstream &outputFilePoints, std::ofstream &outputFil
 
     if(encoding != EncoderType::NO_ENCODING) {
         // Build linear octree and output bounds
-        auto oct = LinearOctree<Point_t>(points, codes, box, enc);
+        auto oct = LinearOctree(points, codes, box, enc);
         oct.logOctreeBounds(outputFileOct, 6);
     }
 }
@@ -161,16 +161,16 @@ void outputReorderings(std::ofstream &outputFilePoints, std::ofstream &outputFil
 /// @brief just a debugging method for checking correct knn impl
 void testKNN(EncoderType encoding = EncoderType::NO_ENCODING) {
     // Load points and put their metadata into a separate vector
-    auto pointMetaPair = readPoints<Point_t>(mainOptions.inputFile);
-    std::vector<Point_t> points = std::move(pointMetaPair.first);
+    auto pointMetaPair = readPoints<Container>(mainOptions.inputFile);
+    Container points = std::move(pointMetaPair.first);
     std::optional<std::vector<PointMetadata>> metadata = std::move(pointMetaPair.second);
     auto& enc = getEncoder(encoding);
     // Sort the point cloud
-    auto [codes, box] = enc.sortPoints<Point_t>(points, metadata);
+    auto [codes, box] = enc.sortPoints(points, metadata);
     // Build structures
-    LinearOctree<Point_t> loct(points, codes, box, enc);
-    NanoflannPointCloud<Point_t> npc(points);
-    NanoFlannKDTree<Point_t> kdtree(3, npc, {mainOptions.maxPointsLeaf});
+    LinearOctree loct(points, codes, box, enc);
+    NanoflannPointCloud npc(points);
+    NanoFlannKDTree kdtree(3, npc, {mainOptions.maxPointsLeaf});
     auto pclCloud = convertCloudToPCL(points);
 
     // Build the PCL Octree

@@ -16,22 +16,22 @@
  * @author Miguel Yermo
  * @brief Specialization of FileRead to read .las/.laz files
  */
-template <typename Point_t>
-class LasFileReader : public FileReader<Point_t>
+template <PointContainer Container>
+class LasFileReader : public FileReader<Container>
 {
 	public:
 	// ***  CONSTRUCTION / DESTRUCTION  *** //
 	// ************************************ //
-	LasFileReader(const fs::path& path) : FileReader<Point_t>(path){};
+	LasFileReader(const fs::path& path) : FileReader<Container>(path){};
 	~LasFileReader(){};
 
 	/**
 	 * @brief Reads the points contained in the .las/.laz file
-	 * @return Vector of point_t
+	 * @return Container of points
 	 */
-	std::vector<Point_t> read()
+	Container read()
 	{
-		std::vector<Point_t> points;
+		Container points;
 
 		// LAS File reading
 		LASreadOpener lasreadopener;
@@ -64,23 +64,23 @@ class LasFileReader : public FileReader<Point_t>
 
 		// Point creation
 		auto pointInserter = [&](size_t& idx) {
-			points.emplace_back(
+			points.push_back(Point(
 				idx, 
 				static_cast<double>(lasreader->point.get_X() * xScale + xOffset),
 				static_cast<double>(lasreader->point.get_Y() * yScale + yOffset),
-				static_cast<double>(lasreader->point.get_Z() * zScale + zOffset),
-				static_cast<double>(lasreader->point.get_intensity()),
-				static_cast<unsigned short>(lasreader->point.get_return_number()),
-				static_cast<unsigned short>(lasreader->point.get_number_of_returns()),
-				static_cast<unsigned short>(lasreader->point.get_scan_direction_flag()),
-				static_cast<unsigned short>(lasreader->point.get_edge_of_flight_line()),
-				static_cast<unsigned short>(lasreader->point.get_classification()),
-				static_cast<char>(lasreader->point.get_scan_angle_rank()),
-				static_cast<unsigned short>(lasreader->point.get_user_data()),
-				static_cast<unsigned short>(lasreader->point.get_point_source_ID()),
-				static_cast<unsigned int>(lasreader->point.get_R()),
-				static_cast<unsigned int>(lasreader->point.get_G()),
-				static_cast<unsigned int>(lasreader->point.get_B())
+				static_cast<double>(lasreader->point.get_Z() * zScale + zOffset))
+				// static_cast<double>(lasreader->point.get_intensity()),
+				// static_cast<unsigned short>(lasreader->point.get_return_number()),
+				// static_cast<unsigned short>(lasreader->point.get_number_of_returns()),
+				// static_cast<unsigned short>(lasreader->point.get_scan_direction_flag()),
+				// static_cast<unsigned short>(lasreader->point.get_edge_of_flight_line()),
+				// static_cast<unsigned short>(lasreader->point.get_classification()),
+				// static_cast<char>(lasreader->point.get_scan_angle_rank()),
+				// static_cast<unsigned short>(lasreader->point.get_user_data()),
+				// static_cast<unsigned short>(lasreader->point.get_point_source_ID()),
+				// static_cast<unsigned int>(lasreader->point.get_R()),
+				// static_cast<unsigned int>(lasreader->point.get_G()),
+				// static_cast<unsigned int>(lasreader->point.get_B())
 			);
 		};
 
@@ -92,9 +92,9 @@ class LasFileReader : public FileReader<Point_t>
 		return points;
 	}
 
-	std::pair<std::vector<Point_t>, std::vector<PointMetadata>> readMeta()
+	std::pair<Container, std::vector<PointMetadata>> readMeta()
 	{
-		std::vector<Point_t> points;
+		Container points;
 		std::vector<PointMetadata> metadata;
 
 		// LAS File reading
@@ -127,11 +127,11 @@ class LasFileReader : public FileReader<Point_t>
 
 		// Point creation
 		auto pointInserter = [&](size_t& idx) {
-			points.emplace_back(
+			points.push_back(Point(
 				idx, 
 				static_cast<double>(lasreader->point.get_X() * xScale + xOffset),
 				static_cast<double>(lasreader->point.get_Y() * yScale + yOffset),
-				static_cast<double>(lasreader->point.get_Z() * zScale + zOffset)
+				static_cast<double>(lasreader->point.get_Z() * zScale + zOffset))
 			);
 			metadata.emplace_back(
 				static_cast<double>(lasreader->point.get_intensity()),

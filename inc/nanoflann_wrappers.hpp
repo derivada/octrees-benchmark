@@ -1,13 +1,13 @@
 #pragma once
 
 // Wrapper around Point
-template <typename Point_t>
+template <PointContainer Container>
 struct NanoflannPointCloud
 {
     using coord_t = double;  //!< The type of each coordinate
 
-    std::vector<Point_t> &pts;
-    NanoflannPointCloud(std::vector<Point_t> &points) : pts(points) {};
+    Container &pts;
+    NanoflannPointCloud(Container &points) : pts(points) {};
     
     // Must return the number of data points
     inline size_t kdtree_get_point_count() const { return pts.size(); }
@@ -39,9 +39,9 @@ struct NanoflannPointCloud
 };
 
 // nanoflann kd tree
-template <typename Point_t>
+template <PointContainer Container>
 using NanoFlannKDTree = nanoflann::KDTreeSingleIndexAdaptor<
-    nanoflann::L2_Simple_Adaptor<double, NanoflannPointCloud<Point_t>>,
-    NanoflannPointCloud<Point_t>,
+    nanoflann::L2_Simple_Adaptor<double, NanoflannPointCloud<Container>>,
+    NanoflannPointCloud<Container>,
     3,
     size_t>;

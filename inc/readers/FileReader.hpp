@@ -22,6 +22,7 @@
 #include <iostream>
 #include <vector>
 #include "Geometry/PointMetadata.hpp"
+#include "point_containers.hpp"
 
 namespace fs = std::filesystem;
 
@@ -29,7 +30,7 @@ namespace fs = std::filesystem;
  * @author Miguel Yermo
  * @brief Abstract class defining common behavor for all file readers
  */
-template <typename Point_t>
+template <PointContainer Container>
 class FileReader
 {
 	protected:
@@ -80,6 +81,6 @@ class FileReader
 	 */
 	FileReader(const fs::path& path) : path(path){};
 	virtual ~FileReader(){}; // Every specialization of this class must manage its own destruction
-	virtual std::vector<Point_t> read() = 0;
-	virtual std::pair<std::vector<Point_t>, std::vector<PointMetadata>> readMeta() = 0;
+	virtual Container read() = 0;
+	virtual std::pair<Container, std::vector<PointMetadata>> readMeta() = 0;
 };
