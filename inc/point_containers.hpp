@@ -8,7 +8,7 @@
 #include <variant>
 #include <vector>
 #include "Geometry/point.hpp"
-
+#include <Eigen/Core>
 
 template <typename T>
 concept PointContainer = 
@@ -71,8 +71,8 @@ public:
 // SoA container (SIMD)
 // -----------------------------------------------------
 class PointsSoA {
-    std::vector<double> xs, ys, zs;
-    std::vector<unsigned int> ids;
+    std::vector<double, Eigen::aligned_allocator<double>> xs, ys, zs;
+    std::vector<size_t, Eigen::aligned_allocator<size_t>> ids;
 public:
     PointsSoA(size_t n = 0) : xs(n), ys(n), zs(n), ids(n) {}
 
@@ -111,12 +111,12 @@ public:
     double* dataX() { return xs.data(); }
     double* dataY() { return ys.data(); }
     double* dataZ() { return zs.data(); }
-    unsigned int* dataIds() { return ids.data(); }
+    size_t* dataIds() { return ids.data(); }
 
     const double* dataX() const { return xs.data(); }
     const double* dataY() const { return ys.data(); }
     const double* dataZ() const { return zs.data(); }
-    const unsigned int* dataIds() const { return ids.data(); }
+    const size_t* dataIds() const { return ids.data(); }
 
     // -------------------------------
     // SoA Iterator (yields Point copies)

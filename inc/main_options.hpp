@@ -87,6 +87,16 @@ constexpr std::pair<Kernel_t, std::string_view> kernelMap[] = {
 	{Kernel_t::square, "square"}
 };
 
+enum class ContainerType {
+	AoS,
+	SoA
+};
+
+constexpr std::pair<ContainerType, std::string_view> containerTypeMap[] = {
+    { ContainerType::AoS, 	"PointsAoS" },
+    { ContainerType::SoA,	"PointsSoA" },
+};
+
 constexpr SearchStructure algoToStructure(SearchAlgo algo) {
     for (const auto& [key, val] : algoToStructureMap) {
         if (key == algo) return val;
@@ -122,6 +132,14 @@ constexpr std::string_view kernelToString(Kernel_t kernel) {
     return "Unknown";
 }
 
+constexpr std::string_view containerTypeToString(ContainerType containerType) {
+    for (const auto& [key, val] : containerTypeMap) {
+        if (key == containerType) return val;
+    }
+    return "Unknown";
+}
+
+
 class main_options
 {
 public:
@@ -129,6 +147,9 @@ public:
 	fs::path inputFile{};
 	fs::path outputDirName{"out"};
 	std::string inputFileName{};
+
+	// Container type
+	ContainerType containerType = ContainerType::AoS; // default == AoS == std::vector<Point> wrapper
 
 	// Benchmark parameters
 	std::vector<float> benchmarkRadii{2.5, 5.0, 7.5, 10.0};
@@ -153,7 +174,6 @@ public:
 	bool searchAll{false};
 	size_t maxPointsLeaf = 128;
 	double pclOctResolution = 0.1;
-
 };
 
 extern main_options mainOptions;
@@ -162,6 +182,7 @@ enum LongOptions : int
 {
 	HELP,
 	INPUT,
+	CONTAINER_TYPE,
 	OUTPUT,
 	RADII,
 	K_VALUES,
@@ -184,12 +205,13 @@ enum LongOptions : int
 };
 
 // Define short options
-const char* const short_opts = "h:i:o:r:v:s:t:b:k:a:e:cb:";
+const char* const short_opts = "h:i:c:o:r:v:s:t:b:k:a:e:cb:";
 
 // Define long options
 const option long_opts[] = {
 	{ "help", no_argument, nullptr, LongOptions::HELP },
 	{ "input", required_argument, nullptr, LongOptions::INPUT },
+	{ "container-type", required_argument, nullptr, LongOptions::CONTAINER_TYPE },
 	{ "output", required_argument, nullptr, LongOptions::OUTPUT },
 	{ "radii", required_argument, nullptr, LongOptions::RADII },
 	{ "kvalues", required_argument, nullptr, LongOptions::K_VALUES },

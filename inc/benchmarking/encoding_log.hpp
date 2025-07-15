@@ -30,7 +30,7 @@ struct EncodingLog {
     }
 
     void toCSV(std::ostream& out) const {
-        out << "Point" << ","
+        out << containerTypeToString(mainOptions.containerType) << ","
             << encoderTypeToString(encoding) << ","
             << cloudSize << ","
             << boundingBoxTime << ","
@@ -41,7 +41,7 @@ struct EncodingLog {
     }
     
     static void writeCSVHeader(std::ostream& out) {
-        out  << "point_type,"
+        out  << "container,"
              << "enc_type,"
              << "cloud_size,"
              << "bbox_time,"

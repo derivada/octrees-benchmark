@@ -206,7 +206,7 @@ class RadiusNeighborsBenchmark {
                                 size_t averageResultSize = 0, int numThreads = omp_get_max_threads(), double tolerancePercentage = 0.0) {
             // Check if the file is empty and append header if it is
             if (outputFile.tellp() == 0) {
-                outputFile <<   "date,octree,point_type,encoder,npoints,operation,kernel,radius,num_searches,sequential_searches,repeats,"
+                outputFile <<   "date,octree,container,encoder,npoints,operation,kernel,radius,num_searches,sequential_searches,repeats,"
                                 "accumulated,mean,median,stdev,used_warmup,warmup_time,avg_result_size,tolerance_percentage,"
                                 "openmp_threads,openmp_schedule\n";
             }

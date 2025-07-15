@@ -21,12 +21,11 @@ struct alignas(32) Point
 	double       x_{};  // X Coordinate
 	double       y_{};  // Y Coordinate
 	double       z_{};  // Z Coordinate
-	unsigned int id_{}; // Id of the point (in order of reading)
-	unsigned int unused_{}; // For 32 byte alignment
+	size_t id_{}; // Id of the point (in order of reading)
 
 	public:
 	Point() = default;
-	explicit Point(unsigned int id) : id_(id) {}
+	explicit Point(size_t id) : id_(id) {}
 
 	// 2D Geometric constructor ( Z = 0.0 )
 	Point(double x, double y) : x_(x), y_(y) {}
@@ -35,7 +34,7 @@ struct alignas(32) Point
 	Point(double x, double y, double z) : x_(x), y_(y), z_(z) {}
 
 	// 3D Geometric constructor with ID
-	Point(unsigned int id, double x, double y, double z) : id_(id), x_(x), y_(y), z_(z) {}
+	Point(size_t id, double x, double y, double z) : id_(id), x_(x), y_(y), z_(z) {}
 
 
 	// Reading points ISPRS format
@@ -316,8 +315,8 @@ struct alignas(32) Point
     }
 
 	// Getters and setters
-	[[nodiscard]] inline unsigned int id() const { return id_; }
-	inline void                       id(unsigned int id) { id_ = id; }
+	[[nodiscard]] inline size_t id() const { return id_; }
+	inline void                       id(size_t id) { id_ = id; }
 	[[nodiscard]] inline double       getX() const { return x_; }
 	inline void                       setX(double x) { x_ = x; }
 	[[nodiscard]] inline double       getY() const { return y_; }

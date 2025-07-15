@@ -73,7 +73,7 @@ class NeighborsBenchmark {
             }
             outputFile << getCurrentDate() << ',' 
                 << searchStructureToString(algoToStructure(algo)) << ',' 
-                << "Point" << ','
+                << containerTypeToString(mainOptions.containerType) << ','
                 << enc.getEncoderName() << ','
                 << points.size() <<  ','
                 << fullAlgoName << ',' 
@@ -128,7 +128,7 @@ class NeighborsBenchmark {
             }
             outputFile << getCurrentDate() << ',' 
                 << searchStructureToString(algoToStructure(algo)) << ',' 
-                << "Point" << ','
+                << containerTypeToString(mainOptions.containerType) << ','
                 << enc.getEncoderName() << ','
                 << points.size() <<  ','
                 << fullAlgoName << ',' 

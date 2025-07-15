@@ -31,21 +31,21 @@
 #include "papi.h"
 #include "benchmarking/enc_build_benchmarks.hpp"
 #include "point_containers.hpp"
+#include <iomanip>
+#include <type_traits>
 
 namespace fs = std::filesystem;
 using namespace PointEncoding;
-
-// CHOOSE PointsAoS (wrapper around std::vector<Point>) or PointsSoA (separate arrays for each coordinate, for SIMD)
-using Container = PointsSoA;
 
 /**
  * @brief Benchmark neighSearch and numNeighSearch for a given octree configuration (point type + encoder).
  * Compares LinearOctree and PointerOctree. If passed PointEncoding::NoEncoder, only PointerOctree is used.
  */
+template <PointContainer Container>
 void searchBenchmark(std::ofstream &outputFile, EncoderType encoding = EncoderType::NO_ENCODING) {
     // Load points and put their metadata into a separate vector
     auto pointMetaPair = readPoints<Container>(mainOptions.inputFile);
-    Container points = std::move(pointMetaPair.first);
+    auto points = std::move(pointMetaPair.first);
     std::optional<std::vector<PointMetadata>> metadata = std::move(pointMetaPair.second);
 
     auto& enc = getEncoder(encoding);
@@ -62,20 +62,22 @@ void searchBenchmark(std::ofstream &outputFile, EncoderType encoding = EncoderTy
  * @brief Benchmark encoding times for each different encoder (Morton, Hilbert) and build times of the structures under each
  * of this encodings (or without them if possible)
  */
+template <PointContainer Container>
 void buildEncodingBenchmark(std::ofstream &encodingFile, std::ofstream &buildFile) {
     // Load points and put their metadata into a separate vector
     auto pointMetaPair = readPoints<Container>(mainOptions.inputFile);
-    Container points = std::move(pointMetaPair.first);
+    auto points = std::move(pointMetaPair.first);
     std::optional<std::vector<PointMetadata>> metadata = std::move(pointMetaPair.second);
     EncodingBuildBenchmarks encBuildBenchmarks(points, metadata, encodingFile, buildFile);
     encBuildBenchmarks.runEncodingBuildBenchmarks();
 }
 
 // TODO
+// template <PointContainer Container>
 // void approximateSearchLog(std::ofstream &outputFile, EncoderType encoding) {
 //     assert(encoding != EncoderType::NO_ENCODING);
 //     auto pointMetaPair = readPoints<Container>(mainOptions.inputFile);
-//     Container points = std::move(pointMetaPair.first);
+//     auto points = std::move(pointMetaPair.first);
 //     std::optional<std::vector<PointMetadata>> metadata = std::move(pointMetaPair.second);
 //     auto& enc = getEncoder(encoding);
 //     auto [codes, box] = enc.sortPoints(points, metadata);
@@ -136,9 +138,10 @@ void buildEncodingBenchmark(std::ofstream &encodingFile, std::ofstream &buildFil
 //     return locality;
 // }
 
+template <PointContainer Container>
 void outputReorderings(std::ofstream &outputFilePoints, std::ofstream &outputFileOct, EncoderType encoding = EncoderType::NO_ENCODING) {
     auto pointMetaPair = readPoints<Container>(mainOptions.inputFile);
-    Container points = std::move(pointMetaPair.first);
+    auto points = std::move(pointMetaPair.first);
     std::optional<std::vector<PointMetadata>> metadata = std::move(pointMetaPair.second);
 
     auto& enc = getEncoder(encoding);
@@ -159,10 +162,11 @@ void outputReorderings(std::ofstream &outputFilePoints, std::ofstream &outputFil
 }
 
 /// @brief just a debugging method for checking correct knn impl
+template <PointContainer Container>
 void testKNN(EncoderType encoding = EncoderType::NO_ENCODING) {
     // Load points and put their metadata into a separate vector
     auto pointMetaPair = readPoints<Container>(mainOptions.inputFile);
-    Container points = std::move(pointMetaPair.first);
+    auto points = std::move(pointMetaPair.first);
     std::optional<std::vector<PointMetadata>> metadata = std::move(pointMetaPair.second);
     auto& enc = getEncoder(encoding);
     // Sort the point cloud
@@ -317,6 +321,75 @@ void testKNN(EncoderType encoding = EncoderType::NO_ENCODING) {
     }
 }
 
+
+template <PointContainer Container>
+void testContainersMemLayout(EncoderType encoding = EncoderType::NO_ENCODING) {
+    auto pointMetaPair = readPoints<Container>(mainOptions.inputFile);
+    auto points = std::move(pointMetaPair.first);
+    std::optional<std::vector<PointMetadata>> metadata = std::move(pointMetaPair.second);
+
+    // check 32-byte cache-line alignment
+    auto isAligned = [](const void* ptr) -> bool {
+        return reinterpret_cast<uintptr_t>(ptr) % 32 == 0;
+    };
+
+    auto& enc = getEncoder(encoding);
+    auto [codes, box] = enc.sortPoints(points, metadata);
+
+    std::cout << std::fixed << std::setprecision(3);
+    std::cout << "\nContainer Type: ";
+    
+    if constexpr(std::is_same_v<Container, PointsAoS>) {
+        std::cout << "PointsAoS\n";
+        std::cout << "  Total points: " << points.size() << '\n';
+        std::cout << "  Size of Point: " << sizeof(Point) << " bytes\n";
+        std::cout << "  Total memory used: " << sizeof(Point) * points.size() << " bytes\n";
+
+        if (!points.size()) return;
+
+        const Point* basePtr = &points[0];
+        std::cout << "  First point memory address:  " << static_cast<const void*>(basePtr)
+                << (isAligned(basePtr) ? " (aligned to 32 bytes)\n" : " (NOT aligned to 32 bytes)\n");
+
+        std::cout << "  Second point memory address: " << static_cast<const void*>(basePtr + 1) << '\n';
+        std::cout << "  Layout: Contiguous AoS (Array of Structs)\n";
+    } else {
+        std::cout << "PointsSoA\n";
+        std::cout << "  Total points: " << points.size() << '\n';
+    
+        const auto* soa = dynamic_cast<const PointsSoA*>(&points);
+        if (!soa) {
+            std::cerr << "  [Error] Could not cast to PointsSoA\n";
+            return;
+        }
+    
+        const size_t N = soa->size();
+    
+        auto* xs = soa->dataX();
+        auto* ys = soa->dataY();
+        auto* zs = soa->dataZ();
+        auto* ids = soa->dataIds();
+    
+        auto printMemRange = [&](const char* label, const void* base, size_t count, size_t elementSize) {
+            const void* end = static_cast<const char*>((const void*)base) + count * elementSize;
+            std::cout << "  [" << label << "] address range:   "
+                      << base << " - " << end
+                      << " (" << count * elementSize << " bytes) "
+                      << (isAligned(base) ? "(aligned to 32 bytes)" : "(NOT aligned)") << '\n';
+        };
+    
+        printMemRange("XS ", xs, N, sizeof(double));
+        printMemRange("YS ", ys, N, sizeof(double));
+        printMemRange("ZS ", zs, N, sizeof(double));
+        printMemRange("IDS", ids, N, sizeof(size_t));
+    
+        std::cout << "  Layout: SoA (Structure of Arrays), SIMD-friendly\n";
+    }
+
+    std::cout << '\n';
+}
+
+
 int main(int argc, char *argv[]) {
     // Set default OpenMP schedule: dynamic and auto chunk size
     omp_set_schedule(omp_sched_dynamic, 0);
@@ -348,7 +421,11 @@ int main(int argc, char *argv[]) {
             std::filesystem::path csvPathBuild = mainOptions.outputDirName / csvFilenameBuild;
             std::ofstream outputFileEnc = std::ofstream(csvPathEnc, std::ios::app);
             std::ofstream outputFileBuild = std::ofstream(csvPathBuild, std::ios::app);
-            buildEncodingBenchmark(outputFileEnc, outputFileBuild);
+            if(mainOptions.containerType == ContainerType::AoS) {
+                buildEncodingBenchmark<PointsAoS>(outputFileEnc, outputFileBuild);
+            } else {
+                buildEncodingBenchmark<PointsSoA>(outputFileEnc, outputFileBuild);
+            }
         } else {
             // Open the benchmark output file
             std::string csvFilename = mainOptions.inputFileName + "-" + getCurrentDate() + ".csv";
@@ -358,15 +435,25 @@ int main(int argc, char *argv[]) {
                 throw std::ios_base::failure(std::string("Failed to open benchmark output file: ") + csvPath.string());
             }
             // Run search benchmarks
-            if(mainOptions.encodings.contains(EncoderType::NO_ENCODING))
-                searchBenchmark(outputFile, EncoderType::NO_ENCODING);
-            if(mainOptions.encodings.contains(EncoderType::MORTON_ENCODER_3D))
-                searchBenchmark(outputFile, EncoderType::MORTON_ENCODER_3D);
-            if(mainOptions.encodings.contains(EncoderType::HILBERT_ENCODER_3D))
-                searchBenchmark(outputFile, EncoderType::HILBERT_ENCODER_3D);   
+            if(mainOptions.containerType == ContainerType::AoS) {
+                for(EncoderType enc: mainOptions.encodings)
+                    searchBenchmark<PointsAoS>(outputFile, enc);  
+            } else {
+                for(EncoderType enc: mainOptions.encodings)
+                    searchBenchmark<PointsSoA>(outputFile, enc);  
+            }
         }
     } else {
-        testKNN(HILBERT_ENCODER_3D);
+        if(mainOptions.containerType == ContainerType::AoS) {
+            testContainersMemLayout<PointsAoS>(HILBERT_ENCODER_3D);  
+        } else {
+            testContainersMemLayout<PointsSoA>(HILBERT_ENCODER_3D);  
+        }
+        // if(mainOptions.containerType == ContainerType::AoS) {
+        //     testKNN<PointsAoS>(HILBERT_ENCODER_3D);  
+        // } else {
+        //     testKNN<PointsSoA>(HILBERT_ENCODER_3D);  
+        // }
         // Output encoded point clouds to the files (for plots and such)
         // std::filesystem::path unencodedPath = mainOptions.outputDirName / "output_unencoded.csv";
         // std::filesystem::path mortonPath = mainOptions.outputDirName / "output_morton.csv";

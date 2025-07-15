@@ -12,6 +12,7 @@ void printHelp() {
 		<< "Main options:\n"
 		<< "-h, --help: Show help message\n"
 		<< "-i, --input: Path to input file\n"
+		<< "-c, --container-type: Container type to use, possible values. Default: AoS. Possible values: SoA, AoS.\n"
 		<< "-o, --output: Path to output file\n"
 		<< "-r, --radii: Benchmark radii (comma-separated, e.g., '2.5,5.0,7.5')\n"
 		<< "-v, --kvalues: kNN benchmark k's (comma-separated, e.g., '10,50,250,1000')\n"
@@ -233,6 +234,23 @@ void processArgs(int argc, char** argv)
 				mainOptions.inputFile = fs::path(std::string(optarg));
 				mainOptions.inputFileName = mainOptions.inputFile.stem().string();
 				break;
+			case 'c':
+			case LongOptions::CONTAINER_TYPE: {
+				std::string containerTypeStr = optarg;
+				// lowercase it
+				std::transform(containerTypeStr.begin(), containerTypeStr.end(), containerTypeStr.begin(),
+	               [](unsigned char c) { return std::tolower(c); });
+				
+				if (containerTypeStr == "aos") {
+					mainOptions.containerType = ContainerType::AoS;
+				} else if (containerTypeStr == "soa") {
+					mainOptions.containerType = ContainerType::SoA;
+				} else {
+					std::cerr << "Invalid container type: " << containerTypeStr << ". Use 'AoS' or 'SoA'.\n";
+					std::exit(EXIT_FAILURE);
+				}				
+				break;
+			}
 			case 'o':
 			case LongOptions::OUTPUT:
 				mainOptions.outputDirName = fs::path(std::string(optarg));

@@ -69,7 +69,7 @@ struct BuildLog {
     }
 
     void toCSV(std::ostream& out) const {
-        out  << "Point" << ","
+        out  << containerTypeToString(mainOptions.containerType) << ","
              << searchStructureToString(structure) << ","
              << maxLeafPoints << ","
              << encoderTypeToString(encoding) << ","
@@ -91,7 +91,7 @@ struct BuildLog {
     }
     
     static void writeCSVHeader(std::ostream& out) {
-        out  << "point_type,"
+        out  << "container,"
              << "structure,"
              << "max_leaf_points,"
              << "enc_type,"
