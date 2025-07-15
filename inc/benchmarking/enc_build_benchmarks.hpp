@@ -121,13 +121,13 @@ class EncodingBuildBenchmarks {
                         unibn::Octree<Point, Container> oct;
                         unibn::OctreeParams params;
                         params.bucketSize = mainOptions.maxPointsLeaf;
-                        oct.initialize(points, params); // TODO
+                        oct.initialize(points, params);
                     }, mainOptions.useWarmup, eventSet, eventValues.data());
                     log->buildTime = stats.mean();
                     break;
                 }
                 case SearchStructure::NANOFLANN_KDTREE: {
-                    NanoflannPointCloud<Container> npc(points); // TODO
+                    NanoflannPointCloud<Container> npc(points);
                     auto stats = benchmarking::benchmark(mainOptions.repeats, [&]() { 
                         NanoFlannKDTree<Container> kdtree(3, npc, {mainOptions.maxPointsLeaf});
                     }, mainOptions.useWarmup, eventSet, eventValues.data());

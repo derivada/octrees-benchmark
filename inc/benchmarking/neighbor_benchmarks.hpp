@@ -504,7 +504,7 @@ class NeighborsBenchmark {
 
 
         void initializeBenchmarkNanoflannKDTree() {
-            NanoflannPointCloud<Container> npc(points); // TODO
+            NanoflannPointCloud<Container> npc(points);
 
             // Build nanoflann kd-tree and run searches
             NanoFlannKDTree<Container> kdtree(3, npc, {mainOptions.maxPointsLeaf});
@@ -522,7 +522,7 @@ class NeighborsBenchmark {
             unibn::Octree<Point, Container> oct;
             unibn::OctreeParams params;
             params.bucketSize = mainOptions.maxPointsLeaf;
-            oct.initialize(points, params); // TODO
+            oct.initialize(points, params);
             for (const auto& kernel : mainOptions.kernels) {
                 switch (kernel) {
                     case Kernel_t::sphere:
