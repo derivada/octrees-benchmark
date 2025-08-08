@@ -42,5 +42,10 @@ target_link_libraries(${PROJECT_NAME}
 target_link_libraries(${PROJECT_NAME} PRIVATE ${PAPI_LIBRARY})
 target_include_directories(${PROJECT_NAME} PRIVATE ${PAPI_INCLUDE_DIR})
 
+# Añadimos linkeo de pthread y atomic para resolver errores
+find_package(Threads REQUIRED)
+target_link_libraries(${PROJECT_NAME} PRIVATE Threads::Threads atomic)
+
 # Set Link Time Optimization (LTO)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -flto=auto")
+

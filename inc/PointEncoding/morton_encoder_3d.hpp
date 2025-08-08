@@ -35,6 +35,11 @@ class MortonEncoder3D : public PointEncoder {
         return libmorton::morton3D_64_encode(x, y, z);
     }
 
+    void encodeVectorized(const uint32_t *x, const uint32_t *y, const uint32_t *z, std::vector<key_t> &keys, size_t i) const override
+    {
+        return;
+    }
+
     /// @brief Decodes the given Morton key and puts the coordinates into x, y, z
     inline void decode(key_t code, coords_t &x, coords_t &y, coords_t &z) const override {
         libmorton::morton3D_64_decode(code, x, y, z);
@@ -51,6 +56,7 @@ class MortonEncoder3D : public PointEncoder {
     inline double eps() const override { return EPS; }
     inline key_t upperBound() const override { return UPPER_BOUND; }
     inline uint32_t unusedBits() const override { return UNUSED_BITS; }
+    inline EncoderType getEncoder() const override { return EncoderType::MORTON_ENCODER_3D; };
     inline std::string getEncoderName() const override { return "MortonEncoder3D"; };
     inline std::string getShortEncoderName() const override { return "mort"; };
 };
