@@ -22,3 +22,4 @@ enc_build_times*
 out_tfg*
 out_knn
 out_params
+locality_knn_50

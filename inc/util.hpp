@@ -43,14 +43,16 @@ size_t vectorMemorySize(const auto& vec) {
 
 template <PointContainer Container>
 Container generateGridCloud(size_t n) {
-    Container points(n*n*n);
+    Container points(n * n * n);
+
     for (size_t i = 0; i < n; i++) {
         for (size_t j = 0; j < n; j++) {
             for (size_t k = 0; k < n; k++) {
-                points.set(i, (Point(i * n * n + j * n + k, i, j, k)));
+                size_t idx = i * n * n + j * n + k;
+                points[idx] = Point(i, j, k);  // assign into flat index
             }
-		}
-	}
+        }
+    }
 
     return points;
 }

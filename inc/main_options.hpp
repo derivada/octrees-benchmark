@@ -165,6 +165,7 @@ public:
 
 	bool debug{false};
 	bool buildEncBenchmarks{false};
+	bool localityBenchmarks{false};
 	bool cacheProfiling{false};
 	bool checkResults{false};
 	bool useWarmup{true};
@@ -194,6 +195,7 @@ enum LongOptions : int
 	
 	DEBUG,
 	BUILD_ENC,
+	LOCALITY,
 	CACHE_PROFILING,
 	CHECK,
 	NO_WARMUP,
@@ -223,6 +225,7 @@ const option long_opts[] = {
 
 	{ "debug", no_argument, nullptr, LongOptions::DEBUG },
 	{ "build-enc", no_argument, nullptr, LongOptions::BUILD_ENC },
+	{ "locality", no_argument, nullptr, LongOptions::LOCALITY },
 	{ "cache-profiling", no_argument, nullptr, LongOptions::CACHE_PROFILING },
 	{ "check", no_argument, nullptr, LongOptions::CHECK },
 	{ "no-warmup", no_argument, nullptr, LongOptions::NO_WARMUP },

@@ -22,6 +22,7 @@
 #include "unibnOctree.hpp"
 #include "nanoflann.hpp"
 #include "nanoflann_wrappers.hpp"
+#include "benchmarking/locality_benchmarks.hpp"
 #ifdef HAVE_PCL
 #include <pcl/point_cloud.h>
 #include <pcl/octree/octree_search.h>
@@ -57,6 +58,26 @@ void searchBenchmark(std::ofstream &outputFile, EncoderType encoding = EncoderTy
     NeighborsBenchmark octreeBenchmarks(points, codes, box, enc, searchSet, outputFile);   
     octreeBenchmarks.runAllBenchmarks();    
 }
+
+template <PointContainer Container>
+void localityBenchmark(std::ofstream &outputFile, EncoderType encoding = EncoderType::NO_ENCODING) {
+    // Load points and put their metadata into a separate vector
+    auto pointMetaPair = readPoints<Container>(mainOptions.inputFile);
+    auto points = std::move(pointMetaPair.first);
+    std::optional<std::vector<PointMetadata>> metadata = std::move(pointMetaPair.second);
+    // auto points = generateGridCloud<Container>(32);
+    // std::optional<std::vector<PointMetadata>> metadata;
+    // std::cout << points.size() << std::endl;
+    auto& enc = getEncoder(encoding);
+    // Sort the point cloud
+    auto [codes, box] = enc.sortPoints(points, metadata);
+    
+    // Prepare the search set (must be done after sorting since it indexes points)
+    // Run the benchmarks
+    LocalityBenchmark localityBenchmark(points, codes, box, enc, outputFile);   
+    localityBenchmark.histogramLocality(50);    
+}
+
 
 /**
  * @brief Benchmark encoding times for each different encoder (Morton, Hilbert) and build times of the structures under each
@@ -426,7 +447,24 @@ int main(int argc, char *argv[]) {
             } else {
                 buildEncodingBenchmark<PointsSoA>(outputFileEnc, outputFileBuild);
             }
-        } else {
+        }
+        
+        if(mainOptions.localityBenchmarks) {
+            for(EncoderType enc: mainOptions.encodings){
+                std::string csvFilenameLocality = mainOptions.inputFileName + "-" + std::string(encoderTypeToString(enc)) + "-locality.csv";
+                std::filesystem::path csvPathLocality = mainOptions.outputDirName / csvFilenameLocality;
+                std::ofstream outputFileLocality = std::ofstream(csvPathLocality);
+                std::cout << "Running locality bench for " << encoderTypeToString(enc) << std::endl;
+                if(mainOptions.containerType == ContainerType::AoS) {
+                        localityBenchmark<PointsAoS>(outputFileLocality, enc);
+                } else {
+                    for(EncoderType enc: mainOptions.encodings)
+                        localityBenchmark<PointsSoA>(outputFileLocality, enc);
+                }
+            }
+        }
+
+        if(!mainOptions.buildEncBenchmarks && !mainOptions.localityBenchmarks) {
             // Open the benchmark output file
             std::string csvFilename = mainOptions.inputFileName + "-" + getCurrentDate() + ".csv";
             std::filesystem::path csvPath = mainOptions.outputDirName / csvFilename;
