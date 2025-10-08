@@ -7,6 +7,7 @@
 #include <vector>
 #include "omp.h"
 #include <set>
+#include <optional>
 
 namespace fs = std::filesystem;
 
@@ -16,12 +17,12 @@ enum SearchStructure {
 };
 
 constexpr std::pair<SearchStructure, std::string_view> structureMap[] = {
-    { SearchStructure::PTR_OCTREE,       "Octree" },
-    { SearchStructure::LINEAR_OCTREE,    "LinearOctree" },
-    { SearchStructure::UNIBN_OCTREE,     "UnibnOctree" },
-    { SearchStructure::PCL_OCTREE,       "PCLOctree" },
-    { SearchStructure::PCL_KDTREE,       "PCLKDTree" },
-    { SearchStructure::NANOFLANN_KDTREE, "NanoflannKDTree" }
+    { SearchStructure::PTR_OCTREE,       "ptrOct" },
+    { SearchStructure::LINEAR_OCTREE,    "linOct" },
+    { SearchStructure::UNIBN_OCTREE,     "uniOct" },
+    { SearchStructure::PCL_OCTREE,       "pclOct" },
+    { SearchStructure::PCL_KDTREE,       "pclKD" },
+    { SearchStructure::NANOFLANN_KDTREE, "nanoKD" }
 };
 
 enum SearchAlgo { 
@@ -165,6 +166,7 @@ public:
 
 	bool debug{false};
 	bool buildEncBenchmarks{false};
+	std::optional<SearchStructure> memoryStructure{std::nullopt};
 	bool localityBenchmarks{false};
 	bool cacheProfiling{false};
 	bool checkResults{false};
@@ -195,6 +197,7 @@ enum LongOptions : int
 	
 	DEBUG,
 	BUILD_ENC,
+	MEMORY,
 	LOCALITY,
 	CACHE_PROFILING,
 	CHECK,
@@ -225,6 +228,7 @@ const option long_opts[] = {
 
 	{ "debug", no_argument, nullptr, LongOptions::DEBUG },
 	{ "build-enc", no_argument, nullptr, LongOptions::BUILD_ENC },
+	{ "memory", required_argument, nullptr, LongOptions::MEMORY },
 	{ "locality", no_argument, nullptr, LongOptions::LOCALITY },
 	{ "cache-profiling", no_argument, nullptr, LongOptions::CACHE_PROFILING },
 	{ "check", no_argument, nullptr, LongOptions::CHECK },

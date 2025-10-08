@@ -27,13 +27,14 @@
 #include <pcl/point_cloud.h>
 #include <pcl/octree/octree_search.h>
 #include <pcl/kdtree/kdtree_flann.h>
-#include "pcl_cloud_reader.hpp"
+#include "pcl_wrappers.hpp"
 #endif
 #include "papi.h"
 #include "benchmarking/enc_build_benchmarks.hpp"
 #include "point_containers.hpp"
 #include <iomanip>
 #include <type_traits>
+#include "benchmarking/memory_benchmarks.hpp"
 
 namespace fs = std::filesystem;
 using namespace PointEncoding;
@@ -89,8 +90,31 @@ void buildEncodingBenchmark(std::ofstream &encodingFile, std::ofstream &buildFil
     auto pointMetaPair = readPoints<Container>(mainOptions.inputFile);
     auto points = std::move(pointMetaPair.first);
     std::optional<std::vector<PointMetadata>> metadata = std::move(pointMetaPair.second);
+    auto& enc = getEncoder(EncoderType::MORTON_ENCODER_3D);
+    auto [codes, box] = enc.sortPoints(points, metadata);
     EncodingBuildBenchmarks encBuildBenchmarks(points, metadata, encodingFile, buildFile);
     encBuildBenchmarks.runEncodingBuildBenchmarks();
+}
+
+/*
+ * Benchmark similar to encBuild, but we only encode once, don't care about encoding (we use Morton)
+ * and build the structure once to get a stable memory profile (e.g. with heaptrack). The theoretical
+ * structure size is also printed
+*/
+template <PointContainer Container>
+void memoryBenchmark() {
+    // Load points and put their metadata into a separate vector
+    auto pointMetaPair = readPoints<Container>(mainOptions.inputFile);
+    auto points = std::move(pointMetaPair.first);
+    std::optional<std::vector<PointMetadata>> metadata = std::move(pointMetaPair.second);
+    auto& enc = getEncoder(EncoderType::MORTON_ENCODER_3D);
+    auto [codes, box] = enc.sortPoints(points, metadata);
+    
+    // Delete the unnecesary metadata so the heap profile has less stuff
+    metadata.reset(); 
+
+    MemoryBenchmarks tm(points, codes, box, enc);
+    tm.run();
 }
 
 // TODO
@@ -435,6 +459,16 @@ int main(int argc, char *argv[]) {
 
     using namespace PointEncoding;
     if(!mainOptions.debug) {
+        if(mainOptions.memoryStructure.has_value()) {
+            if(mainOptions.containerType == ContainerType::AoS) {
+                memoryBenchmark<PointsAoS>();
+            } else {
+                memoryBenchmark<PointsSoA>();
+            }
+            // EARLY EXIT: memory benchmark is the only one done if requested, 
+            // to allow for easy heap profiling
+            return EXIT_SUCCESS; 
+        }
         if(mainOptions.buildEncBenchmarks) {
             std::string csvFilenameEnc = mainOptions.inputFileName + "-" + getCurrentDate() + "-encoding.csv";
             std::string csvFilenameBuild = mainOptions.inputFileName + "-" + getCurrentDate() + "-build.csv";

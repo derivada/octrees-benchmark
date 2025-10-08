@@ -13,7 +13,7 @@
 #include <pcl/point_cloud.h>
 #include <pcl/octree/octree_search.h>
 #include <pcl/kdtree/kdtree_flann.h>
-#include "pcl_cloud_reader.hpp"
+#include "pcl_wrappers.hpp"
 #endif
 #include "nanoflann.hpp"
 #include "nanoflann_wrappers.hpp"

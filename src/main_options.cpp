@@ -5,6 +5,8 @@
 #include "NeighborKernels/KernelFactory.hpp"
 #include <unordered_map>
 #include "PointEncoding/point_encoder_factory.hpp"
+#include <optional>
+
 main_options mainOptions{};
 
 void printHelp() {
@@ -40,6 +42,7 @@ void printHelp() {
 		<< "Other options:\n"
 		<< "--debug: Enable debug mode (measures octree build and encoding times)\n"
 		<< "--build-enc: Run benchmarks for the encoding and build of selected structures (the ones with a representative on -a / --search-algo)\n"
+		<< "--memory: Run a simple benchmark for measuring the memory consumed by an structure, so heap profiling can be easy. Possible values: ptrOct,linOct,unibnOct,nanoKD,pclOct,pclKD\n"
 		<< "--locality: Run benchmarks for the analyzing the locality of the point cloud after given reorderings\n"
 		<< "--cache-profiling: Enable cache profiling during search algo. executions using PAPI\n"
 		<< "--check: Enable result checking (legacy option; use avg_result_size to verify correctness)\n"
@@ -296,6 +299,8 @@ void processArgs(int argc, char** argv)
 			case LongOptions::BUILD_ENC:
 				mainOptions.buildEncBenchmarks = true;
 				break;
+			case LongOptions::MEMORY:
+				mainOptions.memoryStructure.emplace(structureFromString(std::string(optarg)));
 			case LongOptions::LOCALITY:
 				mainOptions.localityBenchmarks = true;
 				break;

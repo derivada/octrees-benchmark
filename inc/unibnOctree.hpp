@@ -862,7 +862,6 @@ bool Octree<PointT, ContainerT>::inside(const PointT& query, double radius, cons
 template <typename PointT, typename ContainerT>
 void Octree<PointT, ContainerT>::logOctreeData(std::shared_ptr<BuildLog> log) const {
   log->memoryUsed = successors_.size() * sizeof(uint32_t);
-  std::cout << log->memoryUsed << std::endl;
   log->minRadiusAtMaxDepth = 1e18;
   logOctreeData(log, root_, 0);
   log->totalNodes = log->internalNodes + log->leafNodes;

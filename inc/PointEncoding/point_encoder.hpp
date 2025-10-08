@@ -192,7 +192,7 @@ public:
      * @return A pair containing the center point and the radii vector.
      */
     inline Point getCenter(key_t code, uint32_t level, const Box &bbox, 
-            const double* halfLengths, const std::vector<Vector> precomputedRadii) const {
+            const double* halfLengths, const std::vector<Vector> &precomputedRadii) const {
         // Decode the points back into their integer coordinates
         coords_t min_x, min_y, min_z;
         decode(code, min_x, min_y, min_z);

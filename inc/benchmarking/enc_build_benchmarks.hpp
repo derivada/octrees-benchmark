@@ -11,7 +11,7 @@
 #include <pcl/point_cloud.h>
 #include <pcl/octree/octree_search.h>
 #include <pcl/kdtree/kdtree_flann.h>
-#include "pcl_cloud_reader.hpp"
+#include "pcl_wrappers.hpp"
 #endif
 #include "nanoflann.hpp"
 #include "nanoflann_wrappers.hpp"
@@ -37,7 +37,7 @@ class EncodingBuildBenchmarks {
         EncodingBuildBenchmarks(Container &points, std::optional<std::vector<PointMetadata>> &metadata, 
             std::ostream &outputEncoding, std::ostream& outputBuild): 
             points(points), metadata(metadata), outputEncoding(outputEncoding), outputBuild(outputBuild) {}
-        
+
         void runBuildBenchmark(SearchStructure structure, EncoderType encoding) {
             int eventSet = PAPI_NULL;
             auto [events, descriptions] = buildCombinedEventList();
@@ -113,23 +113,32 @@ class EncodingBuildBenchmarks {
                             oct.addPointsFromInputCloud();
                     }, mainOptions.useWarmup, eventSet, eventValues.data());
                     log->buildTime = stats.mean();
+                    pcl::octree::OctreePointCloudSearch<pcl::PointXYZ> oct(mainOptions.pclOctResolution);
+                    pcl::PointCloud<pcl::PointXYZ>::Ptr cloudPtr = pclCloud.makeShared();
+                    oct.setInputCloud(cloudPtr);
+                    oct.addPointsFromInputCloud();
+                    log->memoryUsed = estimatePCLOctMemory(oct);
                     break;
                 }
 #endif
                 case SearchStructure::UNIBN_OCTREE: {
+                    unibn::OctreeParams params;
                     auto stats = benchmarking::benchmark(mainOptions.repeats, [&]() { 
                         unibn::Octree<Point, Container> oct;
-                        unibn::OctreeParams params;
                         params.bucketSize = mainOptions.maxPointsLeaf;
                         oct.initialize(points, params);
                     }, mainOptions.useWarmup, eventSet, eventValues.data());
                     log->buildTime = stats.mean();
+                    unibn::Octree<Point, Container> oct; // rebuild so logOctreeData doesnt affect measured time
+                    oct.initialize(points, params);
+                    oct.logOctreeData(log);
                     break;
                 }
                 case SearchStructure::NANOFLANN_KDTREE: {
                     NanoflannPointCloud<Container> npc(points);
                     auto stats = benchmarking::benchmark(mainOptions.repeats, [&]() { 
                         NanoFlannKDTree<Container> kdtree(3, npc, {mainOptions.maxPointsLeaf});
+                        log->memoryUsed = kdtree.usedMemory(kdtree); // record memory used
                     }, mainOptions.useWarmup, eventSet, eventValues.data());
                     log->buildTime = stats.mean();
                     break;
