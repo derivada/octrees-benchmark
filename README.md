@@ -26,7 +26,7 @@ Original project: https://gitlab.citius.usc.es/lidar/rule-based-classifier.
     Get 1.15 source code from  `https://github.com/PointCloudLibrary/pcl/releases` and build it. The folder were I installed it is `~/local/pcl`, but that can be changed to any other folder, with an appropiate change in `CMakeLibraries.cmake`. Can also change the version to look for in that file.
     ```bash
     wget https://github.com/PointCloudLibrary/pcl/releases/download/pcl-1.15.0/source.tar.gz
-    tar xvf sources.tar.gz
+    tar xvf source.tar.gz
     cd pcl && mkdir build && cd build
     cmake .. -DCMAKE_INSTALL_PREFIX=$HOME/local/pcl -DCMAKE_BUILD_TYPE=Release
     make -j2

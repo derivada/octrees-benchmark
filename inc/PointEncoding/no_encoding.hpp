@@ -14,6 +14,11 @@ class NoEncoding : public PointEncoder {
         return 0;
     }
 
+    void encodeVectorized(const uint32_t *x, const uint32_t *y, const uint32_t *z, std::vector<key_t> &keys, size_t i) const override
+    {
+        return;
+    }
+
     /// @brief Decodes the given Morton key and puts the coordinates into x, y, z
     inline void decode(key_t code, coords_t &x, coords_t &y, coords_t &z) const override {
         x = 0, y = 0, z = 0;
@@ -28,6 +33,7 @@ class NoEncoding : public PointEncoder {
     inline double eps() const override { return EPS; }
     inline key_t upperBound() const override { return UPPER_BOUND; }
     inline uint32_t unusedBits() const override { return UNUSED_BITS; }
+    inline EncoderType getEncoder() const override { return EncoderType::NO_ENCODING; };
     inline std::string getEncoderName() const { return "NoEncoding"; };
     inline std::string getShortEncoderName() const { return "none"; };
 };
