@@ -472,7 +472,7 @@ class NeighborsBenchmark {
                         for(size_t i = 0; i<searchSet.numSearches; i++) {
                             std::vector<size_t> indexes(k);
                             std::vector<double> distances(k);
-                            const size_t nMatches = oct.template knnV2 (points[searchIndexes[i]], k, indexes, distances);
+                            const size_t nMatches = oct.template knn (points[searchIndexes[i]], k, indexes, distances);
                             averageResultSize += nMatches; // only here so the call is not optimized
                         }
                     averageResultSize /= searchSet.numSearches;

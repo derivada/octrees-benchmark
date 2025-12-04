@@ -251,7 +251,7 @@ void testKNN(EncoderType encoding = EncoderType::NO_ENCODING) {
                     std::vector<size_t> indexesLoct(k);
                     std::vector<double> distancesLoct(k);
                     twLoct.start();
-                    loct.knnV2(points[searchPoints[i]], k, indexesLoct, distancesLoct);
+                    loct.knn(points[searchPoints[i]], k, indexesLoct, distancesLoct);
                     twLoct.stop();
                     nanosOct += twLoct.getElapsedNanos();
                     // Run nanoflann

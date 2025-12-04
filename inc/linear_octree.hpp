@@ -133,24 +133,12 @@ private:
     /// @brief A reference to the PointEncoder used to sort the cloud before starting the LinearOctree build.
     PointEncoder& enc;
 
-    /// @brief The encodings of the points in the octree
+    /// @brief The encodings of the points in the octree, not needed during searches so we don't count towards total memory overhead
     std::vector<key_t> &codes;
 
     /// @brief A vector containing the half-lengths of the minimum measure of the encoding.
     double halfLengths[3];
 
-    /// @brief Returns the memory footprint of the octree (without counting references)
-    size_t computeMemoryFootprint() {
-        size_t memory = 0;
-        // Base size of the structure
-        memory += sizeof(LinearOctree);
-        // Size of each of the 4 arrays used in neighbourhood searches (the others are deleted after build) 
-        memory += vectorMemorySize(internalRanges);
-        memory += vectorMemorySize(offsets);
-        memory += vectorMemorySize(centers);
-        memory += vectorMemorySize(precomputedRadii);
-        return memory;
-    }
 
     /**
      * @brief Computes the rebalacing decisions as the first process in the subdivision of the leaves array
@@ -439,63 +427,6 @@ private:
         return internalRanges[node];
     }
 
-public:    
-    /**
-     * @brief Builds the linear octree given an array of points, also reporting how much time each step takes
-     * 
-     * @details The points will be sorted in-place by the order given by the encoding to allow
-     * spatial data locality
-     */
-    explicit LinearOctree(Container& points,
-                        std::vector<key_t>& codes,
-                        Box box,
-                        PointEncoder& enc,
-                        std::shared_ptr<BuildLog> log = nullptr)
-        : points(points), enc(enc), codes(codes), box(box)  {
-        static_assert(!std::is_same_v<std::decay_t<PointEncoder>, PointEncoding::NoEncoding>,
-            "Encoder cannot be an instance of NoEncoding when using LinearOctree.");
-        
-        // Temporal structs for the variables in the leaf and internal parts of the octree that we wont use during searches
-        LeafPart leaf;
-        InternalPart inter;
-
-        setupBbox(inter);
-
-        TimeWatcher tw;
-        // Leaf construction
-        tw.start();
-        buildOctreeLeaves(leaf);
-        tw.stop();
-        if(log)
-            log->linearOctreeLeafTime = tw.getElapsedDecimalSeconds();
-        
-        // Internal part construction
-        tw.start();
-        resize(inter);
-        buildOctreeInternal(leaf, inter);
-        computeGeometry(inter);
-        tw.stop();
-        if(log)
-            log->linearOctreeInternalTime = tw.getElapsedDecimalSeconds();
-
-
-        // Output extra info from the build
-        if (log) {
-            log->buildTime = log->linearOctreeLeafTime + log->linearOctreeInternalTime;
-            log->maxLeafPoints = mainOptions.maxPointsLeaf;
-            log->memoryUsed = computeMemoryFootprint();
-            log->totalNodes = nTotal;
-            log->leafNodes = nLeaf;
-            log->internalNodes = nInternal;
-            log->maxDepthSeen = maxDepthSeen;
-            log->minRadiusAtMaxDepth = std::min(
-                precomputedRadii[maxDepthSeen].getX(), std::min(
-                precomputedRadii[maxDepthSeen].getY(), 
-                precomputedRadii[maxDepthSeen].getZ()
-            ));
-        }
-    }
-    
     /**
      * @brief Computes essential geometric information about the octree
      * 
@@ -616,8 +547,6 @@ public:
         computeInternalRanges(leaf, inter);
     }
 
-
-
     /**
      * @brief Computes the octree geometry (the centers and radii of each internal node and leaf)
      * 
@@ -633,6 +562,76 @@ public:
                 uint32_t level = enc.decodePrefixLength(prefix) / 3;
                 centers[i] = enc.getCenter(startKey, level, box, halfLengths, precomputedRadii);
             }
+    }
+
+public:    
+    /**
+     * @brief Builds the linear octree given an array of points, also reporting how much time each step takes
+     * 
+     * @details The points will be sorted in-place by the order given by the encoding to allow
+     * spatial data locality
+     */
+    explicit LinearOctree(Container& points,
+                        std::vector<key_t>& codes,
+                        Box box,
+                        PointEncoder& enc,
+                        std::shared_ptr<BuildLog> log = nullptr)
+        : points(points), enc(enc), codes(codes), box(box)  {
+        static_assert(!std::is_same_v<std::decay_t<PointEncoder>, PointEncoding::NoEncoding>,
+            "Encoder cannot be an instance of NoEncoding when using LinearOctree.");
+        
+        // Temporal structs for the variables in the leaf and internal parts of the octree that we wont use during searches
+        LeafPart leaf;
+        InternalPart inter;
+
+        setupBbox(inter);
+
+        TimeWatcher tw;
+
+        // Leaf construction
+        tw.start();
+        buildOctreeLeaves(leaf);
+        tw.stop();
+        if(log)
+            log->linearOctreeLeafTime = tw.getElapsedDecimalSeconds();
+        
+        // Internal part construction
+        tw.start();
+        resize(inter);
+        buildOctreeInternal(leaf, inter);
+        computeGeometry(inter);
+        tw.stop();
+        if(log)
+            log->linearOctreeInternalTime = tw.getElapsedDecimalSeconds();
+
+        // Output extra info from the build
+        if (log) {
+            log->buildTime = log->linearOctreeLeafTime + log->linearOctreeInternalTime;
+            log->maxLeafPoints = mainOptions.maxPointsLeaf;
+            log->memoryUsed = computeMemoryFootprint();
+            log->totalNodes = nTotal;
+            log->leafNodes = nLeaf;
+            log->internalNodes = nInternal;
+            log->maxDepthSeen = maxDepthSeen;
+            log->minRadiusAtMaxDepth = std::min(
+                precomputedRadii[maxDepthSeen].getX(), std::min(
+                precomputedRadii[maxDepthSeen].getY(), 
+                precomputedRadii[maxDepthSeen].getZ()
+            ));
+        }
+    }
+
+    /// @brief Returns the memory overhead of the octree (points cloud or codes are not counted)
+    size_t computeMemoryFootprint() {
+        size_t memory = 0;
+        // Base size of the structure
+        memory += sizeof(LinearOctree);
+        // Size of each of the 4 arrays used in neighbourhood searches (the others are deleted after build) 
+        memory += vectorMemorySize(internalRanges);
+        memory += vectorMemorySize(offsets);
+        memory += vectorMemorySize(centers);
+        memory += vectorMemorySize(precomputedRadii);
+        return memory;
     }
 
     /// @brief Computes the density of the point cloud as number of points / dataset
@@ -733,52 +732,6 @@ public:
         return ptsInside;
 	}
 
-    // with result as (dist, index) vector
-    // template<typename Kernel>
-    // [[nodiscard]] std::vector<std::pair<double, size_t>> neighborsDists(const Kernel& k) const {
-    //     std::vector<std::pair<double, size_t>> result;
-    //     auto checkBoxIntersect = [&](uint32_t nodeIndex, uint32_t currDepth) {
-    //         auto nodeCenter = this->centers[nodeIndex];
-    //         auto nodeRadii = this->precomputedRadii[currDepth];
-    //         switch (k.boxIntersect(nodeCenter, nodeRadii)) {
-    //             case KernelAbstract::IntersectionJudgement::INSIDE: {
-    //                 // Completely inside, all add points and prune
-    //                 size_t startIndex = this->internalRanges[nodeIndex].first;
-    //                 size_t endIndex = this->internalRanges[nodeIndex].second;
-    //                 auto* startPtr = points.data() + startIndex;
-    //                 auto* endPtr = points.data() + endIndex;
-    //                 for (; startPtr != endPtr; ++startPtr) {
-    //                     result.push_back(std::make_pair(sqDist(*startPtr, k.center()), startPtr->id()));
-    //                 }
-    //                 return false;
-    //             }
-    //             case KernelAbstract::IntersectionJudgement::OVERLAP:
-    //                 // Overlaps but not inside, keep descending
-    //                 return true;
-    //             default:
-    //                 // Completely outside, prune
-    //                 return false;
-    //         }
-    //     };
-        
-    //     auto findAndInsertPoints = [&](uint32_t nodeIndex) {
-    //         // Reached a leaf, add all points inside the kernel
-    //         size_t startIndex = this->internalRanges[nodeIndex].first;
-    //         size_t endIndex = this->internalRanges[nodeIndex].second;
-    //         auto* startPtr = points.data() + startIndex;
-    //         auto* endPtr = points.data() + endIndex;
-    //         for (; startPtr != endPtr; ++startPtr) {
-    //             if (k.isInside(*startPtr)) {
-    //                 result.push_back(std::make_pair(sqDist(*startPtr, k.center()), startPtr->id()));
-    //             }
-    //         }
-    //     };
-        
-    //     singleTraversal(checkBoxIntersect, findAndInsertPoints);
-    //     return result;
-	// }
-    
-
     /**
      * @brief Search neighbors function. Similar to neighbors(), but returns a list-of-ranges wrapper structure containing the neighbours. 
      * This structure implements a forward iterator and can thus be used in a loop. It is way faster as it does not need to copy
@@ -815,20 +768,17 @@ public:
             size_t startIndex = this->internalRanges[nodeIndex].first;
             size_t endIndex = this->internalRanges[nodeIndex].second;
             size_t rangeStart = startIndex;
-            size_t rangeEnd = startIndex;
-            for (size_t i = startIndex; i < endIndex; ++i, ++rangeEnd) {
+            
+            for (size_t i = startIndex; i < endIndex; ++i) {
                 if (!k.isInside(points[i])) {
-                    if (rangeStart < rangeEnd) {
-                        // Store the last valid range [rangeStart, rangeEnd)
-                        result.addRange(rangeStart, rangeEnd);
-                    }
-                    rangeStart = rangeEnd + 1;  // start next range after current point
+                    if (rangeStart < i)
+                        result.addRange(rangeStart, i);
+                    rangeStart = i + 1;
                 }
             }
-            // Insert the last range if it was open
-            if (rangeStart < rangeEnd) {
-                result.addRange(rangeStart, rangeEnd);
-            }
+            
+            if (rangeStart < endIndex)
+                result.addRange(rangeStart, endIndex);
         };
         
         singleTraversal(checkBoxIntersect, findAndInsertPoints);
@@ -916,7 +866,7 @@ public:
      * TODO: implement this and check if its faster than the doubling method found in knn(), after checking its implementation
      * and invoking neighborsPrune inside it 
      */
-    size_t knnV2(const Point& p, const size_t k, std::vector<size_t> &indexes, std::vector<double> &dists) {
+    size_t knn(const Point& p, const size_t k, std::vector<size_t> &indexes, std::vector<double> &dists) {
         // Initialize the min-distances heap with the root octant
         std::vector<OctantPointIndex> heap;
         heap.reserve(std::max((size_t) 512, k / 2));
@@ -967,132 +917,6 @@ public:
         }
         return inserted;
 	}
-
-    struct PointCandidates {
-        size_t pointIndex;
-        double pointDist;
-        PointCandidates(size_t index, double dist): pointIndex(index), pointDist(dist) {}
-        bool operator<(const PointCandidates& other) const {
-            return pointDist < other.pointDist;
-        }
-    };
-    template<typename T, typename Compare>
-    void debugPriorityQueue(std::priority_queue<T, Container, Compare> pq) {
-        std::cout << "Priority Queue contents (top to bottom):" << std::endl;
-        while (!pq.empty()) {
-            std::cout << pq.top().pointDist << " ";
-            pq.pop();
-        }
-        std::cout << std::endl;
-    }
-
-
-    struct KNNOctantQueueElement {
-        union {
-            struct {
-                uint64_t index : 58;
-                uint64_t depth : 6;
-            };
-            uint64_t raw = 0;
-        };
-        double dist = 0.0;
-
-        KNNOctantQueueElement(size_t idx, uint8_t depth, double minDist): dist(minDist) {
-            setIndex(idx, depth);
-        }
-        
-        static constexpr uint64_t indexMask = ((1ULL << 59) - 1);
-        static constexpr uint64_t depthMask = 0x3F;
-        void setIndex(size_t idx, uint8_t octantDepth = 0) {
-            index = idx & indexMask;
-            depth = octantDepth & depthMask;
-        }
-
-        // decreasing order in minDist
-        bool operator<(const KNNOctantQueueElement& other) const {
-            return this->dist > other.dist;
-        }
-    };
-
-    size_t knnV3(const Point& p, const size_t k, std::vector<size_t> &indexes, std::vector<double> &dists) {
-        std::vector<std::pair<double, size_t>> distsIndexes;
-        distsIndexes.reserve(k+1);
-        double maxSqDist = std::numeric_limits<double>::max();
-        std::cout << std::fixed << std::setprecision(3);
-        std::vector<KNNOctantQueueElement> octantHeap;
-        std::priority_queue<PointCandidates> pointCandidates;
-        octantHeap.reserve(8);
-        std::make_heap(octantHeap.begin(), octantHeap.end());
-        auto comp = [](const std::pair<double, size_t>& a, const std::pair<double, size_t>& b) {
-            return a.first < b.first; // max-heap by dist
-        };
-
-        // push root octant
-        octantHeap.emplace_back(0, 0, 0);
-        std::push_heap(octantHeap.begin(), octantHeap.end());
-        
-        while(!octantHeap.empty()) {
-            std::pop_heap(octantHeap.begin(), octantHeap.end());
-            auto top = octantHeap.back();
-            octantHeap.pop_back();
-            size_t minDist = top.dist;
-            size_t index = top.index;
-            size_t depth = top.depth;
-            // maybe the octant was pushed before this was updated
-            if(top.dist > maxSqDist) {
-                continue; 
-            }
-
-            // Get number of points under octant
-            size_t startIndex = this->internalRanges[index].first;
-            size_t endIndex = this->internalRanges[index].second;
-            size_t pointsInOctant = endIndex - startIndex;
-
-            // leaf
-            if(offsets[index] == 0) {
-                // Leaf node, push points into the result
-                // Leaf node: examine points
-                for (size_t i = startIndex; i < endIndex; ++i) {
-                    double dist = sqDist(points[i], p);
-                    if (dist > maxSqDist)
-                        continue;
-
-                    distsIndexes.emplace_back(dist, i);
-                    std::push_heap(distsIndexes.begin(), distsIndexes.end(), comp);
-
-                    if (distsIndexes.size() > k) {
-                        std::pop_heap(distsIndexes.begin(), distsIndexes.end(), comp);
-                        distsIndexes.pop_back();
-                    }
-
-                    if (distsIndexes.size() == k) {
-                        maxSqDist = distsIndexes.front().first;
-                    }
-                }
-            } else {
-                // internal node
-                for (int octant = 0; octant < OCTANTS_PER_NODE; ++octant) {
-                    size_t childOctIndex = offsets[index] + octant;
-                    const Point& childOctantCenter = centers[childOctIndex];
-                    const Vector& childOctantRadii = precomputedRadii[depth + 1];
-                    double octDist = distPointOctantSquared(p, childOctantCenter, childOctantRadii);
-                    if(octDist <= maxSqDist){
-                        // std::cout << "Pushed " << childOctIndex << " " << depth+1 << " " << octDist << std::endl;
-                        octantHeap.emplace_back(childOctIndex, depth + 1, octDist);
-                        std::push_heap(octantHeap.begin(), octantHeap.end());
-                    }
-                }
-            }   
-        }
-        // Separate results into two vectors: indexes and distances
-        for(int i = 0; i<distsIndexes.size(); i++) {
-            dists[i] = distsIndexes[i].first;
-            indexes[i] = distsIndexes[i].second;
-        }
-
-        return distsIndexes.size();
-    }
-
 
     uint32_t getPrecisionLevel(const Vector &toleranceVector) const {
         assert(toleranceVector.getX() > 0 && toleranceVector.getY() > 0 && toleranceVector.getZ() > 0 && "tolerance vector must be >0 in every coordinate");
@@ -1178,127 +1002,13 @@ public:
         return result;
 	}
     
-    template<typename Kernel>
-    [[nodiscard]] NeighborSet<Container> neighborsApprox(const Kernel& k, const Vector &toleranceVector, bool upperBound) {
-        return neighborsApprox(k, getPrecisionLevel(toleranceVector), upperBound);
-    }
-
-    template<Kernel_t kernel_type = Kernel_t::square>
-	[[nodiscard]] inline NeighborSet<Container> searchNeighborsApprox(const Point& p, double radius, const Vector &toleranceVector, bool upperBound) {
-		const auto kernel = kernelFactory<kernel_type>(p, radius);
-		return neighborsApprox(kernel, toleranceVector, upperBound);
-	}
-	template<Kernel_t kernel_type = Kernel_t::cube>
-	[[nodiscard]] inline NeighborSet<Container> searchNeighborsApprox(const Point& p, const Vector& radii, const Vector &toleranceVector, bool upperBound) {
-		const auto kernel = kernelFactory<kernel_type>(p, radii);
-		return neighborsApprox(kernel, toleranceVector, upperBound);
-	}
-
-    template<typename Kernel>
-    [[nodiscard]] NeighborSet<Container> neighborsApprox(const Kernel& k, double tolerancePercentage, bool upperBound) {
-        return neighborsApprox(k, getPrecisionLevel(k.radii(), tolerancePercentage), upperBound);
-    }
-
-    template<Kernel_t kernel_type = Kernel_t::square>
-	[[nodiscard]] inline NeighborSet<Container> searchNeighborsApprox(const Point& p, double radius, double tolerancePercentage, bool upperBound) {
-		const auto kernel = kernelFactory<kernel_type>(p, radius);
-		return neighborsApprox(kernel, tolerancePercentage, upperBound);
-	}
-	template<Kernel_t kernel_type = Kernel_t::cube>
-	[[nodiscard]] inline NeighborSet<Container> searchNeighborsApprox(const Point& p, const Vector& radii, double tolerancePercentage, bool upperBound) {
-		const auto kernel = kernelFactory<kernel_type>(p, radii);
-		return neighborsApprox(kernel, tolerancePercentage, upperBound);
-	}
-
-    /**
-     * @brief KNN algorithm. Returns the min(k, maxNeighs) nearest neighbors of a given point p
-     * @param p
-     * @param k
-     * @param maxNeighs
-     * @return
-     */
-    // std::vector<Point_t*> KNN(const Point& p, const size_t k, const size_t maxNeighs) const {
-    //     std::vector<Point_t*> knn{};
-    //     std::unordered_map<size_t, bool> wasAdded{};
-
-    //     double r = 1.0;
-
-    //     size_t nmax = std::min(k, maxNeighs);
-    //     const double rMax = box.radii().getMaxCoordinate(); // Use maximum radius as an upper bound
-
-    //     while (knn.size() <= nmax && r <= rMax)
-    //     {
-    //         auto neighs = searchNeighbors<Kernel_t::sphere>(p, r);
-
-    //         // Add all the points if there is room for them on proximity order
-    //         if (knn.size() + neighs.size() > nmax) {
-    //             std::sort(neighs.begin(), neighs.end(),
-    //                     [&p](Point_t* a, Point_t* b) { return a->distance3D(p) < b->distance3D(p); });
-    //         }
-
-    //         for (const auto& n : neighs)  {
-    //             if (!wasAdded[n->id()]) {
-    //                 wasAdded[n->id()] = true;
-    //                 knn.push_back(n); // Conditional inserting?
-    //             }
-    //         }
-    //         r *= 2;
-    //     }
-    //     return knn;
-    // }
-
-    // surely a bad idea
-    size_t binarySearchKNN(const Point& p, const size_t k, std::vector<size_t> &indexes, std::vector<double> &dists) {
-        const double rMax = box.radii().getMaxCoordinate();
-        double rLow = 0.0;
-        double rHigh = 100.0;
-        const double epsilon = 1e-3;  // precision for radius convergence
-
-        NeighborSet<Container> neighs;
-        while (rHigh - rLow > epsilon) {
-            double rMid = (rLow + rHigh) / 2.0;
-
-            // Query neighbors within radius rMid
-            neighs = searchNeighborsStruct<Kernel_t::sphere>(p, rMid);
-
-            size_t count = neighs.size();
-            // std::cout << "rMid = " << rMid << " count = " << count << std::endl;
-            if (count < k) {
-                // Not enough neighbors: increase radius
-                rLow = rMid;
-            } else {
-                // Enough or more neighbors: try smaller radius
-                rHigh = rMid;
-                if(count == k) break; // good enough
-            }
-        }
-        size_t i = 0;
-        for (auto [idx, pt] : neighs) {
-            indexes[i] = idx;
-            dists[i] = distPointsSquared(pt, p);
-            i++;
-            if(i == k) break;
-        }
-        return neighs.size();
-    }
-
-	/**
-     * @brief Search neighbors function. Given a point and a radius, return the points inside a given kernel type
-     * @param p Center of the kernel to be used
-     * @param radius Radius of the kernel to be used
-     * @return Points inside the given kernel type
-     */
+    // Overrides for working with a given radius/vector of radii before calling the actual search methods
 	template<Kernel_t kernel_type = Kernel_t::square>
 	[[nodiscard]] inline std::vector<size_t> searchNeighbors(const Point& p, double radius) const {
 		const auto kernel = kernelFactory<kernel_type>(p, radius);
 		return neighbors(kernel);
 	}
-	/**
-     * @brief Search neighbors function. Given a point and a radius, return the points inside a given kernel type
-     * @param p Center of the kernel to be used
-     * @param radii Radii of the kernel to be used
-     * @return Points inside the given kernel type
-     */
+
 	template<Kernel_t kernel_type = Kernel_t::cube>
 	[[nodiscard]] inline std::vector<size_t> searchNeighbors(const Point& p, const Vector& radii) const {
 		const auto kernel = kernelFactory<kernel_type>(p, radii);
@@ -1317,23 +1027,29 @@ public:
 		return neighborsStruct(kernel);
 	}
 
-	/**
-	 * A point is considered to be inside a Ring around a point if its outside the innerRing and inside the outerRing
-	 * @param p Center of the kernel to be used
-	 * @param innerRingRadii Radii of the inner part of the ring. Points within this part will be excluded
-	 * @param outerRingRadii Radii of the outer part of the ring
-	 * @return The points located between the inner ring and the outer ring
-	 */
-	[[nodiscard]] std::vector<size_t> searchNeighborsRing(const Point& p, const Vector& innerRingRadii,
-	                                                       const Vector& outerRingRadii) const {
-		// Search points within "outerRingRadii"
-		const auto outerKernel = kernelFactory<Kernel_t::cube>(p, outerRingRadii);
-		// But not too close (within "innerRingRadii")
-		const auto innerKernel = kernelFactory<Kernel_t::cube>(p, innerRingRadii);
-		const auto condition   = [&](const Point& point) { return !innerKernel.isInside(point); };
 
-		return neighbors(outerKernel, condition);
+    template<Kernel_t kernel_type = Kernel_t::square>
+	[[nodiscard]] inline NeighborSet<Container> searchNeighborsApprox(const Point& p, double radius, double tolerancePercentage, bool upperBound) {
+		const auto kernel = kernelFactory<kernel_type>(p, radius);
+		return neighborsApprox(kernel, tolerancePercentage, upperBound);
 	}
+	template<Kernel_t kernel_type = Kernel_t::cube>
+	[[nodiscard]] inline NeighborSet<Container> searchNeighborsApprox(const Point& p, const Vector& radii, double tolerancePercentage, bool upperBound) {
+		const auto kernel = kernelFactory<kernel_type>(p, radii);
+		return neighborsApprox(kernel, tolerancePercentage, upperBound);
+	}
+
+    template<Kernel_t kernel_type = Kernel_t::square>
+	[[nodiscard]] inline NeighborSet<Container> searchNeighborsApprox(const Point& p, double radius, const Vector &toleranceVector, bool upperBound) {
+		const auto kernel = kernelFactory<kernel_type>(p, radius);
+		return neighborsApprox(kernel, toleranceVector, upperBound);
+	}
+	template<Kernel_t kernel_type = Kernel_t::cube>
+	[[nodiscard]] inline NeighborSet<Container> searchNeighborsApprox(const Point& p, const Vector& radii, const Vector &toleranceVector, bool upperBound) {
+		const auto kernel = kernelFactory<kernel_type>(p, radii);
+		return neighborsApprox(kernel, toleranceVector, upperBound);
+	}
+
 
     // OLD IMPLEMENTATIONS KEPT FOR COMPARISON AND TESTING PURPOSES
     // ALSO THE OLD IMPL CAN TAKE AN ARBITRARY CONDITION ON THE SEARCHES, WHILE THE NEW CAN'T
@@ -1475,5 +1191,4 @@ public:
         
         singleTraversal(logBounds, logBoundsLeaf);
 	}
-
 };
