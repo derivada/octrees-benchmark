@@ -216,3 +216,4 @@ inline void progressNumber(size_t progress) {
     std::cout << "Points read: " << progress << "\r";
     std::cout.flush();
 }
+

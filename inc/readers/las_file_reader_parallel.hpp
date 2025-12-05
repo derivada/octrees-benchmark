@@ -91,25 +91,6 @@ class LasFileReaderParallel : public FileReader<Container>
 					static_cast<double>(reader->point.get_Y() * pci.yScale + pci.yOffset),
 					static_cast<double>(reader->point.get_Z() * pci.zScale + pci.zOffset)
 				));
-
-				// points[i] = Point(
-				// 	i,
-				// 	static_cast<double>(reader->point.get_X() * pci.xScale + pci.xOffset),
-				// 	static_cast<double>(reader->point.get_Y() * pci.yScale + pci.yOffset),
-				// 	static_cast<double>(reader->point.get_Z() * pci.zScale + pci.zOffset),
-				// static_cast<double>(reader->point.get_intensity()),
-				// static_cast<unsigned short>(reader->point.get_return_number()),
-				// static_cast<unsigned short>(reader->point.get_number_of_returns()),
-				// static_cast<unsigned short>(reader->point.get_scan_direction_flag()),
-				// static_cast<unsigned short>(reader->point.get_edge_of_flight_line()),
-				// static_cast<unsigned short>(reader->point.get_classification()),
-				// static_cast<char>(reader->point.get_scan_angle_rank()),
-				// static_cast<unsigned short>(reader->point.get_user_data()),
-				// static_cast<unsigned short>(reader->point.get_point_source_ID()),
-				// static_cast<unsigned int>(reader->point.get_R()),
-				// static_cast<unsigned int>(reader->point.get_G()),
-				// static_cast<unsigned int>(reader->point.get_B())
-				// );
 			}
 			closeReader(reader);
 		}

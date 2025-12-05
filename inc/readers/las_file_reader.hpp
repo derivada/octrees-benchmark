@@ -69,18 +69,6 @@ class LasFileReader : public FileReader<Container>
 				static_cast<double>(lasreader->point.get_X() * xScale + xOffset),
 				static_cast<double>(lasreader->point.get_Y() * yScale + yOffset),
 				static_cast<double>(lasreader->point.get_Z() * zScale + zOffset))
-				// static_cast<double>(lasreader->point.get_intensity()),
-				// static_cast<unsigned short>(lasreader->point.get_return_number()),
-				// static_cast<unsigned short>(lasreader->point.get_number_of_returns()),
-				// static_cast<unsigned short>(lasreader->point.get_scan_direction_flag()),
-				// static_cast<unsigned short>(lasreader->point.get_edge_of_flight_line()),
-				// static_cast<unsigned short>(lasreader->point.get_classification()),
-				// static_cast<char>(lasreader->point.get_scan_angle_rank()),
-				// static_cast<unsigned short>(lasreader->point.get_user_data()),
-				// static_cast<unsigned short>(lasreader->point.get_point_source_ID()),
-				// static_cast<unsigned int>(lasreader->point.get_R()),
-				// static_cast<unsigned int>(lasreader->point.get_G()),
-				// static_cast<unsigned int>(lasreader->point.get_B())
 			);
 		};
 

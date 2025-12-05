@@ -50,7 +50,6 @@ class FileReaderFactory
 			case txt_t:
 				std::cout << "Txtfilereader not available after SoA refactor\n";
 				return nullptr;
-				//return std::make_shared<TxtFileReader<PointContainer>>(path);
 			case las_t:
 				return std::make_shared<LasFileReaderParallel<Container>>(path);
 			default:

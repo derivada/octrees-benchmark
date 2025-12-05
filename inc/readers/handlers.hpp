@@ -50,11 +50,9 @@ void pointCloudReadLog(const Container &points, TimeWatcher &tw, const fs::path&
     std::cout << std::left << std::setw(LOG_FIELD_WIDTH) << "Number of read points:"      << std::setw(LOG_FIELD_WIDTH) << points.size()                                  << "\n";
     std::cout << std::left << std::setw(LOG_FIELD_WIDTH) << "Size of point type:"         << std::setw(LOG_FIELD_WIDTH) << point_size_str                                 << "\n";
     std::cout << std::left << std::setw(LOG_FIELD_WIDTH) << "Points vector size:"         << std::setw(LOG_FIELD_WIDTH) << mem_size_str                                   << "\n";
-    // TODO std::cout << std::left << std::setw(LOG_FIELD_WIDTH) << "Alligned to cache lines?:"  	<< std::setw(LOG_FIELD_WIDTH) << (checkMemoryAlligned(points) ? "Yes" : "No") << "\n";
     std::cout << std::endl;
 }
 
-/// @brief The optional will be null if Point_t does not require metadata (is not Point)
 template <PointContainer Container>
 std::pair<Container, std::optional<std::vector<PointMetadata>>> readPoints(const fs::path& fileName) {
 	// Open the file and create the reader

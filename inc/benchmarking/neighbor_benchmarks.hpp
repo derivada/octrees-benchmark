@@ -425,7 +425,7 @@ class NeighborsBenchmark {
                     std::vector<size_t> &searchIndexes = searchSet.searchPoints[searchSet.currentRepeat];
                     #pragma omp parallel for schedule(runtime) reduction(+:averageResultSize)
                         for(size_t i = 0; i<searchSet.numSearches; i++) {
-                            auto result = oct.template searchNeighborsOld<kernel>(points[searchIndexes[i]], radius);
+                            auto result = oct.template neighbors<kernel>(points[searchIndexes[i]], radius);
                             averageResultSize += result.size();
                         }
                     averageResultSize /= searchSet.numSearches;
@@ -440,7 +440,7 @@ class NeighborsBenchmark {
                     std::vector<size_t> &searchIndexes = searchSet.searchPoints[searchSet.currentRepeat];
                     #pragma omp parallel for schedule(runtime) reduction(+:averageResultSize)
                         for(size_t i = 0; i<searchSet.numSearches; i++) {
-                            auto result = oct.template searchNeighbors<kernel>(points[searchIndexes[i]], radius);
+                            auto result = oct.template neighborsPrune<kernel>(points[searchIndexes[i]], radius);
                             averageResultSize += result.size();
                         }
                     averageResultSize /= searchSet.numSearches;
@@ -455,7 +455,7 @@ class NeighborsBenchmark {
                     std::vector<size_t> &searchIndexes = searchSet.searchPoints[searchSet.currentRepeat];
                     #pragma omp parallel for schedule(runtime) reduction(+:averageResultSize)
                         for(size_t i = 0; i<searchSet.numSearches; i++) {
-                            auto result = oct.template searchNeighborsStruct<kernel>(points[searchIndexes[i]], radius);
+                            auto result = oct.template neighborsStruct<kernel>(points[searchIndexes[i]], radius);
                             averageResultSize += result.size();
                         }
                     averageResultSize /= searchSet.numSearches;
