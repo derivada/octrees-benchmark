@@ -1,40 +1,46 @@
 #include <filesystem>
 #include <iomanip>
 #include <iostream>
-#include <random>
+#include <omp.h>
 #include <optional>
+#include <papi.h>
+#include <random>
+#include <type_traits>
+
 #include "main_options.hpp"
 #include "util.hpp"
-#include "TimeWatcher.hpp"
-#include "handlers.hpp"
+
+#include "readers/handlers.hpp"
+
 #include "benchmarking/benchmarking.hpp"
+#include "benchmarking/enc_build_benchmarks.hpp"
+#include "benchmarking/locality_benchmarks.hpp"
+#include "benchmarking/memory_benchmarks.hpp"
 #include "benchmarking/neighbor_benchmarks.hpp"
 #include "benchmarking/search_set.hpp"
-#include "octree.hpp"
-#include "linear_octree.hpp"
-#include "NeighborKernels/KernelFactory.hpp"
-#include "Geometry/point.hpp"
-#include "Geometry/Lpoint.hpp"
-#include "Geometry/Lpoint.hpp"
-#include "Geometry/PointMetadata.hpp"
-#include "PointEncoding/point_encoder_factory.hpp"
-#include "omp.h"
-#include "unibnOctree.hpp"
-#include "nanoflann.hpp"
-#include "nanoflann_wrappers.hpp"
-#include "benchmarking/locality_benchmarks.hpp"
+#include "benchmarking/time_watcher.hpp"
+
+#include "encoding/point_encoder_factory.hpp"
+
+#include "kernels/kernel_factory.hpp"
+
+#include "geometry/point.hpp"
+#include "geometry/point_containers.hpp"
+#include "geometry/point_metadata.hpp"
+
+#include "structures/linear_octree.hpp"
+#include "structures/nanoflann.hpp"
+#include "structures/nanoflann_wrappers.hpp"
+#include "structures/octree.hpp"
+#include "structures/unibn_octree.hpp"
+
 #ifdef HAVE_PCL
 #include <pcl/point_cloud.h>
 #include <pcl/octree/octree_search.h>
 #include <pcl/kdtree/kdtree_flann.h>
-#include "pcl_wrappers.hpp"
+#include "structures/pcl_wrappers.hpp"
 #endif
-#include "papi.h"
-#include "benchmarking/enc_build_benchmarks.hpp"
-#include "point_containers.hpp"
-#include <iomanip>
-#include <type_traits>
-#include "benchmarking/memory_benchmarks.hpp"
+
 
 namespace fs = std::filesystem;
 using namespace PointEncoding;

@@ -2,14 +2,14 @@
 // Created by miguel.yermo on 5/03/20.
 //
 
-#include "octree.hpp"
 
-#include "Geometry/Box.hpp"
-#include "NeighborKernels/KernelFactory.hpp"
 #include <algorithm>
 #include <unordered_map>
-#include "Geometry/Lpoint.hpp"
+
+#include "geometry/box.hpp"
+#include "kernels/kernel_factory.hpp"
 #include "main_options.hpp"
+#include "structures/octree.hpp"
 
 template class Octree<PointsAoS>;
 template class Octree<PointsSoA>;

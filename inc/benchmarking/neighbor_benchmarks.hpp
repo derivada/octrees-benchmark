@@ -1,25 +1,28 @@
 #pragma once
+
 #include <omp.h>
 #include <type_traits>
+
+#include "geometry/point_containers.hpp"
+#include "kernels/kernel_factory.hpp"
+#include "structures/linear_octree.hpp"
+#include "structures/nanoflann.hpp"
+#include "structures/nanoflann_wrappers.hpp"
+#include "structures/octree.hpp"
+#include "structures/unibn_octree.hpp"
+
 #include "benchmarking.hpp"
-#include "NeighborKernels/KernelFactory.hpp"
-#include "octree.hpp"
-#include "linear_octree.hpp"
-#include "TimeWatcher.hpp"
+#include "papi_events.hpp"
+#include "time_watcher.hpp"
 #include "search_set.hpp"
 #include "main_options.hpp"
-#include "unibnOctree.hpp"
+
 #ifdef HAVE_PCL
 #include <pcl/point_cloud.h>
 #include <pcl/octree/octree_search.h>
 #include <pcl/kdtree/kdtree_flann.h>
-#include "pcl_wrappers.hpp"
+#include "structures/pcl_wrappers.hpp"
 #endif
-#include "nanoflann.hpp"
-#include "nanoflann_wrappers.hpp"
-#include "papi_events.hpp"
-#include "point_containers.hpp"
-
 
 template <PointContainer Container>
 class NeighborsBenchmark {

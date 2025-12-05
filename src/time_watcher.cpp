@@ -2,12 +2,11 @@
 // Created by miguelyermo on 16/11/20.
 //
 
-#include "TimeWatcher.hpp"
-
 #include <iomanip>
 #include <memory>
 #include <sstream>
 
+#include "benchmarking/time_watcher.hpp"
 
 // *** PUBLIC METHODS *** //
 // ********************** //

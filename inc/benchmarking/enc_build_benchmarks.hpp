@@ -1,26 +1,31 @@
 #pragma once
+
 #include <omp.h>
+#include <papi.h>
 #include <type_traits>
-#include "benchmarking.hpp"
-#include "octree.hpp"
-#include "linear_octree.hpp"
-#include "TimeWatcher.hpp"
-#include "main_options.hpp"
-#include "unibnOctree.hpp"
+
+#include "geometry/point_containers.hpp"
+#include "encoding/point_encoder.hpp"
+#include "encoding/point_encoder_factory.hpp"
+#include "structures/linear_octree.hpp"
+#include "structures/nanoflann.hpp"
+#include "structures/nanoflann_wrappers.hpp"
+#include "structures/octree.hpp"
+#include "structures/unibn_octree.hpp"
+
 #ifdef HAVE_PCL
 #include <pcl/point_cloud.h>
 #include <pcl/octree/octree_search.h>
 #include <pcl/kdtree/kdtree_flann.h>
-#include "pcl_wrappers.hpp"
+#include "structures/pcl_wrappers.hpp"
 #endif
-#include "nanoflann.hpp"
-#include "nanoflann_wrappers.hpp"
-#include "papi.h"
-#include "encoding_log.hpp"
+
+#include "benchmarking.hpp"
 #include "build_log.hpp"
-#include "../PointEncoding/point_encoder_factory.hpp"
-#include "../PointEncoding/point_encoder.hpp"
-#include "point_containers.hpp"
+#include "encoding_log.hpp"
+#include "main_options.hpp"
+#include "papi_events.hpp"
+#include "time_watcher.hpp"
 
 template <PointContainer Container>
 class EncodingBuildBenchmarks {

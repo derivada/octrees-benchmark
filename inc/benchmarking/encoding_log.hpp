@@ -3,6 +3,7 @@
 #include <string>
 #include <iostream>
 #include <iomanip>
+
 #include "main_options.hpp"
 
 /// @brief Object with logs of the encoding time for each encoder

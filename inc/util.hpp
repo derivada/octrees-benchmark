@@ -17,14 +17,15 @@
 
 #pragma once
 
-#include "Geometry/point.hpp"
 #include <algorithm>
+#include <cstdint>
+#include <iomanip>
 #include <numbers>
 #include <numeric>
-#include <iomanip>
-#include <cstdint>
-#include "papi.h"
-#include "point_containers.hpp"
+#include <papi.h>
+
+#include "geometry/point.hpp"
+#include "geometry/point_containers.hpp"
 
 
 constexpr size_t LOG_FIELD_WIDTH = 32;

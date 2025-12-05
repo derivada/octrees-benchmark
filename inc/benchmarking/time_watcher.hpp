@@ -15,9 +15,6 @@
 *
 */
 
-#ifndef RULE_BASED_CLASSIFIER_CPP_TIMEWATCHER_H
-#define RULE_BASED_CLASSIFIER_CPP_TIMEWATCHER_H
-
 #pragma once
 
 #include <chrono>
@@ -149,6 +146,3 @@ class TimeWatcher
    */
 	bool hasNulls();
 };
-
-
-#endif //RULE_BASED_CLASSIFIER_CPP_TIMEWATCHER_H

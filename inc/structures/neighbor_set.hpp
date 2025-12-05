@@ -1,7 +1,7 @@
 #pragma once
 #include <vector>
 #include <iterator>
-#include "point_containers.hpp"
+#include "geometry/point_containers.hpp"
 
 /**
  * @brief A structure that stores a set of neighboring points within a linear octree.

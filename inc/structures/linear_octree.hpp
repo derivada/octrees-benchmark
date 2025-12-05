@@ -1,19 +1,18 @@
 #pragma once
 
-#include "Geometry/Box.hpp"
 #include <optional>
 #include <bitset>
 #include <unordered_map>
 #include <filesystem>
-#include "PointEncoding/point_encoder.hpp"
-#include "PointEncoding/no_encoding.hpp"
-#include "NeighborKernels/KernelFactory.hpp"
-#include "TimeWatcher.hpp"
-#include "Geometry/Box.hpp"
-#include "neighbor_set.hpp"
 #include "benchmarking/build_log.hpp"
+#include "benchmarking/time_watcher.hpp"
+#include "encoding/no_encoding.hpp"
+#include "encoding/point_encoder.hpp"
+#include "geometry/box.hpp"
+#include "geometry/point_containers.hpp"
+#include "kernels/kernel_factory.hpp"
 #include "main_options.hpp"
-#include "point_containers.hpp"
+#include "neighbor_set.hpp"
 
 /**
 * @class LinearOctree

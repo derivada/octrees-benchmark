@@ -3,12 +3,11 @@
 //
 
 #pragma once
-#include "util.hpp"
-#include "LasFileReader.hpp"
-#include "LasFileReaderParallel.hpp"
-// #include "TxtFileReader.hpp"
 #include <filesystem>
-#include "point_containers.hpp"
+#include "geometry/point_containers.hpp"
+#include "las_file_reader.hpp"
+#include "las_file_reader_parallel.hpp"
+#include "util.hpp"
 
 namespace fs = std::filesystem;
 

@@ -17,12 +17,12 @@
 
 #pragma once
 
-#include "util.hpp"
 #include <filesystem>
 #include <iostream>
 #include <vector>
-#include "Geometry/PointMetadata.hpp"
-#include "point_containers.hpp"
+#include "geometry/point_containers.hpp"
+#include "geometry/point_metadata.hpp"
+#include "util.hpp"
 
 namespace fs = std::filesystem;
 

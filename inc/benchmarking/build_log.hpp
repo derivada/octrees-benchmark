@@ -1,8 +1,9 @@
 #pragma once
 
-#include <string>
 #include <iostream>
 #include <iomanip>
+#include <string>
+
 #include "main_options.hpp"
 
 /// @brief Object with logs of the build time for tested structures

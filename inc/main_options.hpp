@@ -1,13 +1,12 @@
-#ifndef CPP_MAIN_OPTIONS_HPP
-#define CPP_MAIN_OPTIONS_HPP
+#pragma once
 
 #include <filesystem>
 #include <getopt.h>
 #include <iostream>
-#include <vector>
-#include "omp.h"
-#include <set>
+#include <omp.h>
 #include <optional>
+#include <set>
+#include <vector>
 
 namespace fs = std::filesystem;
 
@@ -250,6 +249,3 @@ std::string getKernelListString();
 std::string getSearchAlgoListString();
 std::string getEncoderListString();
 void processArgs(int argc, char** argv);
-
-
-#endif // CPP_MAIN_OPTIONS_HPP

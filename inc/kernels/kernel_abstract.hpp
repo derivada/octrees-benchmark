@@ -4,11 +4,11 @@
 
 #pragma once
 
-#include "Geometry/point.hpp"
-#include "Geometry/Box.hpp"
 #include <array>
 #include <cstdint>
 #include <immintrin.h> 
+#include "geometry/box.hpp"
+#include "geometry/point.hpp"
 
 class KernelAbstract
 /**

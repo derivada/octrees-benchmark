@@ -2,15 +2,15 @@
 // Created by ruben.laso on 22/09/22.
 //
 
-#ifndef RULE_BASED_CLASSIFIER_CPP_BENCHMARKING_HPP
-#define RULE_BASED_CLASSIFIER_CPP_BENCHMARKING_HPP
+#pragma once
 
-#include "TimeWatcher.hpp"
 #include <algorithm>
 #include <numeric>
 #include <functional>
 #include <optional>
 #include <papi.h>
+
+#include "time_watcher.hpp"
 
 namespace benchmarking
 {
@@ -173,6 +173,4 @@ void benchmark(const std::string& description, const size_t repeats, F function,
 	   << " s. Median: " << result.median() << " s. Mean: " << result.mean() << " s. Stdev: " << result.stdev() << "."
 	   << '\n';
 }
-} // namespace benchmarking
-
-#endif /* end of include guard: RULE_BASED_CLASSIFIER_CPP_BENCHMARKING_HPP */
+}

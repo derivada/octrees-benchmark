@@ -1,7 +1,7 @@
 #pragma once
 #ifdef HAVE_PCL
 #include <pcl/point_cloud.h>
-#include "point_containers.hpp"
+#include "geometry/point_containers.hpp"
 
 template <PointContainer Container>
 pcl::PointCloud<pcl::PointXYZ> convertCloudToPCL(Container &points) {

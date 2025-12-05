@@ -4,8 +4,6 @@
 
 #pragma once
 
-#include "NeighborKernels/KernelFactory.hpp"
-#include "Geometry/PointMetadata.hpp"
 #include <algorithm>
 #include <array>
 #include <filesystem>
@@ -15,7 +13,9 @@
 #include <vector>
 #include <optional>
 #include "benchmarking/build_log.hpp"
-#include "point_containers.hpp"
+#include "geometry/point_metadata.hpp"
+#include "geometry/point_containers.hpp"
+#include "kernels/kernel_factory.hpp"
 
 template <PointContainer Container>
 class Octree

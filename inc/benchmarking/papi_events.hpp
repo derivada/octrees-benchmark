@@ -1,9 +1,10 @@
 #pragma once
+
+#include <iomanip>
+#include <iostream>
 #include <papi.h>
 #include <vector>
 #include <string>
-#include <iostream>
-#include <iomanip>
 #include <utility>
 
 constexpr int CACHE_EVENTS[] = {

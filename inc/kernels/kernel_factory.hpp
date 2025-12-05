@@ -2,16 +2,13 @@
 // Created by ruben.laso on 7/10/22.
 //
 
-#ifndef KERNELFACTORY_HPP
-#define KERNELFACTORY_HPP
+#pragma once
 
-#include "main_options.hpp"
-#include "KernelCircle.hpp"
-#include "KernelCube.hpp"
-#include "KernelSphere.hpp"
-#include "KernelSquare.hpp"
-#include "Geometry/point.hpp"
 #include <memory>
+#include "main_options.hpp"
+#include "kernel_2d.hpp"
+#include "kernel_3d.hpp"
+#include "geometry/point.hpp"
 
 
 template<Kernel_t kernel>
@@ -42,5 +39,3 @@ inline auto kernelFactory(const Point& center, const Vector& radii)
 	if constexpr (kernel == Kernel_t::square) { return KernelSquare(center, radii); }
 	else if constexpr (kernel == Kernel_t::cube) { return KernelCube(center, radii); }
 }
-
-#endif /* end of include guard: KERNELFACTORY_HPP */

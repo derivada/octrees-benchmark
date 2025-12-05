@@ -15,18 +15,17 @@
 *
 */
 
-#ifndef CPP_HANDLERS_H
-#define CPP_HANDLERS_H
+#pragma once
 
-#include "readers/FileReaderFactory.hpp"
 #include <filesystem>
 #include <fstream>
-#include <lasreader.hpp>
-#include "Geometry/point.hpp"
-#include "Geometry/PointMetadata.hpp"
 #include <optional>
-#include "TimeWatcher.hpp"
-#include "point_containers.hpp"
+#include <lasreader.hpp>
+#include "benchmarking/time_watcher.hpp"
+#include "geometry/point.hpp"
+#include "geometry/point_containers.hpp"
+#include "geometry/point_metadata.hpp"
+#include "file_reader_factory.hpp"
 
 namespace fs = std::filesystem;
 
@@ -74,6 +73,3 @@ std::pair<Container, std::optional<std::vector<PointMetadata>>> readPoints(const
     pointCloudReadLog(points, tw, fileName);
     return std::make_pair(points, std::optional<std::vector<PointMetadata>>(metadata));
 }
-
-
-#endif //CPP_HANDLERS_H

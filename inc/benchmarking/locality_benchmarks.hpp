@@ -1,14 +1,16 @@
 #pragma once
+
 #include <omp.h>
 #include <type_traits>
-#include "benchmarking.hpp"
-#include "NeighborKernels/KernelFactory.hpp"
-#include "nanoflann.hpp"
-#include "nanoflann_wrappers.hpp"
-#include "TimeWatcher.hpp"
-#include "search_set.hpp"
-#include "main_options.hpp"
 
+#include "benchmarking/search_set.hpp"
+#include "kernels/kernel_factory.hpp"
+#include "structures/nanoflann.hpp"
+#include "structures/nanoflann_wrappers.hpp"
+
+#include "benchmarking.hpp"
+#include "main_options.hpp"
+#include "time_watcher.hpp"
 
 template <PointContainer Container>
 class LocalityBenchmark {
@@ -42,13 +44,6 @@ class LocalityBenchmark {
             std::atomic<size_t> progress(0);
             TimeWatcher tw;
             tw.start();
-            // auto [events, descriptions] = buildCombinedEventList();
-            // int eventSet = initPapiEventSet(events);
-            // std::vector<long long> eventValues(events.size());
-            // if (eventSet == PAPI_NULL) {
-            //     std::cout << "Failed to initialize PAPI event set." << std::endl;
-            //     exit(1);
-            // }
             #pragma omp parallel
             {
                 std::unordered_map<size_t, size_t> localIndexDistances;
@@ -65,15 +60,6 @@ class LocalityBenchmark {
                              ? (i - indexes[j]) : (indexes[j] - i);
                         localIndexDistances[diff] += 1;
                     }
-                    
-                    // radius
-                    // std::vector<nanoflann::ResultItem<size_t, double>> ret_matches;
-                    // const size_t nMatches = kdtree.radiusSearch(pt, mainOptions.benchmarkRadii[0]*mainOptions.benchmarkRadii[0], ret_matches);
-                    // for(size_t j = 0; j < nMatches; j++) {
-                    //     size_t diff = (i > ret_matches[j].first) ? 
-                    //         (i - ret_matches[j].first) : (ret_matches[j].first - i);
-                    //     localIndexDistances[diff] += 1;
-                    // }
             
                     // Progress tracking
                     size_t done = ++progress;

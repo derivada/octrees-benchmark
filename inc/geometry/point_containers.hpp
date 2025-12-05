@@ -3,12 +3,12 @@
 #include <cassert>
 #include <concepts>
 #include <cstddef>
+#include <Eigen/Core>
 #include <iostream>
 #include <memory>
 #include <variant>
 #include <vector>
-#include "Geometry/point.hpp"
-#include <Eigen/Core>
+#include "point.hpp"
 
 template <typename T>
 concept PointContainer = 

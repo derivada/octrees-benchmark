@@ -27,7 +27,7 @@
 #include <cstring>  // memset.
 #include <limits>
 #include <vector>
-#include "benchmarking/build_log.hpp"
+#include "benchmarking/build_log.hpp" // NOTE: Modified for benchmarking
 
 // needed for gtest access to protected/private members ...
 namespace

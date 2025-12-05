@@ -4,14 +4,15 @@
 
 #pragma once
 
-#include "FileReader.hpp"
 #include <lasreader.hpp>
 #include <vector>
+#include <omp.h>
 #include <utility>
+
+#include "geometry/point.hpp"
+#include "geometry/point_metadata.hpp"
+#include "file_reader.hpp"
 #include "util.hpp"
-#include "Geometry/point.hpp"
-#include "Geometry/PointMetadata.hpp"
-#include "omp.h"
 
 /**
  * @author Miguel Yermo and Pablo Díaz

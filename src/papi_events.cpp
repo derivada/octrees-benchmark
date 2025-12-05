@@ -1,4 +1,4 @@
-#include "papi_events.hpp"
+#include "benchmarking/papi_events.hpp"
 
 std::pair<std::vector<int>, std::vector<std::string>> buildCombinedEventList() {
     std::vector<int> fullEventList;

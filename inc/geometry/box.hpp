@@ -1,14 +1,8 @@
-//
-// Created by ruben.laso on 27/10/22.
-//
+#pragma once
 
-#ifndef RULE_BASED_CLASSIFIER_CPP_BOX_HPP
-#define RULE_BASED_CLASSIFIER_CPP_BOX_HPP
-
+#include <vector>
 #include "point.hpp"
 #include "util.hpp"
-#include <vector>
-
 
 class Box
 {
@@ -213,5 +207,3 @@ inline void makeBoxWithinHeights(const Point& p, double radius, Vector& min, Vec
 	max.setY(p.getY() + radius);
 	max.setZ(zMax);
 }
-
-#endif /* end of include guard: RULE_BASED_CLASSIFIER_CPP_BOX_HPP */

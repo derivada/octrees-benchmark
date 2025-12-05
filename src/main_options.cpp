@@ -1,11 +1,12 @@
-#include "main_options.hpp"
-#include <sstream>
 #include <cstdlib>
-#include <set>
-#include "NeighborKernels/KernelFactory.hpp"
-#include <unordered_map>
-#include "PointEncoding/point_encoder_factory.hpp"
 #include <optional>
+#include <set>
+#include <sstream>
+#include <unordered_map>
+
+#include "encoding/point_encoder_factory.hpp"
+#include "kernels/kernel_factory.hpp"
+#include "main_options.hpp"
 
 main_options mainOptions{};
 

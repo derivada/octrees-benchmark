@@ -1,14 +1,15 @@
 #pragma once
 
-#include "Geometry/point.hpp"
-#include "Geometry/Box.hpp"
-#include <cstdint>
-#include <optional>
-#include "Geometry/PointMetadata.hpp"
-#include "benchmarking/encoding_log.hpp"
-#include "TimeWatcher.hpp"
-#include <immintrin.h>
 #include <bitset>
+#include <cstdint>
+#include <immintrin.h>
+#include <optional>
+
+#include "benchmarking/encoding_log.hpp"
+#include "benchmarking/time_watcher.hpp"
+#include "geometry/box.hpp"
+#include "geometry/point.hpp"
+#include "geometry/point_metadata.hpp"
 
 // Base class for all Encoders
 namespace PointEncoding {

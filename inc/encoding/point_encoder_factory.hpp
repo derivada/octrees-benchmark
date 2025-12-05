@@ -1,12 +1,12 @@
 #pragma once
-#include "point_encoder.hpp"
+
 #include "hilbert_encoder_3d.hpp"
+#include "main_options.hpp"
 #include "morton_encoder_3d.hpp"
 #include "no_encoding.hpp"
-#include "main_options.hpp"
+#include "point_encoder.hpp"
 
 namespace PointEncoding {
-   
     inline PointEncoder& getEncoder(EncoderType type) {
         static HilbertEncoder3D hilbertEncoder;
         static MortonEncoder3D mortonEncoder;
@@ -22,4 +22,4 @@ namespace PointEncoding {
                 return noEncoding;
         }
     }
-} // namespace PointEncoding
+}
