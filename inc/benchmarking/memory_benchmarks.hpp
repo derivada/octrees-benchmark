@@ -39,6 +39,7 @@ class MemoryBenchmarks {
         size_t runPoct() {
             std::shared_ptr<BuildLog> log = std::make_shared<BuildLog>();
             Octree oct(points, box);
+            oct.logOctreeData(log);
             return log->memoryUsed;
         }
 
