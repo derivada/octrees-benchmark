@@ -72,9 +72,6 @@ void localityBenchmark(std::ofstream &outputFile, EncoderType encoding = Encoder
     auto pointMetaPair = readPoints<Container>(mainOptions.inputFile);
     auto points = std::move(pointMetaPair.first);
     std::optional<std::vector<PointMetadata>> metadata = std::move(pointMetaPair.second);
-    // auto points = generateGridCloud<Container>(32);
-    // std::optional<std::vector<PointMetadata>> metadata;
-    // std::cout << points.size() << std::endl;
     auto& enc = getEncoder(encoding);
     // Sort the point cloud
     auto [codes, box] = enc.sortPoints(points, metadata);
@@ -123,72 +120,6 @@ void memoryBenchmark() {
     tm.run();
 }
 
-// TODO
-// template <PointContainer Container>
-// void approximateSearchLog(std::ofstream &outputFile, EncoderType encoding) {
-//     assert(encoding != EncoderType::NO_ENCODING);
-//     auto pointMetaPair = readPoints<Container>(mainOptions.inputFile);
-//     auto points = std::move(pointMetaPair.first);
-//     std::optional<std::vector<PointMetadata>> metadata = std::move(pointMetaPair.second);
-//     auto& enc = getEncoder(encoding);
-//     auto [codes, box] = enc.sortPoints(points, metadata);
-
-//     auto lin_oct = LinearOctree(points, codes, box, enc);
-//     std::array<float, 5> tolerances = {5.0, 10.0, 25.0, 50.0, 100.0};
-//     float radius = 3.0;
-//     outputFile << "tolerance,upper,x,y,z\n";
-//     auto points_exact = lin_oct.searchNeighborsStruct<Kernel_t::sphere>(points[1234], radius);
-//     for(auto [idx, p]: points_exact) {
-//         outputFile << "0.0,exact," << p.getX() << "," << p.getY() << "," << p.getZ() << "\n";
-//     }
-//     for(float tol: tolerances) {
-//             auto points_upper = lin_oct.searchNeighborsApprox<Kernel_t::sphere>(points[1234], 3.0, tol, true);
-//             auto points_lower = lin_oct.searchNeighborsApprox<Kernel_t::sphere>(points[1234], 3.0, tol, false);
-//             for(auto [idx, p]: points_upper) {
-//                 outputFile << tol << ",upper," << p.getX() << "," << p.getY() << "," << p.getZ() << "\n";
-//             }
-//             for(auto [idx, p]: points_lower) {
-//                 outputFile << tol << ",lower," << p.getX() << "," << p.getY() << "," << p.getZ() << "\n";
-//             }
-//     }
-// }
-// double computeLocality(std::vector<Point> &points, size_t windowSize) {
-//     TimeWatcher tw;
-//     tw.start();
-//     if (points.size() < windowSize) return 0.0;
-//     double locality = 0;
-//     int seen = 0;
-//     std::multiset<double> mx;
-//     std::multiset<double> my;
-//     std::multiset<double> mz;
-//     for(int i = 0; i<points.size(); i++) {
-//         mx.insert(points[i].getX());
-//         my.insert(points[i].getY());
-//         mz.insert(points[i].getZ());
-//         if(i >= windowSize) {
-//             double volume = (*mx.rbegin() - *mx.begin());
-//             volume *= (*my.rbegin() - *my.begin());
-//             volume *= (*mz.rbegin() - *mz.begin());
-            
-//             if(seen == 0) {
-//                 locality = volume;
-//             } else {
-//                 locality = ((locality / seen) + volume) / (seen+1);
-//                 seen++;
-//             }
-
-//             // erase old elements
-//             mx.erase(mx.find(points[i-windowSize].getX()));
-//             my.erase(my.find(points[i-windowSize].getY()));
-//             mz.erase(mz.find(points[i-windowSize].getZ()));
-//         }
-//     }
-//     tw.stop();
-//     std::cout << "avg. bounding box size (lower is better) = " << locality << std::endl;
-//     std::cout << "time to compute: " << tw.getElapsedDecimalSeconds() << std::endl;
-//     return locality;
-// }
-
 template <PointContainer Container>
 void outputReorderings(std::ofstream &outputFilePoints, std::ofstream &outputFileOct, EncoderType encoding = EncoderType::NO_ENCODING) {
     auto pointMetaPair = readPoints<Container>(mainOptions.inputFile);
@@ -198,7 +129,6 @@ void outputReorderings(std::ofstream &outputFilePoints, std::ofstream &outputFil
     auto& enc = getEncoder(encoding);
     auto [codes, box] = enc.sortPoints(points, metadata);
 
-    // computeLocality(points, 100);
     // Output reordered points
     outputFilePoints << std::fixed << std::setprecision(3); 
     for(size_t i = 0; i<points.size(); i++) {
@@ -227,16 +157,6 @@ void testKNN(EncoderType encoding = EncoderType::NO_ENCODING) {
     NanoflannPointCloud npc(points);
     NanoFlannKDTree kdtree(3, npc, {mainOptions.maxPointsLeaf});
     auto pclCloud = convertCloudToPCL(points);
-
-    // Build the PCL Octree
-    // pcl::octree::OctreePointCloudSearch<pcl::PointXYZ> pcloct(mainOptions.pclOctResolution);
-    // pcl::PointCloud<pcl::PointXYZ>::Ptr cloudPtr = pclCloud.makeShared();
-    // pcloct.setInputCloud(cloudPtr);
-    // pcloct.addPointsFromInputCloud();
-
-    // // Build the PCL Kd-tree
-    // pcl::KdTreeFLANN<pcl::PointXYZ> pclkd = pcl::KdTreeFLANN<pcl::PointXYZ>();
-    // pclkd.setInputCloud(cloudPtr);
     
     TimeWatcher twLoct; 
     TimeWatcher twNano;
@@ -268,101 +188,6 @@ void testKNN(EncoderType encoding = EncoderType::NO_ENCODING) {
                     kdtree.knnSearch(pt, k, &indexesNanoflann[0], &distancesNanoflann[0]);
                     twNano.stop();
                     nanosNano += twNano.getElapsedNanos();
-                    
-                    // // Run PCLOCT
-                    // pcl::PointXYZ searchPoint = pclCloud[searchPoints[i]];
-                    // std::vector<int> indexesPcloct(k);
-                    // std::vector<float> distancesPcloct(k);
-                    // twPcloct.start();
-                    // pcloct.nearestKSearch(searchPoint, k, indexesPcloct, distancesPcloct);
-                    // twPcloct.stop();
-                    // nanosPcloct += twPcloct.getElapsedNanos();
-
-                    // // Run PCLKD
-                    // std::vector<int> indexesPclKD(k);
-                    // std::vector<float> distancesPclKD(k);
-                    // twPclKD.start();
-                    // pclkd.nearestKSearch(searchPoint, k, indexesPclKD, distancesPclKD);
-                    // twPclKD.stop();
-                    // nanosPclKD += twPclKD.getElapsedNanos();
-
-                    // std::unordered_set<size_t> indexSetLoct;
-                    // for (auto index : indexesLoct) {
-                    //     indexSetLoct.insert(index);
-                    // }
-                    // std::unordered_set<size_t> indexSetNanoflann;
-                    // for (auto index : indexesNanoflann) {
-                    //     indexSetNanoflann.insert(index);
-                    // }
-                    // std::unordered_set<size_t> indexSetPcloct;
-                    // for (auto index : indexesPcloct) {
-                    //     indexSetPcloct.insert(index);
-                    // }
-                    // std::unordered_set<size_t> indexSetPclKD;
-                    // for (auto index : indexesPclKD) {
-                    //     indexSetPclKD.insert(index);
-                    // }
-                    // if(indexSetLoct != indexSetNanoflann) {
-                    //     std::cout << "KNN results are different for nanoflann!" << std::endl;
-
-                    //     // Optional: print differences
-                    //     std::cout << "In Loct but not in nanoflann:" << std::endl;
-                    //     for (size_t id : indexSetLoct) {
-                    //         if (indexSetNanoflann.find(id) == indexSetNanoflann.end()) {
-                    //             std::cout << id << std::endl;
-                    //         }
-                    //     }
-
-                    //     std::cout << "In nanoflann but not in Loct:" << std::endl;
-                    //     for (size_t id : indexSetNanoflann) {
-                    //         if (indexSetLoct.find(id) == indexSetLoct.end()) {
-                    //             std::cout << id << std::endl;
-                    //         }
-                    //     }
-                    //     std::cout << std::setprecision(7) << std::fixed;
-                    //     std::cout << std::setw(10) << "index loct"<< std::setw(10) << "dist loct" 
-                    //     << std::setw(10) << "index nano"<< std::setw(10) << "dist nano" << std::endl;
-                    //     for(int i = 0; i<k; i++) {
-                    //         std::cout << std::setw(10) << indexesLoct[i]<< std::setw(10) << distancesLoct[i] << 
-                    //             std::setw(10) << indexesNanoflann[i] << std::setw(10) << distancesNanoflann[i] << std::endl;
-                    //     }
-                    // }
-                    // if(indexSetLoct != indexSetPcloct) {
-                    //     std::cout << "KNN results are different for pcloctree!" << std::endl;
-
-                    //     // Optional: print differences
-                    //     std::cout << "In Loct but not in pcloct:" << std::endl;
-                    //     for (size_t id : indexSetLoct) {
-                    //         if (indexSetPcloct.find(id) == indexSetPcloct.end()) {
-                    //             std::cout << id << std::endl;
-                    //         }
-                    //     }
-
-                    //     std::cout << "In pcloct but not in Loct:" << std::endl;
-                    //     for (size_t id : indexSetPcloct) {
-                    //         if (indexSetLoct.find(id) == indexSetLoct.end()) {
-                    //             std::cout << id << std::endl;
-                    //         }
-                    //     }
-                    // }
-                    // if(indexSetLoct != indexSetPclKD) {
-                    //     std::cout << "KNN results are different for pclkdtree!" << std::endl;
-
-                    //     // Optional: print differences
-                    //     std::cout << "In Loct but not in pclkdtree:" << std::endl;
-                    //     for (size_t id : indexSetLoct) {
-                    //         if (indexSetPclKD.find(id) == indexSetPclKD.end()) {
-                    //             std::cout << id << std::endl;
-                    //         }
-                    //     }
-
-                    //     std::cout << "In pclkdtree but not in Loct:" << std::endl;
-                    //     for (size_t id : indexSetPclKD) {
-                    //         if (indexSetLoct.find(id) == indexSetLoct.end()) {
-                    //             std::cout << id << std::endl;
-                    //         }
-                    //     }
-                    // }
                 }
         std::cout << "k = " << k << std::endl << std::fixed << std::setprecision(5);
         std::cout << "  linear octree: "    << (double) nanosOct / 1e9  << std::endl;

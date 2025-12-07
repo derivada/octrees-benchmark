@@ -15,6 +15,11 @@ inline constexpr float SENSEPSILON = 0.001; // Sensible epsilon
 using Vector = class Point; // Point and Vector are exactly the same entity, but this is done
                             // to preserve mathematical correctness
 
+namespace pico_tree {
+    template <typename PointType>
+    struct point_traits;
+}
+
 struct alignas(32) Point
 {
 	protected:
@@ -323,4 +328,6 @@ struct alignas(32) Point
 	inline void                       setY(double y) { y_ = y; }
 	[[nodiscard]] inline double       getZ() const { return z_; }
 	inline void                       setZ(double z) { z_ = z; }
+
+	friend struct pico_tree::point_traits<Point>;
 };

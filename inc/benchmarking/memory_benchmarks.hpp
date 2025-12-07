@@ -7,6 +7,8 @@
 #include "structures/linear_octree.hpp"
 #include "structures/nanoflann.hpp"
 #include "structures/nanoflann_wrappers.hpp"
+#include "structures/picotree_profiler.hpp"
+#include "structures/picotree_wrappers.hpp"
 #include "structures/octree.hpp"
 #include "structures/unibn_octree.hpp"
 
@@ -79,6 +81,19 @@ class MemoryBenchmarks {
             NanoFlannKDTree<Container> kdtree(3, npc, {mainOptions.maxPointsLeaf});
             return kdtree.usedMemory(kdtree);
         }
+
+        size_t runPico() {
+            if constexpr (std::is_same_v<Container, PointsAoS>) {
+                pico_tree::kd_tree<PointsAoS> tree(
+                    points, 
+                    pico_tree::max_leaf_size_t(mainOptions.maxPointsLeaf)
+                );
+                return pico_tree_profiler::get_memory_usage(tree);
+            } else {
+                std::cout << "WARNING: Skipping pico_tree memory benchmark: Container is not PointsAoS." << std::endl;
+                return 0;
+            }
+        }
     
     public:
         MemoryBenchmarks(Container &points, std::vector<key_t> &codes, Box box, PointEncoder &enc): 
@@ -109,6 +124,8 @@ class MemoryBenchmarks {
                 case NANOFLANN_KDTREE:
                     theoSize = runNano();
                     break;
+                case PICOTREE:
+                    theoSize = runPico();
                 default:
                     std::cerr << "Unknown SearchStructure type!" << std::endl;
                     break;

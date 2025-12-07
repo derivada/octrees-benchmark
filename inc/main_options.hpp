@@ -12,7 +12,8 @@ namespace fs = std::filesystem;
 
 enum SearchStructure { 
 	PTR_OCTREE, LINEAR_OCTREE, UNIBN_OCTREE, 
-	PCL_OCTREE, PCL_KDTREE, NANOFLANN_KDTREE 
+	PCL_OCTREE, PCL_KDTREE, NANOFLANN_KDTREE,
+	PICOTREE
 };
 
 constexpr std::pair<SearchStructure, std::string_view> structureMap[] = {
@@ -21,14 +22,16 @@ constexpr std::pair<SearchStructure, std::string_view> structureMap[] = {
     { SearchStructure::UNIBN_OCTREE,     "uniOct" },
     { SearchStructure::PCL_OCTREE,       "pclOct" },
     { SearchStructure::PCL_KDTREE,       "pclKD" },
-    { SearchStructure::NANOFLANN_KDTREE, "nanoKD" }
+    { SearchStructure::NANOFLANN_KDTREE, "nanoKD" },
+    { SearchStructure::PICOTREE, 		 "picoTree" }
 };
 
 enum SearchAlgo { 
 	NEIGHBORS_PTR, NEIGHBORS, NEIGHBORS_PRUNE,
 	NEIGHBORS_STRUCT, NEIGHBORS_APPROX, NEIGHBORS_UNIBN, 
 	NEIGHBORS_PCLKD, NEIGHBORS_PCLOCT, NEIGHBORS_NANOFLANN, 
-	KNN_V2, KNN_NANOFLANN, KNN_PCLKD, KNN_PCLOCT
+	NEIGHBORS_PICOTREE, KNN_V2, KNN_NANOFLANN, 
+	KNN_PCLKD, KNN_PCLOCT, KNN_PICOTREE
 };
 
 constexpr std::pair<SearchAlgo, std::string_view> searchAlgoMap[] = {
@@ -41,11 +44,12 @@ constexpr std::pair<SearchAlgo, std::string_view> searchAlgoMap[] = {
 	{ SearchAlgo::NEIGHBORS_PCLKD, 		"neighborsPCLKD" },
 	{ SearchAlgo::NEIGHBORS_PCLOCT, 	"neighborsPCLOct" },
 	{ SearchAlgo::NEIGHBORS_NANOFLANN, 	"neighborsNanoflann" },
+	{ SearchAlgo::NEIGHBORS_PICOTREE, 	"neighborsPico" },
 	{ SearchAlgo::KNN_V2, 				"KNNV2" },
 	{ SearchAlgo::KNN_NANOFLANN, 		"KNNNanoflann" },
 	{ SearchAlgo::KNN_PCLKD,			"KNNPCLKD" },
-	{ SearchAlgo::KNN_PCLOCT,			"KNNPCLOCT" }
-
+	{ SearchAlgo::KNN_PCLOCT,			"KNNPCLOCT" },
+	{ SearchAlgo::KNN_PICOTREE,			"KNNPico" }
 };
 
 constexpr std::pair<SearchAlgo, SearchStructure> algoToStructureMap[] = {
@@ -58,10 +62,12 @@ constexpr std::pair<SearchAlgo, SearchStructure> algoToStructureMap[] = {
     { SearchAlgo::NEIGHBORS_PCLKD,    	SearchStructure::PCL_KDTREE },
     { SearchAlgo::NEIGHBORS_PCLOCT,   	SearchStructure::PCL_OCTREE },
     { SearchAlgo::NEIGHBORS_NANOFLANN,	SearchStructure::NANOFLANN_KDTREE },
+    { SearchAlgo::NEIGHBORS_PICOTREE,	SearchStructure::PICOTREE },
     { SearchAlgo::KNN_V2,             	SearchStructure::LINEAR_OCTREE },
 	{ SearchAlgo::KNN_NANOFLANN,		SearchStructure::NANOFLANN_KDTREE },
 	{ SearchAlgo::KNN_PCLKD,			SearchStructure::PCL_KDTREE },
-	{ SearchAlgo::KNN_PCLOCT,			SearchStructure::PCL_OCTREE }
+	{ SearchAlgo::KNN_PCLOCT,			SearchStructure::PCL_OCTREE },
+	{ SearchAlgo::KNN_PICOTREE,			SearchStructure::PICOTREE }
 };
 
 enum EncoderType { MORTON_ENCODER_3D, HILBERT_ENCODER_3D, NO_ENCODING };

@@ -505,6 +505,76 @@ class NeighborsBenchmark {
             }
         }
 
+        void benchmarkPicoTree(pico_tree::kd_tree<Container> &tree, std::string_view kernelName) {
+            if(mainOptions.searchAlgos.contains(SearchAlgo::NEIGHBORS_PICOTREE)) {
+                auto neighborsPico = [&](double radius) -> size_t {
+                    size_t averageResultSize = 0;
+                    std::vector<size_t> &searchIndexes = searchSet.searchPoints[searchSet.currentRepeat];
+                    
+                    #pragma omp parallel for schedule(runtime) reduction(+:averageResultSize)
+                    for(size_t i = 0; i < searchSet.numSearches; i++) {
+                        // PicoTree's default metric is L2 Squared. 
+                        // We must square the linear radius provided by the benchmark options.
+                        auto squared_radius = radius * radius;
+                        
+                        // Vector to store results (pair of index, distance)
+                        std::vector<typename pico_tree::kd_tree<Container>::neighbor_type> results;
+                        
+                        tree.search_radius(points[searchIndexes[i]], squared_radius, results);
+                        
+                        averageResultSize += results.size();
+                    }
+
+                    averageResultSize /= searchSet.numSearches;
+                    searchSet.nextRepeat();
+                    return averageResultSize;
+                };
+                
+                executeBenchmark(neighborsPico, kernelName, SearchAlgo::NEIGHBORS_PICOTREE);
+            }
+        }
+
+        void benchmarkPicoTreeKNN(pico_tree::kd_tree<Container> &tree) {
+            if(mainOptions.searchAlgos.contains(SearchAlgo::KNN_PICOTREE)) {
+                auto knnPico = [&](size_t k) -> size_t {
+                    size_t averageResultSize = 0;
+                    std::vector<size_t> &searchIndexes = searchSet.searchPoints[searchSet.currentRepeat];
+                    
+                    #pragma omp parallel for schedule(runtime) reduction(+:averageResultSize)
+                    for(size_t i = 0; i < searchSet.numSearches; i++) {
+                        std::vector<typename pico_tree::kd_tree<Container>::neighbor_type> results;
+                        
+                        tree.search_knn(points[searchIndexes[i]], k, results);
+                        
+                        averageResultSize += results.size();
+                    }
+
+                    averageResultSize /= searchSet.numSearches;
+                    searchSet.nextRepeat();
+                    return averageResultSize;
+                };
+
+                executeKNNBenchmark(knnPico, SearchAlgo::KNN_PICOTREE);
+            }
+        }
+
+        void initializeBenchmarkPicoTree() {
+            if constexpr (std::is_same_v<Container, PointsAoS>) {
+                pico_tree::kd_tree<Container> tree(points, pico_tree::max_leaf_size_t(mainOptions.maxPointsLeaf));
+                for (const auto& kernel : mainOptions.kernels) {
+                    switch (kernel) {
+                        case Kernel_t::sphere:
+                            benchmarkPicoTree(tree, kernelToString(kernel));
+                            break;
+                        default:
+                            break; 
+                    }
+                }
+                benchmarkPicoTreeKNN(tree);
+            } else {
+                std::cout << "WARNING: Skipping pico_tree neighbors benchmarks: Container is not PointsAoS." << std::endl;
+            }
+        }
 
         void initializeBenchmarkNanoflannKDTree() {
             NanoflannPointCloud<Container> npc(points);
@@ -653,6 +723,8 @@ class NeighborsBenchmark {
                     break;
                     case SearchStructure::NANOFLANN_KDTREE:
                         initializeBenchmarkNanoflannKDTree();
+                    case SearchStructure::PICOTREE:
+                        initializeBenchmarkPicoTree();
                     break;
                 }
                 currentStructureBenchmark++;

@@ -10,6 +10,8 @@
 #include "structures/linear_octree.hpp"
 #include "structures/nanoflann.hpp"
 #include "structures/nanoflann_wrappers.hpp"
+#include "structures/picotree_profiler.hpp"
+#include "structures/picotree_wrappers.hpp"
 #include "structures/octree.hpp"
 #include "structures/unibn_octree.hpp"
 
@@ -146,6 +148,20 @@ class EncodingBuildBenchmarks {
                         log->memoryUsed = kdtree.usedMemory(kdtree); // record memory used
                     }, mainOptions.useWarmup, eventSet, eventValues.data());
                     log->buildTime = stats.mean();
+                    break;
+                }
+                case SearchStructure::PICOTREE: {
+                    if constexpr (std::is_same_v<Container, PointsAoS>) {
+                        auto stats = benchmarking::benchmark(mainOptions.repeats, [&]() {
+                            pico_tree::kd_tree<Container> tree(points, pico_tree::max_leaf_size_t(mainOptions.maxPointsLeaf));
+                        }, mainOptions.useWarmup, eventSet, eventValues.data());
+                        log->buildTime = stats.mean();
+                        pico_tree::kd_tree<PointsAoS> tree(points, pico_tree::max_leaf_size_t(mainOptions.maxPointsLeaf));
+                        log->memoryUsed = pico_tree_profiler::get_memory_usage(tree);
+                    } else {
+                        std::cout << "WARNING: Skipping pico_tree build benchmark: Container is not PointsAoS." << std::endl;
+                        return;
+                    }
                     break;
                 }
             }
