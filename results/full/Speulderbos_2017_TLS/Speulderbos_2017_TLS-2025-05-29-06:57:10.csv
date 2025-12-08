@@ -26,3 +26,6 @@ date,octree,point_type,encoder,npoints,operation,kernel,radius,num_searches,sequ
 2025-07-01-16:13:34,linOct,Point,HilbertEncoder3D,721810646,neighbors,Sphere,0.25,721810646,sequential,1,936.017,936.017,936.017,0,0,6.93276e-310,4658,0,40,dynamic
 2025-07-01-16:27:00,linOct,Point,HilbertEncoder3D,721810646,neighborsPrune,Sphere,0.25,721810646,sequential,1,805.679,805.679,805.679,0,0,4.94066e-323,4658,0,40,dynamic
 2025-07-01-16:34:56,linOct,Point,HilbertEncoder3D,721810646,neighborsStruct,Sphere,0.25,721810646,sequential,1,476.357,476.357,476.357,0,0,4.94066e-323,4658,0,40,dynamic
+2025-12-08-00:29:38,picoTree,PointsAoS,HilbertEncoder3D,721810646,neighborsPico,Sphere,0.05,721810646,sequential,1,185.388,185.388,185.388,0,1,169.905,198,0,40,dynamic
+2025-12-08-00:40:11,picoTree,PointsAoS,HilbertEncoder3D,721810646,neighborsPico,Sphere,0.1,721810646,sequential,1,321.254,321.254,321.254,0,1,311.636,787,0,40,dynamic
+2025-12-08-01:23:13,picoTree,PointsAoS,HilbertEncoder3D,721810646,neighborsPico,Sphere,0.25,721810646,sequential,1,1289.83,1289.83,1289.83,0,1,1292.3,4658,0,40,dynamic

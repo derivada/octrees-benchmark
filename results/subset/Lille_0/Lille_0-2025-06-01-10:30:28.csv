@@ -195,3 +195,7 @@ date,octree,point_type,encoder,npoints,operation,kernel,radius,num_searches,sequ
 2025-11-05-19:32:08,nanoKD,PointsAoS,HilbertEncoder3D,10000000,neighborsNanoflann,Sphere,1,5000,random,5,0.28665,0.05733,0.0574664,0.00045026,1,0.0651706,8456,0,40,dynamic
 2025-11-05-19:32:09,nanoKD,PointsAoS,HilbertEncoder3D,10000000,neighborsNanoflann,Sphere,2,5000,random,5,1.044,0.2088,0.208382,0.00129429,1,0.225467,33418,0,40,dynamic
 2025-11-05-19:32:12,nanoKD,PointsAoS,HilbertEncoder3D,10000000,neighborsNanoflann,Sphere,3,5000,random,5,2.28168,0.456336,0.457364,0.00322905,1,0.47321,73099,0,40,dynamic
+2025-12-07-21:36:19,picoTree,PointsAoS,HilbertEncoder3D,10000000,neighborsPico,Sphere,0.5,5000,random,5,0.0993074,0.0198615,0.0198803,9.71493e-05,1,0.0226316,2104,0,40,dynamic
+2025-12-07-21:36:20,picoTree,PointsAoS,HilbertEncoder3D,10000000,neighborsPico,Sphere,1,5000,random,5,0.289839,0.0579677,0.057975,0.000534735,1,0.0653492,8456,0,40,dynamic
+2025-12-07-21:36:21,picoTree,PointsAoS,HilbertEncoder3D,10000000,neighborsPico,Sphere,2,5000,random,5,0.829787,0.165957,0.164851,0.00515166,1,0.227899,33418,0,40,dynamic
+2025-12-07-21:36:23,picoTree,PointsAoS,HilbertEncoder3D,10000000,neighborsPico,Sphere,3,5000,random,5,1.68449,0.336898,0.335005,0.00309481,1,0.356041,73099,0,40,dynamic

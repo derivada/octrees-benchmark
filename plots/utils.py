@@ -45,7 +45,7 @@ def set_default_style(font_size=14, axes_labelsize=14, xtick_labelsize=14,
 def get_locality_file(data_path: str, cloud_name: str, encoder: str = "none") -> pd.DataFrame:
     file_name = cloud_name + "-" + encoder + "-locality.csv"
     file_path = os.path.join(data_path, cloud_name, file_name)
-    print(f"Loading latest file: {file_path}")
+    print(f"Loading results file: {file_path}")
     df = pd.read_csv(file_path)
     return df.sort_values("distance")
 
@@ -82,7 +82,7 @@ def get_dataset_file(data_path, cloud_name, timestamp="latest"):
                 continue
 
         if latest_file:
-            print(f"Loading latest file: {latest_file}")
+            print(f"Loading results file: {latest_file}")
             df = pd.read_csv(latest_file)
         else:
             raise FileNotFoundError(f"No valid timestamped files found in: {csv_folder}")

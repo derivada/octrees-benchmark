@@ -17,3 +17,6 @@ date,octree,point_type,encoder,npoints,operation,kernel,radius,num_searches,sequ
 2025-11-05-20:10:43,nanoKD,PointsAoS,HilbertEncoder3D,10000000,neighborsNanoflann,Sphere,0.5,10000000,sequential,1,17.289,17.289,17.289,0,1,17.6615,4978,0,40,dynamic
 2025-11-05-20:17:58,nanoKD,PointsAoS,HilbertEncoder3D,10000000,neighborsNanoflann,Sphere,1.5,10000000,sequential,1,198.338,198.338,198.338,0,1,236.517,45393,0,40,dynamic
 2025-11-05-20:55:20,nanoKD,PointsAoS,HilbertEncoder3D,10000000,neighborsNanoflann,Sphere,3,10000000,sequential,1,1119.47,1119.47,1119.47,0,1,1122.4,179181,0,40,dynamic
+2025-12-07-22:13:41,picoTree,PointsAoS,HilbertEncoder3D,10000000,neighborsPico,Sphere,0.5,10000000,sequential,1,17.4673,17.4673,17.4673,0,1,17.9896,4978,0,40,dynamic
+2025-12-07-22:20:15,picoTree,PointsAoS,HilbertEncoder3D,10000000,neighborsPico,Sphere,1.5,10000000,sequential,1,195.456,195.456,195.456,0,1,198.462,45393,0,40,dynamic
+2025-12-07-22:57:25,picoTree,PointsAoS,HilbertEncoder3D,10000000,neighborsPico,Sphere,3,10000000,sequential,1,1105.49,1105.49,1105.49,0,1,1125.28,179181,0,40,dynamic

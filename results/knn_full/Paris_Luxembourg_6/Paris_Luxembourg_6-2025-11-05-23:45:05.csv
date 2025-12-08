@@ -109,3 +109,13 @@ date,octree,point_type,encoder,npoints,operation,kernel,radius,num_searches,sequ
 2025-11-06-00:04:50,nanoKD,PointsAoS,NoEncoding,10000000,nanoflannKNN,KNN,300,10000000,sequential,1,21.5773,21.5773,21.5773,0,0,9.11808e-315,300,0,40,dynamic
 2025-11-06-00:05:23,nanoKD,PointsAoS,NoEncoding,10000000,nanoflannKNN,KNN,400,10000000,sequential,1,33.6717,33.6717,33.6717,0,0,9.11808e-315,400,0,40,dynamic
 2025-11-06-00:06:12,nanoKD,PointsAoS,NoEncoding,10000000,nanoflannKNN,KNN,500,10000000,sequential,1,49.1128,49.1128,49.1128,0,0,9.11808e-315,500,0,40,dynamic
+2025-12-08-01:23:22,picoTree,PointsAoS,HilbertEncoder3D,10000000,KNNPico,KNN,5,10000000,sequential,1,1.30697,1.30697,1.30697,0,0,1.20212e-316,5,0,40,dynamic
+2025-12-08-01:23:24,picoTree,PointsAoS,HilbertEncoder3D,10000000,KNNPico,KNN,10,10000000,sequential,1,1.29937,1.29937,1.29937,0,0,1.20212e-316,10,0,40,dynamic
+2025-12-08-01:23:25,picoTree,PointsAoS,HilbertEncoder3D,10000000,KNNPico,KNN,25,10000000,sequential,1,1.45693,1.45693,1.45693,0,0,1.20212e-316,25,0,40,dynamic
+2025-12-08-01:23:27,picoTree,PointsAoS,HilbertEncoder3D,10000000,KNNPico,KNN,50,10000000,sequential,1,1.8838,1.8838,1.8838,0,0,1.20212e-316,50,0,40,dynamic
+2025-12-08-01:23:30,picoTree,PointsAoS,HilbertEncoder3D,10000000,KNNPico,KNN,75,10000000,sequential,1,2.60122,2.60122,2.60122,0,0,1.20212e-316,75,0,40,dynamic
+2025-12-08-01:23:33,picoTree,PointsAoS,HilbertEncoder3D,10000000,KNNPico,KNN,100,10000000,sequential,1,3.42858,3.42858,3.42858,0,0,1.20212e-316,100,0,40,dynamic
+2025-12-08-01:23:41,picoTree,PointsAoS,HilbertEncoder3D,10000000,KNNPico,KNN,200,10000000,sequential,1,7.84629,7.84629,7.84629,0,0,1.20212e-316,200,0,40,dynamic
+2025-12-08-01:23:55,picoTree,PointsAoS,HilbertEncoder3D,10000000,KNNPico,KNN,300,10000000,sequential,1,13.9216,13.9216,13.9216,0,0,1.20212e-316,300,0,40,dynamic
+2025-12-08-01:24:17,picoTree,PointsAoS,HilbertEncoder3D,10000000,KNNPico,KNN,400,10000000,sequential,1,21.6793,21.6793,21.6793,0,0,1.20212e-316,400,0,40,dynamic
+2025-12-08-01:24:48,picoTree,PointsAoS,HilbertEncoder3D,10000000,KNNPico,KNN,500,10000000,sequential,1,31.1559,31.1559,31.1559,0,0,1.20212e-316,500,0,40,dynamic

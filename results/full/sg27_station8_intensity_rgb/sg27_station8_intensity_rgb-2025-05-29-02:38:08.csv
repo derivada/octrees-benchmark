@@ -39,3 +39,6 @@ date,octree,point_type,encoder,npoints,operation,kernel,radius,num_searches,sequ
 2025-11-05-18:38:35,ptrOct,PointsAoS,NoEncoding,429615314,neighborsPtr,cube,0.02,429615314,sequential,1,406.84,406.84,406.84,0,0,6.89913e-310,2656,0,40,dynamic
 2025-11-05-18:51:50,ptrOct,PointsAoS,NoEncoding,429615314,neighborsPtr,cube,0.03,429615314,sequential,1,794.559,794.559,794.559,0,0,6.89913e-310,6372,0,40,dynamic
 2025-11-05-19:31:36,ptrOct,PointsAoS,NoEncoding,429615314,neighborsPtr,cube,0.05,429615314,sequential,1,2385.98,2385.98,2385.98,0,0,6.89913e-310,21426,0,40,dynamic
+2025-12-07-23:03:26,picoTree,PointsAoS,HilbertEncoder3D,429615314,neighborsPico,Sphere,0.01,429615314,sequential,1,107.796,107.796,107.796,0,1,108.437,456,0,40,dynamic
+2025-12-07-23:19:21,picoTree,PointsAoS,HilbertEncoder3D,429615314,neighborsPico,Sphere,0.025,429615314,sequential,1,476.728,476.728,476.728,0,1,478.457,3711,0,40,dynamic
+2025-12-08-00:18:56,picoTree,PointsAoS,HilbertEncoder3D,429615314,neighborsPico,Sphere,0.05,429615314,sequential,1,1787.46,1787.46,1787.46,0,1,1787.57,14526,0,40,dynamic
