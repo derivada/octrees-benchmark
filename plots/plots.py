@@ -1,28 +1,27 @@
 # Functions for generating the plots
-
-import os
-from typing import Dict, Tuple
+from typing import Dict
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 import numpy as np
-import scienceplots
-import matplotlib as mpl
 from utils import *
+from constants import *
 import scipy.stats as stats
+import matplotlib.lines as mlines
 
 def plot_locality_hist(
     datasets: Dict[str, pd.DataFrame],
     bin_size: float,
     min_dist: float,
     max_dist: float,
-    use_log: bool
+    k: int,
+    use_log: bool,
 ) -> plt.Figure: # type: ignore
     fig, ax = plt.subplots(figsize=(6,4))
     cmap = plt.get_cmap("tab10")
 
     for i, (encoder, df) in enumerate(datasets.items()):
-        encoder_str = r"$H_{" + encoder + r"}$"
+        encoder_str = r"$H_{" + str(k) + r"}^{" + encoder + r"}$"
         ax.bar(
             df["distance"],
             df["count"],
@@ -51,6 +50,7 @@ def plot_locality_hist(
     fig.tight_layout()
 
     return fig
+
 
 def plot_locality_kde(
     datasets: Dict[str, pd.DataFrame],
@@ -88,22 +88,21 @@ def filter_by_params(df: pd.DataFrame, params: Dict) -> pd.DataFrame:
     return df[mask]
 
 def plot_runtime_comparison(data_path, cloud, viz_config, encoder="all", kernel="all", 
-                            show_warmup_time=False, cols=1, figsz=(7, 10)):
+                            show_warmup_time=False, cols=1, figsz=(7, 10), algos="all"):
     
     df = get_dataset_file(data_path, cloud)
-    
-    # Pre-filter
-    radii = sorted(df['radius'].unique())
+    if algos != "all":
+        df = df[df["operation"].isin(algos)]
     
     if kernel != "all":
         if isinstance(kernel, str):
             kernel = [kernel]
         df = df[df["kernel"].isin(kernel)]
-    
-    unique_kernels = df['kernel'].unique()
-
     if encoder != "all":
         df = df[df["encoder"] == encoder]
+    
+    radii = sorted(df['radius'].unique())
+    unique_kernels = df['kernel'].unique()
 
     # Plot setup
     fig, axes = plt.subplots(int(np.ceil(len(radii)/cols)), cols, figsize=figsz,
@@ -287,7 +286,6 @@ def plot_result_sizes_runtime_log(data_path, clouds_datasets, viz_config,
     
     return fig
 
-
 def plot_knn_comparison(data_path, cloud, viz_config,
                         struct_whitelist=None, low_limit=0, high_limit=1e9,
                         label_low_limit=0, fsz=(6, 6)):
@@ -306,7 +304,9 @@ def plot_knn_comparison(data_path, cloud, viz_config,
         df = df[df["octree"].isin(struct_whitelist)]
         
     fig, ax = plt.subplots(figsize=fsz)
-    legend_handles, legend_labels = [], []
+    
+    # Changed: List to store plot info for sorting later
+    legend_items = [] 
     xticks_set = set()
 
     # Iterate through Config List
@@ -337,8 +337,16 @@ def plot_knn_comparison(data_path, cloud, viz_config,
         )
         xticks_set.update(grouped["avg_result_size"].unique())
 
-        legend_handles.append(line)
-        legend_labels.append(label)
+        # --- New Sorting Logic ---
+        # Since 'grouped' is already sorted by avg_result_size (X axis),
+        # the last row contains the rightmost value.
+        rightmost_y_val = grouped.iloc[-1]["mean"]
+
+        legend_items.append({
+            "handle": line,
+            "label": label,
+            "sort_val": rightmost_y_val
+        })
 
     ax.set_xlabel(r"$k$")
     ax.set_ylabel("Total Runtime (s)")
@@ -351,12 +359,18 @@ def plot_knn_comparison(data_path, cloud, viz_config,
         rotation=45
     )
 
-    ax.legend(legend_handles, legend_labels, loc="upper left",
+    # --- Apply Legend Sorting ---
+    # Sort descending based on the rightmost Y value (highest runtime at top)
+    legend_items.sort(key=lambda x: x["sort_val"], reverse=True)
+
+    sorted_handles = [x["handle"] for x in legend_items]
+    sorted_labels = [x["label"] for x in legend_items]
+
+    ax.legend(sorted_handles, sorted_labels, loc="upper left",
               framealpha=0.9, borderpad=0.4, handletextpad=0.4,
               labelspacing=0.25, title=None)
 
     return fig
-
 
 def plot_octree_parallelization(data_path, cloud, algo, annotated=False, encoder="HilbertEncoder3D"):
     df = get_dataset_file(data_path, cloud, "latest")
@@ -387,4 +401,181 @@ def plot_octree_parallelization(data_path, cloud, algo, annotated=False, encoder
     ax.xaxis.set_minor_locator(plt.NullLocator())
     ax.tick_params(axis="both", which="both", length=0)
     cbar.ax.tick_params(axis="y", which="both", length=0)
+    return fig
+
+def table_speedup_vs_baseline(data_path, clouds_datasets, kernel, viz_config, encoder="all"):
+    
+    dfs = read_multiple_datasets(data_path, clouds_datasets)
+    all_results = []
+
+    baseline_params = {"octree": POINTER_OCTREE, "operation": NEIGHBOURS_PTR}
+
+    # Define result size bins: [(min, max), ...]
+    bins = [(10**i, 10**(i+2)) for i in range(1, 7, 2)]
+
+    for bin_min, bin_max in bins:
+        bin_results = []
+        
+        # 1. Collect Data for all configs in this Bin
+        for config in viz_config:
+            runtimes = []
+
+            for df_name, df in dfs.items():
+                if df.empty: continue
+                
+                # General Filters
+                if kernel != "all":
+                    df = df[(df['kernel'] == kernel)]
+                
+                if encoder != "all":
+                    df = df[df["encoder"] == encoder]
+
+                # Specific Config Filter (Using the helper from previous steps)
+                struct_data = filter_by_params(df, config["params"])
+
+                if struct_data.empty: continue
+
+                # Bin Filter
+                struct_data = struct_data[
+                    (struct_data["avg_result_size"] >= bin_min) & 
+                    (struct_data["avg_result_size"] < bin_max)
+                ]
+                
+                if struct_data.empty: continue
+
+                runtimes.extend(struct_data["mean"].tolist())
+
+            avg_runtime = np.mean(runtimes) if runtimes else np.nan
+            
+            bin_results.append({
+                "config": config,
+                "avg_runtime": avg_runtime
+            })
+
+        # 2. Identify Baseline Runtime for this Bin
+        # We look for the entry in bin_results where the params match baseline_params
+        baseline_runtime = np.nan
+        for res in bin_results:
+            if res["config"]["params"] == baseline_params:
+                baseline_runtime = res["avg_runtime"]
+                break
+
+        # 3. Calculate Speedups and Build Rows
+        for res in bin_results:
+            runtime = res["avg_runtime"]
+            config = res["config"]
+            
+            # Calculate Speedup (Baseline / Current)
+            if np.isnan(runtime) or np.isnan(baseline_runtime) or runtime == 0:
+                speedup = np.nan
+            else:
+                speedup = baseline_runtime / runtime
+
+            label = config["display_name"]
+            
+            # Store raw numbers for sorting, formatted strings for display
+            all_results.append({
+                "Size Range": f"{bin_min:.0e}–{bin_max:.0e}",
+                "Structure": label,
+                "_sort_val": speedup if not np.isnan(speedup) else -1.0, # Hidden col for sorting
+                "Average Runtime (ms)": f"{runtime:.4f}" if not np.isnan(runtime) else "N/A",
+                "Speedup": f"{speedup:.2f}x" if not np.isnan(speedup) else "N/A"
+            })
+
+    # Create DataFrame
+    df_res = pd.DataFrame(all_results)
+    
+    if not df_res.empty:
+        # Sort using the numeric value to ensure "10.0x" > "2.0x"
+        df_res = df_res.sort_values(by=["Size Range", "_sort_val"], ascending=[True, False])
+        # Remove the hidden helper column
+        df_res = df_res.drop(columns=["_sort_val"])
+        
+    return df_res
+
+
+def plot_encoder_improvement(data_path, clouds_datasets, viz_config, 
+                             base_encoder, improved_encoder, 
+                             kernel="all", outlier_threshold=80,  # Added parameter
+                             fsz=(7, 7), fs_legend=14):
+    
+    dfs = read_multiple_datasets(data_path, clouds_datasets)
+    
+    all_data = pd.DataFrame()
+    for ds_name, df in dfs.items():
+        df = df.copy()
+        df['cloud'] = ds_name
+        all_data = pd.concat([all_data, df], ignore_index=True)
+
+    fig, ax = plt.subplots(figsize=fsz)
+    structure_handles = []
+    
+    for config in viz_config:
+        struct_data = filter_by_params(all_data, config["params"])
+        
+        if kernel != "all":
+            struct_data = struct_data[struct_data['kernel'] == kernel]
+            
+        if struct_data.empty:
+            continue
+
+        df_enc1 = struct_data[struct_data["encoder"] == base_encoder]
+        df_enc2 = struct_data[struct_data["encoder"] == improved_encoder]
+        
+        if df_enc1.empty or df_enc2.empty:
+            print(f"Skipping {config['display_name']}: Missing data for one of the encoders.")
+            continue
+
+        merge_cols = ['cloud', 'radius', 'kernel']
+            
+        merged_df = pd.merge(
+            df_enc1, 
+            df_enc2, 
+            on=merge_cols, 
+            suffixes=('_base', '_target'),
+            how='inner'
+        )
+        
+        if merged_df.empty:
+            print(f"Skipping {config['display_name']}: No matching {merge_cols} found.")
+            continue
+
+        # compute relative improvement from enc1 to enc2
+        t1 = merged_df['mean_base']
+        t2 = merged_df['mean_target']
+        rel_improvement = ((t1 - t2) / t1) * 100
+
+        if outlier_threshold is not None:
+            mask = rel_improvement.abs() <= outlier_threshold
+            rel_improvement = rel_improvement[mask]
+            merged_df = merged_df[mask]
+            
+            if rel_improvement.empty:
+                print(f"Skipping {config['display_name']}: All data filtered out by threshold {outlier_threshold}.")
+                continue
+
+        print(config["params"]["operation"], rel_improvement.mean())
+        
+        base_color = config["style"].get("color", "black")
+        base_marker = config["style"].get("marker", "o")
+        scatter_kwargs = {'s': 30}
+        scatter_kwargs.update(config["style"])
+        
+        ax.scatter(merged_df['avg_result_size_base'], rel_improvement, **scatter_kwargs)
+        
+        structure_handles.append(
+            mlines.Line2D([], [], color=base_color, marker=base_marker, 
+                          linestyle='None', markersize=8, label=config["display_name"])
+        )
+
+    ax.axhline(0, color='gray', linestyle='--', linewidth=1)
+    ax.set_xscale("log")
+    ax.set_xlabel(r"$\mu$", fontsize=16)
+    ax.set_ylabel(r"Relative Improvement ($\%$)", fontsize=14)
+    
+    ax.tick_params(axis='both', which='major', labelsize=12)
+    ax.grid(True, which="both", ls="-", alpha=0.2)
+    
+    ax.legend(handles=structure_handles, loc="best", fontsize=fs_legend, framealpha=0.5)
+    
     return fig

@@ -131,15 +131,23 @@ void outputReorderings(std::ofstream &outputFilePoints, std::ofstream &outputFil
 
     // Output reordered points
     outputFilePoints << std::fixed << std::setprecision(3); 
+    size_t progress = 0, percent = 0;
     for(size_t i = 0; i<points.size(); i++) {
         outputFilePoints <<  points[i].getX() << "," << points[i].getY() << "," << points[i].getZ() << "\n";
+        progress++;
+        if(progress >= points.size()/100){
+            percent++;
+            std::cout << percent << "% of points written for " << encoderTypeToString(encoding) << std::endl;
+            progress = 0;
+        }
     }
-
+    std::cout << "All points written, building and logging octree" << std::endl;
     if(encoding != EncoderType::NO_ENCODING) {
         // Build linear octree and output bounds
         auto oct = LinearOctree(points, codes, box, enc);
         oct.logOctreeBounds(outputFileOct, 6);
     }
+    std::cout << "Logging done for " << encoderTypeToString(encoding) << std::endl;
 }
 
 /// @brief just a debugging method for checking correct knn impl
@@ -339,47 +347,47 @@ int main(int argc, char *argv[]) {
             }
             // Run search benchmarks
             if(mainOptions.containerType == ContainerType::AoS) {
-                for(EncoderType enc: mainOptions.encodings)
+                for(EncoderType enc: mainOptions.encodings){
                     searchBenchmark<PointsAoS>(outputFile, enc);  
+                }
             } else {
                 for(EncoderType enc: mainOptions.encodings)
                     searchBenchmark<PointsSoA>(outputFile, enc);  
             }
         }
     } else {
-        if(mainOptions.containerType == ContainerType::AoS) {
-            testContainersMemLayout<PointsAoS>(HILBERT_ENCODER_3D);  
-        } else {
-            testContainersMemLayout<PointsSoA>(HILBERT_ENCODER_3D);  
-        }
+        // if(mainOptions.containerType == ContainerType::AoS) {
+        //     testContainersMemLayout<PointsAoS>(HILBERT_ENCODER_3D);  
+        // } else {
+        //     testContainersMemLayout<PointsSoA>(HILBERT_ENCODER_3D);  
+        // }
         // if(mainOptions.containerType == ContainerType::AoS) {
         //     testKNN<PointsAoS>(HILBERT_ENCODER_3D);  
         // } else {
         //     testKNN<PointsSoA>(HILBERT_ENCODER_3D);  
         // }
         // Output encoded point clouds to the files (for plots and such)
-        // std::filesystem::path unencodedPath = mainOptions.outputDirName / "output_unencoded.csv";
-        // std::filesystem::path mortonPath = mainOptions.outputDirName / "output_morton.csv";
+        //std::filesystem::path unencodedPath = mainOptions.outputDirName / "output_unencoded.csv";
+        std::filesystem::path mortonPath = mainOptions.outputDirName / "output_morton.csv";
         // std::filesystem::path hilbertPath = mainOptions.outputDirName / "output_hilbert.csv";
-        // std::filesystem::path unencodedPathOct = mainOptions.outputDirName / "output_unencoded_oct.csv";
-        // std::filesystem::path mortonPathOct = mainOptions.outputDirName / "output_morton_oct.csv";
+        //std::filesystem::path unencodedPathOct = mainOptions.outputDirName / "output_unencoded_oct.csv";
+        std::filesystem::path mortonPathOct = mainOptions.outputDirName / "output_morton_oct.csv";
         // std::filesystem::path hilbertPathOct = mainOptions.outputDirName / "output_hilbert_oct.csv";
-        // std::ofstream unencodedFile(unencodedPath);
-        // std::ofstream mortonFile(mortonPath);
+        //std::ofstream unencodedFile(unencodedPath);
+        std::ofstream mortonFile(mortonPath);
         // std::ofstream hilbertFile(hilbertPath);
-        // std::ofstream unencodedFileOct(unencodedPathOct);
-        // std::ofstream mortonFileOct(mortonPathOct);
+        //std::ofstream unencodedFileOct(unencodedPathOct);
+        std::ofstream mortonFileOct(mortonPathOct);
         // std::ofstream hilbertFileOct(hilbertPathOct);
-        
-        // if (!unencodedFile.is_open() || !mortonFile.is_open() || !hilbertFile.is_open() || 
-        //     !unencodedFileOct.is_open() || !mortonFileOct.is_open() || !hilbertFileOct.is_open()) {
-        //     throw std::ios_base::failure("Failed to open output files");
-        // }
-        
-        // std::cout << "Output files created successfully." << std::endl;
-        // outputReorderings(unencodedFile, unencodedFileOct);  
-        // outputReorderings(mortonFile, mortonFileOct, EncoderType::MORTON_ENCODER_3D);  
-        // outputReorderings(hilbertFile, hilbertFileOct, EncoderType::HILBERT_ENCODER_3D);  
+        if(mainOptions.containerType == ContainerType::AoS) {
+            // outputReorderings<PointsAoS>(unencodedFile, unencodedFileOct, EncoderType::NO_ENCODING);  
+            outputReorderings<PointsAoS>(mortonFile, mortonFileOct, EncoderType::MORTON_ENCODER_3D);  
+            // outputReorderings<PointsAoS>(hilbertFile, hilbertFileOct, EncoderType::HILBERT_ENCODER_3D);  
+        } else {
+            // outputReorderings<PointsSoA>(unencodedFile, unencodedFileOct, EncoderType::NO_ENCODING);  
+            outputReorderings<PointsSoA>(mortonFile, mortonFileOct, EncoderType::MORTON_ENCODER_3D);  
+            // outputReorderings<PointsSoA>(hilbertFile, hilbertFileOct, EncoderType::HILBERT_ENCODER_3D);  
+        }
     }
 
     return EXIT_SUCCESS;

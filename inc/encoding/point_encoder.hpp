@@ -24,15 +24,16 @@ public:
     virtual key_t encode(coords_t x, coords_t y, coords_t z) const = 0;
     virtual void encodeVectorized(const uint32_t *x, const uint32_t *y, const uint32_t *z, std::vector<key_t> &keys, size_t i) const=0;
     virtual void decode(key_t code, coords_t &x, coords_t &y, coords_t &z) const = 0;
-
+    
     virtual uint32_t maxDepth() const = 0;
     virtual double eps() const = 0;
     virtual key_t upperBound() const = 0;
     virtual uint32_t unusedBits() const = 0;
-    virtual EncoderType getEncoder() const =0; 
+    virtual EncoderType getEncoder() const = 0; 
     virtual std::string getEncoderName() const = 0;
     virtual std::string getShortEncoderName() const = 0;
-
+    virtual bool is3D() const = 0;
+    
     inline void getAnchorCoords(const Point& p, const Box &bbox, 
         coords_t &x, coords_t &y, coords_t &z) const  {
         // Put physical coords into the unit cube

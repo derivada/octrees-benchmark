@@ -36,5 +36,6 @@ class NoEncoding : public PointEncoder {
     inline EncoderType getEncoder() const override { return EncoderType::NO_ENCODING; };
     inline std::string getEncoderName() const { return "NoEncoding"; };
     inline std::string getShortEncoderName() const { return "none"; };
+    inline bool is3D() const override { return false; };
 };
 };

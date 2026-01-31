@@ -81,8 +81,8 @@ class EncodingBuildBenchmarks {
                 }
                 case SearchStructure::LINEAR_OCTREE: {
                     double totalLeaf = 0.0, totalInternal = 0.0;
-                    if(enc.getShortEncoderName() == encoderTypeToString(EncoderType::NO_ENCODING)) {
-                        std::cout << "  Skipping Linear Octree since point cloud was not reordered!" << std::endl;
+                    if(!enc.is3D()) {
+                        std::cout << "  Skipping Linear Octree since encoder is not 3D!" << std::endl;
                         return;
                     } else {
                         bool insideWarmup = mainOptions.useWarmup;

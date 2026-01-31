@@ -61,7 +61,7 @@ def get_dataset_file(data_path, cloud_name, timestamp="latest"):
     csv_folder = os.path.join(data_path, cloud_name)
     csv_files = glob.glob(os.path.join(csv_folder, "*.csv"))
     df = None
-
+    print(csv_folder)
     if not csv_files:
         raise FileNotFoundError(f"No CSV files found in the folder: {csv_folder}")
 
@@ -126,7 +126,7 @@ def output_fig(fig: plt.Figure, output_folder: str, filename: str) -> None: # ty
     os.makedirs(output_folder, exist_ok=True)
     # Save the figure
     filepath = os.path.join(output_folder, filename + ".pdf")
-    fig.savefig(filepath, dpi=OUTPUT_DPI, bbox_inches='tight')
+    fig.savefig(filepath, dpi=OUTPUT_DPI, bbox_inches='tight', pad_inches=0)
     plt.close(fig)
 
 

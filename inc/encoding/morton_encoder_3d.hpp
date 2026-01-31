@@ -18,6 +18,7 @@ namespace PointEncoding {
 * 
 */
 class MortonEncoder3D : public PointEncoder {
+
     /// @brief The maximum depth that this encoding allows (in Morton 64 bit integers, we need 3 bits for each level, so 21)
     static constexpr unsigned MAX_DEPTH = 21;
 
@@ -59,5 +60,6 @@ class MortonEncoder3D : public PointEncoder {
     inline EncoderType getEncoder() const override { return EncoderType::MORTON_ENCODER_3D; };
     inline std::string getEncoderName() const override { return "MortonEncoder3D"; };
     inline std::string getShortEncoderName() const override { return "mort"; };
+    inline bool is3D() const override { return true; };
 };
 };

@@ -1,19 +1,19 @@
 import seaborn as sns
 
 # Names of algorithms, structures and encoders
-NEIGHBORS_PTR = "neighborsPtr"
-NEIGHBORS = "neighbors"
-NEIGHBORS_PRUNE = "neighborsPrune"
-NEIGHBORS_STRUCT = "neighborsStruct"
-NEIGHBORS_PCLOCT = "neighborsPclOct"
-NEIGHBORS_PCLKD = "neighborsPclKD"
-NEIGHBORS_UNIBN = "neighborsUnibn"
-NEIGHBORS_NANOFLANN = "neighborsNanoflann"
-NEIGHBORS_PICO = "neighborsPico"
+NEIGHBOURS_PTR = "neighboursPtr"
+NEIGHBOURS = "neighbours"
+NEIGHBOURS_PRUNE = "neighboursPrune"
+NEIGHBOURS_STRUCT = "neighboursStruct"
+NEIGHBOURS_PCLOCT = "neighboursPCLOct"
+NEIGHBOURS_PCLKD = "neighboursPCLKD"
+NEIGHBOURS_UNIBN = "neighboursUnibn"
+NEIGHBOURS_NANOFLANN = "neighboursNanoflann"
+NEIGHBOURS_PICO = "neighboursPico"
 
 LINEAR_OCTREE = "linOct"
 POINTER_OCTREE = "ptrOct"
-UNIBN_OCTREE = "unibnOctree"
+UNIBN_OCTREE = "uniOct"
 PCL_KDTREE = "pclKD"
 PCL_OCTREE = "pclOct"
 NANOFLANN_KDTREE = "nanoKD"
@@ -40,114 +40,145 @@ RADII_HIGH_DENSITY = {0.01, 0.05, 0.1}
 ALL_CLOUDS = CLOUDS_DATASETS.copy()
 ALL_CLOUDS.update(CLOUDS_DATASETS_HIGH_DENSITY)
 
-# Palettes
-palette_radius = sns.color_palette("tab10")
-palette_knn = sns.color_palette("Set2")
+palette = sns.color_palette("tab10")
 
 # Visualization configurations
 OCTREE_ENCODER = [
     {
         "params": {"octree": POINTER_OCTREE, "encoder": NO_ENCODER},
         "style": {"color": '#e1a692'},
-        "display_name": r'\textit{poct\_none}'
+        "display_name": r'\textit{ptrNone}'
     },
     {
         "params": {"octree": POINTER_OCTREE, "encoder": MORTON_ENCODER},
         "style": {"color": '#de6e56'},
-        "display_name": r'\textit{poct\_mort}'
+        "display_name": r'\textit{ptrMort}'
     },
     {
         "params": {"octree": POINTER_OCTREE, "encoder": HILBERT_ENCODER},
         "style": {"color": '#c23728'},
-        "display_name": r'\textit{poct\_hilb}'
+        "display_name": r'\textit{ptrHilb}'
     },
     {
         "params": {"octree": LINEAR_OCTREE, "encoder": MORTON_ENCODER},
         "style": {"color": '#63bff0'},
-        "display_name": r'\textit{loct\_mort}'
+        "display_name": r'\textit{linMort}'
     },
     {
         "params": {"octree": LINEAR_OCTREE, "encoder": HILBERT_ENCODER},
         "style": {"color": '#1984c5'},
-        "display_name": r'\textit{loct\_hilb}'
+        "display_name": r'\textit{linHilb}'
     }
 ]
 
-OUR_RADIUS = [
+LINEAR_OCTREE_RADIUS = [
     {
-        "params": {"octree": LINEAR_OCTREE, "operation": NEIGHBORS_STRUCT},
-        "style": {"color": palette_radius[0], "marker": 'o'},
-        "display_name": r'\textit{neighborsStruct}'
+        "params": {"octree": LINEAR_OCTREE, "operation": NEIGHBOURS_STRUCT},
+        "style": {"color": palette[0], "marker": 'o'},
+        "display_name": r'\textit{neighboursStruct}'
     },
     {
-        "params": {"octree": LINEAR_OCTREE, "operation": NEIGHBORS_PRUNE},
-        "style": {"color": palette_radius[1], "marker": 'o'},
-        "display_name": r'\textit{neighborsPrune}'
+        "params": {"octree": LINEAR_OCTREE, "operation": NEIGHBOURS_PRUNE},
+        "style": {"color": palette[1], "marker": 'o'},
+        "display_name": r'\textit{neighboursPrune}'
     },
     {
-        "params": {"octree": LINEAR_OCTREE, "operation": NEIGHBORS},
-        "style": {"color": palette_radius[2], "marker": 'o'},
-        "display_name": r'\textit{neighbors}'
-    },
+        "params": {"octree": LINEAR_OCTREE, "operation": NEIGHBOURS},
+        "style": {"color": palette[2], "marker": 'o'},
+        "display_name": r'\textit{neighboursLin}'
+    }
+]
+
+POINTER_OCTREE_RADIUS = [
     {
-        "params": {"octree": POINTER_OCTREE, "operation": NEIGHBORS_PTR},
-        "style": {"color": palette_radius[3], "marker": 'o'},
-        "display_name": r'\textit{neighborsPtr}'
+        "params": {"octree": POINTER_OCTREE, "operation": NEIGHBOURS_PTR},
+        "style": {"color": palette[3], "marker": 'o'},
+        "display_name": r'\textit{neighboursPtr}'
     },
 ]
 
+OUR_RADIUS = LINEAR_OCTREE_RADIUS + POINTER_OCTREE_RADIUS
+
 ALL_RADIUS = OUR_RADIUS + [
     {
-        "params": {"octree": UNIBN_OCTREE, "operation": NEIGHBORS_UNIBN},
-        "style": {"color": palette_radius[4], "marker": 'o'},
-        "display_name": r'\textit{unibn Octree}'
+        "params": {"octree": UNIBN_OCTREE, "operation": NEIGHBOURS_UNIBN},
+        "style": {"color": palette[4], "marker": 'o'},
+        "display_name": r'\textit{neighboursUnibn}'
     },
     {
-        "params": {"octree": PCL_OCTREE, "operation": NEIGHBORS_PCLOCT},
-        "style": {"color": palette_radius[5], "marker": 'o'},
-        "display_name": r'\textit{PCL Octree}'
+        "params": {"octree": PCL_OCTREE, "operation": NEIGHBOURS_PCLOCT},
+        "style": {"color": palette[5], "marker": 'o'},
+        "display_name": r'\textit{neighboursPCLOct}'
     },
     {
-        "params": {"octree": PCL_KDTREE, "operation": NEIGHBORS_PCLKD},
-        "style": {"color": palette_radius[6], "marker": 'o'},
-        "display_name": r'\textit{PCL KD-tree}'
+        "params": {"octree": PCL_KDTREE, "operation": NEIGHBOURS_PCLKD},
+        "style": {"color": palette[6], "marker": 'o'},
+        "display_name": r'\textit{neighboursPCLKD}'
     },
     {
-        "params": {"octree": NANOFLANN_KDTREE, "operation": NEIGHBORS_NANOFLANN},
-        "style": {"color": palette_radius[7], "marker": 'o'},
-        "display_name": r'\textit{Nanoflann KD-tree}'
+        "params": {"octree": NANOFLANN_KDTREE, "operation": NEIGHBOURS_NANOFLANN},
+        "style": {"color": palette[7], "marker": 'o'},
+        "display_name": r'\textit{neighboursNano}'
     },
     {
-        "params": {"octree": PICO_KDTREE, "operation": NEIGHBORS_PICO},
-        "style": {"color": palette_radius[8], "marker": 'o'},
-        "display_name": r'\textit{Pico KD-tree}'
+        "params": {"octree": PICO_KDTREE, "operation": NEIGHBOURS_PICO},
+        "style": {"color": palette[8], "marker": 'o'},
+        "display_name": r'\textit{neighboursPico}'
+    }
+]
+
+OTHER_RADIUS = [
+    {
+        "params": {"octree": UNIBN_OCTREE, "operation": NEIGHBOURS_UNIBN},
+        "style": {"color": palette[4], "marker": 'o'},
+        "display_name": r'\textit{neighboursUnibn}'
+    },
+    {
+        "params": {"octree": PCL_OCTREE, "operation": NEIGHBOURS_PCLOCT},
+        "style": {"color": palette[5], "marker": 'o'},
+        "display_name": r'\textit{neighboursPCLOct}'
+    },
+    {
+        "params": {"octree": PCL_KDTREE, "operation": NEIGHBOURS_PCLKD},
+        "style": {"color": palette[6], "marker": 'o'},
+        "display_name": r'\textit{neighboursPCLKD}'
+    },
+    {
+        "params": {"octree": NANOFLANN_KDTREE, "operation": NEIGHBOURS_NANOFLANN},
+        "style": {"color": palette[7], "marker": 'o'},
+        "display_name": r'\textit{neighboursNano}'
+    },
+    {
+        "params": {"octree": PICO_KDTREE, "operation": NEIGHBOURS_PICO},
+        "style": {"color": palette[8], "marker": 'o'},
+        "display_name": r'\textit{neighboursPico}'
     }
 ]
 
 ALL_KNN = [
     {
         "params": {"octree": LINEAR_OCTREE},
-        "style": {"color": palette_knn[0], "marker": 'o'},
-        "display_name": r'\textit{linOctKNN}'
+        "style": {"color": palette[0], "marker": 'o'},
+        "display_name": r'\textit{knnLinOct}'
     },
     {
         "params": {"octree": PCL_OCTREE},
-        "style": {"color": palette_knn[1], "marker": 'o'},
-        "display_name": r'\textit{pclOctKNN}'
+        "style": {"color": palette[5], "marker": 'o'},
+        "display_name": r'\textit{knnPCLOct}'
     },
     {
         "params": {"octree": PCL_KDTREE},
-        "style": {"color": palette_knn[2], "marker": 'o'},
-        "display_name": r'\textit{pclKdKNN}'
+        "style": {"color": palette[6], "marker": 'o'},
+        "display_name": r'\textit{knnPCLKD}'
     },
     {
         "params": {"octree": NANOFLANN_KDTREE},
-        "style": {"color": palette_knn[3], "marker": 'o'},
-        "display_name": r'\textit{nanoflannKNN}'
+        "style": {"color": palette[7], "marker": 'o'},
+        "display_name": r'\textit{knnNano}'
     },
     {
         "params": {"octree": PICO_KDTREE},
-        "style": {"color": palette_knn[4], "marker": 'o'},
-        "display_name": r'\textit{picoKNN}'
+        "style": {"color": palette[8], "marker": 'o'},
+        "display_name": r'\textit{knnPico}'
     }
 ]

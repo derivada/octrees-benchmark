@@ -476,7 +476,7 @@ class NeighborsBenchmark {
                             std::vector<size_t> indexes(k);
                             std::vector<double> distances(k);
                             const size_t nMatches = oct.template knn (points[searchIndexes[i]], k, indexes, distances);
-                            averageResultSize += nMatches; // only here so the call is not optimized
+                            averageResultSize += nMatches;
                         }
                     averageResultSize /= searchSet.numSearches;
                     searchSet.nextRepeat();
@@ -513,15 +513,9 @@ class NeighborsBenchmark {
                     
                     #pragma omp parallel for schedule(runtime) reduction(+:averageResultSize)
                     for(size_t i = 0; i < searchSet.numSearches; i++) {
-                        // PicoTree's default metric is L2 Squared. 
-                        // We must square the linear radius provided by the benchmark options.
                         auto squared_radius = radius * radius;
-                        
-                        // Vector to store results (pair of index, distance)
                         std::vector<typename pico_tree::kd_tree<Container>::neighbor_type> results;
-                        
                         tree.search_radius(points[searchIndexes[i]], squared_radius, results);
-                        
                         averageResultSize += results.size();
                     }
 
@@ -704,8 +698,8 @@ class NeighborsBenchmark {
                         initializeBenchmarkPtrOctree();
                     break;
                     case SearchStructure::LINEAR_OCTREE:
-                        if(enc.getShortEncoderName() == encoderTypeToString(EncoderType::NO_ENCODING)) {
-                            std::cout << "Skipping Linear Octree since point cloud was not reordered!" << std::endl;
+                        if(!enc.is3D()) {
+                            std::cout << "Skipping Linear Octree since reordering is not 3D!" << std::endl;
                         } else {
                             initializeBenchmarkLinearOctree();
                         }
@@ -723,6 +717,7 @@ class NeighborsBenchmark {
                     break;
                     case SearchStructure::NANOFLANN_KDTREE:
                         initializeBenchmarkNanoflannKDTree();
+                    break;
                     case SearchStructure::PICOTREE:
                         initializeBenchmarkPicoTree();
                     break;

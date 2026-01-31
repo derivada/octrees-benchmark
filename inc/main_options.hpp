@@ -70,12 +70,28 @@ constexpr std::pair<SearchAlgo, SearchStructure> algoToStructureMap[] = {
 	{ SearchAlgo::KNN_PICOTREE,			SearchStructure::PICOTREE }
 };
 
-enum EncoderType { MORTON_ENCODER_3D, HILBERT_ENCODER_3D, NO_ENCODING };
+enum EncoderType { 
+	NO_ENCODING, 
+	MORTON_ENCODER_3D, 
+	MORTON_ENCODER_2D_X, 
+	MORTON_ENCODER_2D_Y, 
+	MORTON_ENCODER_2D_Z, 
+	HILBERT_ENCODER_3D, 
+	HILBERT_ENCODER_2D_X, 
+	HILBERT_ENCODER_2D_Y,
+	HILBERT_ENCODER_2D_Z 
+};
 
 constexpr std::pair<EncoderType, std::string_view> encoderTypeMap[] = {
-    { EncoderType::NO_ENCODING,       	"none" },
-    { EncoderType::MORTON_ENCODER_3D,   "mort" },
-    { EncoderType::HILBERT_ENCODER_3D,  "hilb" }
+    { EncoderType::NO_ENCODING,       		"none" },
+    { EncoderType::MORTON_ENCODER_3D,   	"mort" },
+    { EncoderType::MORTON_ENCODER_2D_X,   	"mort_2d_x" },
+    { EncoderType::MORTON_ENCODER_2D_Y,   	"mort_2d_y" },
+    { EncoderType::MORTON_ENCODER_2D_Z,   	"mort_2d_z" },
+    { EncoderType::HILBERT_ENCODER_3D,  	"hilb" },
+    { EncoderType::HILBERT_ENCODER_2D_X,   	"hilb_2d_x" },
+    { EncoderType::HILBERT_ENCODER_2D_Y,   	"hilb_2d_y" },
+    { EncoderType::HILBERT_ENCODER_2D_Z,   	"hilb_2d_z" },
 };
 
 enum class Kernel_t
@@ -167,7 +183,18 @@ public:
 	std::set<Kernel_t> kernels{Kernel_t::sphere, Kernel_t::circle, Kernel_t::cube, Kernel_t::square};
 	std::set<SearchAlgo> searchAlgos{SearchAlgo::NEIGHBORS_PTR, SearchAlgo::NEIGHBORS, SearchAlgo::NEIGHBORS_PRUNE, SearchAlgo::NEIGHBORS_STRUCT};
 	std::set<SearchStructure> searchStructures{SearchStructure::PTR_OCTREE, SearchStructure::LINEAR_OCTREE};
-	std::set<EncoderType> encodings{EncoderType::NO_ENCODING, EncoderType::MORTON_ENCODER_3D, EncoderType::HILBERT_ENCODER_3D};
+	std::set<EncoderType> encodings{
+		EncoderType::NO_ENCODING, 
+		EncoderType::MORTON_ENCODER_3D, 
+		EncoderType::MORTON_ENCODER_2D_X, 
+		EncoderType::MORTON_ENCODER_2D_Y, 
+		EncoderType::MORTON_ENCODER_2D_Z, 
+		EncoderType::HILBERT_ENCODER_3D,
+		EncoderType::HILBERT_ENCODER_2D_X, 
+		EncoderType::HILBERT_ENCODER_2D_Y, 
+		EncoderType::HILBERT_ENCODER_2D_Z, 
+	};
+
 
 	bool debug{false};
 	bool buildEncBenchmarks{false};

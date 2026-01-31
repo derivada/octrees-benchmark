@@ -302,6 +302,7 @@ public:
     inline EncoderType getEncoder() const override { return EncoderType::HILBERT_ENCODER_3D; };
     inline std::string getEncoderName() const override { return "HilbertEncoder3D"; };
     inline std::string getShortEncoderName() const override { return "hilb"; };
+    inline bool is3D() const override { return true; };
 };
 
 } // namespace PointEncoding
