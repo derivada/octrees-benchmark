@@ -16,7 +16,10 @@ LiDAR (Light and Ranging Detection) technology has now become the quintessential
     Now we clone the repo and build:
     ```bash
     git clone --depth 1 https://github.com/LAStools/LAStools lib/LAStools
-    (cd lib/LAStools && cmake . && make)
+    (cd lib/LAStools && cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=$PWD/../LASlib . && cmake --build build -- -j && cmake --install build)
+    rm -rf lib/LAStools
+    ```
+    
 - PCL version 1.15 (Optional) 
     Get 1.15 source code from  `https://github.com/PointCloudLibrary/pcl/releases` and build it. The folder were we installed it is `~/local/pcl`, but that can be changed to any other folder, with an appropiate change in `CMakeLibraries.cmake`. Can also change the version to look for in that file.
     ```bash
