@@ -17,35 +17,43 @@
 
 #pragma once
 
-#include "Geometry/point.hpp"
 #include <algorithm>
+#include <cstdint>
+#include <iomanip>
 #include <numbers>
 #include <numeric>
-#include <iomanip>
-#include <cstdint>
+#include <papi.h>
+
+#include "geometry/point.hpp"
+#include "geometry/point_containers.hpp"
+
 
 constexpr size_t LOG_FIELD_WIDTH = 32;
 
-template<typename T>
-bool checkMemoryAlligned(std::vector<T> vec) {
-  void* data = vec.data();
-	constexpr std::size_t CACHE_LINE_SIZE = 64; // Typical cache line size
-  return (reinterpret_cast<std::uintptr_t>(data) % CACHE_LINE_SIZE == 0);
-}
+// TODO
+// template<typename T>
+// bool checkMemoryAlligned(std::vector<T> vec) {
+//   void* data = vec.data();
+// 	constexpr std::size_t CACHE_LINE_SIZE = 64; // Typical cache line size
+//   return (reinterpret_cast<std::uintptr_t>(data) % CACHE_LINE_SIZE == 0);
+// }
 
 size_t vectorMemorySize(const auto& vec) {
 	return sizeof(vec) + vec.size() * sizeof(typename std::decay_t<decltype(vec)>::value_type);
 }
 
-template <typename Point_t>
-std::vector<Point_t> generateGridCloud(size_t n) {
-    std::vector<Point_t> points;
-    points.reserve(n * n * n);
-    for (size_t i = 0; i < n; i++)
-        for (size_t j = 0; j < n; j++)
+template <PointContainer Container>
+Container generateGridCloud(size_t n) {
+    Container points(n * n * n);
+
+    for (size_t i = 0; i < n; i++) {
+        for (size_t j = 0; j < n; j++) {
             for (size_t k = 0; k < n; k++) {
-                points.push_back(Point_t(i * n * n + j * n + k, i, j, k));
+                size_t idx = i * n * n + j * n + k;
+                points[idx] = Point(i, j, k);  // assign into flat index
             }
+        }
+    }
 
     return points;
 }
@@ -208,3 +216,4 @@ inline void progressNumber(size_t progress) {
     std::cout << "Points read: " << progress << "\r";
     std::cout.flush();
 }
+

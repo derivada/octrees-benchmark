@@ -39,5 +39,13 @@ target_link_libraries(${PROJECT_NAME}
         PRIVATE
         ${PCL_LIBRARIES})
 
+target_link_libraries(${PROJECT_NAME} PRIVATE ${PAPI_LIBRARY})
+target_include_directories(${PROJECT_NAME} PRIVATE ${PAPI_INCLUDE_DIR})
+
+# PicoTree
+if (TARGET pico_tree)
+    target_link_libraries(${PROJECT_NAME} PRIVATE pico_tree)
+endif()
+
 # Set Link Time Optimization (LTO)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -flto=auto")

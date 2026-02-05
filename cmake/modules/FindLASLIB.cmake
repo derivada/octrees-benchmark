@@ -4,16 +4,23 @@
 #  LASLIB_LIBRARIES, the libraries to link against to use the LASlib library.
 #  LASLIB_LIBRARY_DIRS, the directory where the LASlib library is found.
 
+message(STATUS "CMAKE_SOURCE_DIR = ${CMAKE_SOURCE_DIR}")
+
+
 find_path(LASLIB_INCLUDE_DIR
         lasreader.hpp
         HINTS ${CMAKE_SOURCE_DIR}/lib/LAStools/LASlib/inc)
+message(STATUS "LASLIB_INCLUDE_DIR = ${LASLIB_INCLUDE_DIR}")
+
 find_path(LASZIP_INCLUDE_DIR
         mydefs.hpp
         HINTS ${CMAKE_SOURCE_DIR}/lib/LAStools/LASzip/src)
+message(STATUS "LASZIP_INCLUDE_DIR = ${LASZIP_INCLUDE_DIR}")
 
 find_path(LASZIP_INCLUDE_DIR_2
         laszip_common.h
-        HINTS ${CMAKE_SOURCE_DIR}/lidb/LAStools/LASzip/include/laszip)
+        HINTS ${CMAKE_SOURCE_DIR}/lib/LAStools/LASzip/include/laszip)
+message(STATUS "LASZIP_INCLUDE_DIR_2 = ${LASZIP_INCLUDE_DIR_2}")
 
 if (LASLIB_INCLUDE_DIR)
     find_library(LASLIB_LIBRARY

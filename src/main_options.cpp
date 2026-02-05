@@ -1,10 +1,13 @@
-#include "main_options.hpp"
-#include <sstream>
 #include <cstdlib>
+#include <optional>
 #include <set>
-#include "NeighborKernels/KernelFactory.hpp"
+#include <sstream>
 #include <unordered_map>
-#include "PointEncoding/point_encoder_factory.hpp"
+
+#include "encoding/point_encoder_factory.hpp"
+#include "kernels/kernel_factory.hpp"
+#include "main_options.hpp"
+
 main_options mainOptions{};
 
 void printHelp() {
@@ -12,8 +15,10 @@ void printHelp() {
 		<< "Main options:\n"
 		<< "-h, --help: Show help message\n"
 		<< "-i, --input: Path to input file\n"
+		<< "-c, --container-type: Container type to use, possible values. Default: AoS. Possible values: SoA, AoS.\n"
 		<< "-o, --output: Path to output file\n"
 		<< "-r, --radii: Benchmark radii (comma-separated, e.g., '2.5,5.0,7.5')\n"
+		<< "-v, --kvalues: kNN benchmark k's (comma-separated, e.g., '10,50,250,1000')\n"
 		<< "-s, --searches: Number of searches (random centers unless --sequential is set), type 'all' to search over the whole cloud (with sequential indexing)\n"
 		<< "-t, --repeats: Number of repeats to do for each benchmark\n"
 		<< "-k, --kernels: Specify which kernels to use (comma-separated or 'all'). Possible values: sphere, cube, square, circle\n"
@@ -26,6 +31,12 @@ void printHelp() {
 		<< "    'neighborsUnibn'     - unibnOctree search\n"
 		<< "    'neighborsPCLKD'     - PCL KD-tree search (if available)\n"
 		<< "    'neighborsPCLOct'    - PCL Octree search (if available)\n"
+		<< "    'neighborsPico'      - PicoTree search\n"
+		<< "	'KNNV2' 		     - linear octree KNN searches\n"
+		<< "	'KNNNanoflann'		 - nanoflann KNN searches\n"
+		<< "	'KNNPCLKD'			 - PCL KD-tree KNN search (if available)\n"
+		<< "	'KNNPCLOCT'			 - PCL Octree KNN search (if available)\n"
+		<< "	'KNNPico'			 - PicoTree KNN search\n"
 		<< "-e, --encodings: Select SFC encodings to reorder the cloud before the searches (comma-separated or 'all'). Default: all. Possible values:\n"
 		<< "    'none'  - no encoding; disables Linear Octree building for those runs\n"
 		<< "    'mort'  - Morton SFC Reordering\n"
@@ -33,6 +44,10 @@ void printHelp() {
 
 		<< "Other options:\n"
 		<< "--debug: Enable debug mode (measures octree build and encoding times)\n"
+		<< "--build-enc: Run benchmarks for the encoding and build of selected structures (the ones with a representative on -a / --search-algo)\n"
+		<< "--memory: Run a simple benchmark for measuring the memory consumed by an structure, so heap profiling can be easy. Possible values: ptrOct,linOct,unibnOct,nanoKD,pclOct,pclKD,picoTree\n"
+		<< "--locality: Run benchmarks for the analyzing the locality of the point cloud after given reorderings\n"
+		<< "--cache-profiling: Enable cache profiling during search algo. executions using PAPI\n"
 		<< "--check: Enable result checking (legacy option; use avg_result_size to verify correctness)\n"
 		<< "--no-warmup: Disable warmup phase\n"
 		<< "--approx-tol: Tolerance values for approximate search (comma-separated e.g., '10.0,50.0,100.0')\n"
@@ -42,6 +57,34 @@ void printHelp() {
 		<< "--max-leaf: Max number of points per octree leaf (default = 128). Does not apply to PCL Octree\n"
 		<< "--pcl-oct-resolution: Min octant size for subdivision in PCL Octree\n";
 	exit(1);
+}
+
+SearchStructure structureFromString(std::string_view str) {
+    for (const auto& [key, val] : structureMap) {
+        if (val == str) return key;
+    }
+    throw std::invalid_argument("Unknown search algorithm: " + std::string(str));
+}
+
+SearchAlgo searchAlgoFromString(std::string_view str) {
+    for (const auto& [key, val] : searchAlgoMap) {
+        if (val == str) return key;
+    }
+    throw std::invalid_argument("Unknown search algorithm: " + std::string(str));
+}
+
+EncoderType encoderTypeFromString(std::string_view str) {
+    for (const auto& [key, val] : encoderTypeMap) {
+        if (val == str) return key;
+    }
+    throw std::invalid_argument("Unknown encoder type: " + std::string(str));
+}
+
+Kernel_t kernelFromString(std::string_view str) {
+    for (const auto& [key, val] : kernelMap) {
+        if (val == str) return key;
+    }
+    throw std::invalid_argument("Unknown kernel type: " + std::string(str));
 }
 
 template <typename T>
@@ -58,71 +101,30 @@ std::vector<T> readVectorArg(const std::string& vStr)
 	return v;
 }
 
-std::set<Kernel_t> parseKernelOptions(const std::string& kernelStr) {
-    static const std::unordered_map<std::string, Kernel_t> kernelMap = {
-        {"sphere", Kernel_t::sphere},
-        {"circle", Kernel_t::circle},
-        {"cube", Kernel_t::cube},
-        {"square", Kernel_t::square}
-    };
-
-    std::set<Kernel_t> selectedKernels;
-
-    if (kernelStr == "all") {
-        for (const auto& [key, value] : kernelMap) {
-            selectedKernels.insert(value);
-        }
-    } else {
-        std::stringstream ss(kernelStr);
-        std::string token;
-        while (std::getline(ss, token, ',')) {
-            auto it = kernelMap.find(token);
-            if (it != kernelMap.end()) {
-                selectedKernels.insert(it->second);
-            } else {
-                std::cerr << "Warning: Unknown kernel '" << token << "' ignored.\n";
-            }
-        }
-    }
-
-    return selectedKernels;
-}
 
 std::set<SearchAlgo> parseSearchAlgoOptions(const std::string& algoStr) {
-    static const std::unordered_map<std::string, SearchAlgo> algoMap = {
-		{"neighborsPtr", SearchAlgo::NEIGHBORS_PTR},
-        {"neighbors", SearchAlgo::NEIGHBORS},
-        {"neighborsPrune", SearchAlgo::NEIGHBORS_PRUNE},
-        {"neighborsStruct", SearchAlgo::NEIGHBORS_STRUCT},
-		{"neighborsApprox", SearchAlgo::NEIGHBORS_APPROX},
-		{"neighborsUnibn", SearchAlgo::NEIGHBORS_UNIBN},
-		{"neighborsPCLKD", SearchAlgo::NEIGHBORS_PCLKD},
-		{"neighborsPCLOct", SearchAlgo::NEIGHBORS_PCLOCT}
-    };
-
     std::set<SearchAlgo> selectedSearchAlgos;
 
     if (algoStr == "all") {
-        for (const auto& [key, value] : algoMap) {
-            selectedSearchAlgos.insert(value);
-        }
+		for (const auto& [algo, _] : searchAlgoMap) {
+			selectedSearchAlgos.insert(algo);
+		}
     } else {
         std::stringstream ss(algoStr);
         std::string token;
         while (std::getline(ss, token, ',')) {
-            auto it = algoMap.find(token);
-            if (it != algoMap.end()) {
-                selectedSearchAlgos.insert(it->second);
-            } else {
-                std::cerr << "Warning: Unknown search algorithm '" << token << "' ignored.\n";
+            try {
+                selectedSearchAlgos.insert(searchAlgoFromString(token));
+            } catch (const std::invalid_argument& e) {
+                std::cerr << e.what() << "\n";
             }
         }
     }
+
 #ifndef HAVE_PCL
-    if (selectedSearchAlgos.count(SearchAlgo::NEIGHBORS_PCLKD) ||
-        selectedSearchAlgos.count(SearchAlgo::NEIGHBORS_PCLOCT)) {
-        std::cout << "Error: PCL-based search algorithms selected, but HAVE_PCL is not defined. "
-                  << "Please install PCL or disable 'neighborsPCLKD' and 'neighborsPCLOct'.\n";
+    if (selectedSearchAlgos.count(NEIGHBORS_PCLKD) ||
+        selectedSearchAlgos.count(NEIGHBORS_PCLOCT)) {
+        std::cerr << "Error: PCL-based search algorithms selected, but HAVE_PCL is not defined.\n";
         std::exit(EXIT_FAILURE);
     }
 #endif
@@ -130,33 +132,58 @@ std::set<SearchAlgo> parseSearchAlgoOptions(const std::string& algoStr) {
     return selectedSearchAlgos;
 }
 
-std::set<EncoderType> parseEncodingOptions(const std::string& kernelStr) {
-    static const std::unordered_map<std::string, EncoderType> encoderMap = {
-        {"none", EncoderType::NO_ENCODING},
-        {"mort", EncoderType::MORTON_ENCODER_3D},
-        {"hilb", EncoderType::HILBERT_ENCODER_3D}
-    };
-
+std::set<EncoderType> parseEncodingOptions(const std::string& encoderStr) {
     std::set<EncoderType> selectedEncoders;
 
-    if (kernelStr == "all") {
-        for (const auto& [key, value] : encoderMap) {
-            selectedEncoders.insert(value);
-        }
+    if (encoderStr == "all") {
+		for (const auto& [enc, _] : encoderTypeMap) {
+			selectedEncoders.insert(enc);
+		}
     } else {
-        std::stringstream ss(kernelStr);
+        std::stringstream ss(encoderStr);
         std::string token;
         while (std::getline(ss, token, ',')) {
-            auto it = encoderMap.find(token);
-            if (it != encoderMap.end()) {
-                selectedEncoders.insert(it->second);
-            } else {
-                std::cerr << "Warning: Unknown kernel '" << token << "' ignored.\n";
+            try {
+                selectedEncoders.insert(encoderTypeFromString(token));
+            } catch (const std::invalid_argument& e) {
+                std::cerr << e.what() << "\n";
             }
         }
     }
 
     return selectedEncoders;
+}
+
+std::set<Kernel_t> parseKernelOptions(const std::string& kernelStr) {
+    std::set<Kernel_t> selectedKernels;
+
+    if (kernelStr == "all") {
+		for (const auto& [kernel, _] : kernelMap) {
+			selectedKernels.insert(kernel);
+		}
+    } else {
+        std::stringstream ss(kernelStr);
+        std::string token;
+        while (std::getline(ss, token, ',')) {
+            try {
+                selectedKernels.insert(kernelFromString(token));
+            } catch (const std::invalid_argument& e) {
+                std::cerr << e.what() << "\n";
+            }
+        }
+    }
+
+    return selectedKernels;
+}
+
+std::set<SearchStructure> getSearchStructures(std::set<SearchAlgo> &algos) {
+	std::set<SearchStructure> structures;
+
+	for (SearchAlgo algo : algos) {
+		structures.insert(algoToStructure(static_cast<SearchAlgo>(algo)));
+	}
+
+	return structures;
 }
 
 std::string getKernelListString() {
@@ -214,6 +241,23 @@ void processArgs(int argc, char** argv)
 				mainOptions.inputFile = fs::path(std::string(optarg));
 				mainOptions.inputFileName = mainOptions.inputFile.stem().string();
 				break;
+			case 'c':
+			case LongOptions::CONTAINER_TYPE: {
+				std::string containerTypeStr = optarg;
+				// lowercase it
+				std::transform(containerTypeStr.begin(), containerTypeStr.end(), containerTypeStr.begin(),
+	               [](unsigned char c) { return std::tolower(c); });
+				
+				if (containerTypeStr == "aos") {
+					mainOptions.containerType = ContainerType::AoS;
+				} else if (containerTypeStr == "soa") {
+					mainOptions.containerType = ContainerType::SoA;
+				} else {
+					std::cerr << "Invalid container type: " << containerTypeStr << ". Use 'AoS' or 'SoA'.\n";
+					std::exit(EXIT_FAILURE);
+				}				
+				break;
+			}
 			case 'o':
 			case LongOptions::OUTPUT:
 				mainOptions.outputDirName = fs::path(std::string(optarg));
@@ -221,6 +265,10 @@ void processArgs(int argc, char** argv)
 			case 'r':
 			case LongOptions::RADII:
 				mainOptions.benchmarkRadii = readVectorArg<float>(std::string(optarg));
+				break;
+			case 'v':
+			case LongOptions::K_VALUES:
+				mainOptions.benchmarkKValues = readVectorArg<size_t>(std::string(optarg));
 				break;
 			case 't':
 			case LongOptions::REPEATS:
@@ -242,6 +290,7 @@ void processArgs(int argc, char** argv)
 			case 'a':
 			case LongOptions::SEARCH_ALGOS:
 				mainOptions.searchAlgos = parseSearchAlgoOptions(std::string(optarg));
+				mainOptions.searchStructures = getSearchStructures(mainOptions.searchAlgos);
 				break;
 			case 'e':
 			case LongOptions::ENCODINGS:
@@ -249,6 +298,17 @@ void processArgs(int argc, char** argv)
 				break;
 			case LongOptions::DEBUG:
 				mainOptions.debug = true;
+				break;
+			case LongOptions::BUILD_ENC:
+				mainOptions.buildEncBenchmarks = true;
+				break;
+			case LongOptions::MEMORY:
+				mainOptions.memoryStructure.emplace(structureFromString(std::string(optarg)));
+			case LongOptions::LOCALITY:
+				mainOptions.localityBenchmarks = true;
+				break;
+			case LongOptions::CACHE_PROFILING:
+				mainOptions.cacheProfiling = true;
 				break;
 			case LongOptions::CHECK:
 				mainOptions.checkResults = true;
