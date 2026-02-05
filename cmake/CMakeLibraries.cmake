@@ -68,21 +68,15 @@ else()
 endif()
 
 
-
 # PAPI
-set(PAPI_DIR "$ENV{HOME}/local/papi" CACHE PATH "Path to PAPI installation")
-
-find_path(PAPI_INCLUDE_DIR papi.h PATHS "${PAPI_DIR}/include")
-find_library(PAPI_LIBRARY NAMES papi PATHS "${PAPI_DIR}/lib")
-
-if (PAPI_INCLUDE_DIR AND PAPI_LIBRARY)
-    message(STATUS "PAPI found in ${PAPI_DIR}")
-    include_directories(${PAPI_INCLUDE_DIR})
-    link_directories(${PAPI_DIR}/lib)
-    add_definitions(-DHAVE_PAPI)
-else()
-    message(WARNING "PAPI not found in ${PAPI_DIR}. Building without PAPI support.")
-endif()
+find_package(Papi REQUIRED)
+if (${PAPI_FOUND})
+  include_directories(${PAPI_INCLUDE_DIRS})
+    message(STATUS "Papi include: ${PAPI_INCLUDE_DIRS}")
+    message(STATUS "Papi libraries: ${PAPI_LIBRARIES}")
+else ()
+    message(SEND_ERROR "Could not find Papi")
+endif ()
 
 
 # fetch picotree 1.0.0

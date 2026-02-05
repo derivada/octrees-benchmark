@@ -29,6 +29,13 @@ LiDAR (Light and Ranging Detection) technology has now become the quintessential
     ```
     If PCL is not found during compilation, code will compile just fine, but without support for PCL Octree and KD-Tree related benchmarks.
 
+- PAPI (Optional, for cache profiling)
+  ```bash
+    wget https://github.com/icl-utk-edu/papi/releases/download/papi-7-2-0-t/papi-7.2.0.tar.gz -P lib
+    tar xvf lib/papi-7.2.0.tar.gz -C lib && rm lib/papi-7.2.0.tar.gz && mv lib/papi-7.2.0 lib/papi/
+    (cd lib/papi/src && ./configure --prefix=$(pwd)/.. && make -j && make install)
+  ```
+
 ### Compilation
 
 In the project directory, just execute
