@@ -21,19 +21,7 @@ else ()
     message(SEND_ERROR "Could not find OpenMP")
 endif ()
 
-# # Armadillo
-# find_package(Armadillo REQUIRED)
-# if (TARGET armadillo::armadillo)
-#     message(STATUS "Dependency armadillo::armadillo found")
-# elseif (${ARMADILLO_FOUND})
-#     include_directories(${ARMADILLO_INCLUDE_DIR})
-#     message(STATUS "Armadillo include: " ${ARMADILLO_INCLUDE_DIR})
-#     message(STATUS "Armadillo libraries: " ${ARMADILLO_LIBRARIES})
-# else ()
-#     message(SEND_ERROR "Could find armadillo::armadillo")
-# endif ()
-
-# # Eigen3
+# Eigen3
 find_package(Eigen3 REQUIRED)
 if (TARGET Eigen3::Eigen)
     message(STATUS "Dependency Eigen3::Eigen found")
@@ -53,19 +41,34 @@ else ()
     message(SEND_ERROR "Could not find LASLIB")
 endif ()
 
-# PCL
-set(PCL_DIR "$ENV{HOME}/local/pcl/share/pcl-1.15" CACHE PATH "Path to PCL config")
-find_package(PCL 1.3 QUIET)
 
-if(PCL_FOUND)
-    message(STATUS "PCL found: ${PCL_VERSION}")
-    include_directories(${PCL_INCLUDE_DIRS})
-    link_directories(${PCL_LIBRARY_DIRS})
-    add_definitions(${PCL_DEFINITIONS})
+# Hint Boost so PCL's own config can find the locally built Boost.
+set(BOOST_ROOT "${PROJECT_SOURCE_DIR}/lib/boost")
+set(Boost_ROOT "${PROJECT_SOURCE_DIR}/lib/boost")
+set(Boost_NO_SYSTEM_PATHS ON)
+
+# Include Boost
+set(BOOST_INCLUDE_DIRS "${BOOST_ROOT}/include")
+include_directories(${BOOST_INCLUDE_DIRS})
+
+# PCL (PointCloudLibrary)
+set(PCL_DIR "${CMAKE_SOURCE_DIR}/lib/pcl")
+message("PCL directory: ${PCL_DIR}")
+find_package(Eigen3 3.3 REQUIRED NO_MODULE)
+if(EXISTS ${PCL_DIR})
+    # Include from from lib directory
+    message("Loading PCL from \"${PCL_DIR}\".")
+    set(PCL_INCLUDE_DIRS "${PCL_DIR}/include/pcl-1.15/")
+    file(GLOB PCL_LIBRARIES "${PCL_DIR}/lib/*.so")
     add_definitions(-DHAVE_PCL)
 else()
-    message(WARNING "PCL not found. Building without PCL support.")
+    message("Loading PCL from system.")
+    find_package(PCL 1.15 REQUIRED)
 endif()
+message("PCL include: ${PCL_INCLUDE_DIRS}")
+message("PCL libraries: ${PCL_LIBRARIES}")
+include_directories(${PCL_INCLUDE_DIRS})
+add_definitions(${PCL_DEFINITIONS})
 
 
 # PAPI
