@@ -16,7 +16,10 @@ LiDAR (Light and Ranging Detection) technology has now become the quintessential
     Now we clone the repo and build:
     ```bash
     git clone --depth 1 https://github.com/LAStools/LAStools lib/LAStools
-    (cd lib/LAStools && cmake . && make)
+    (cd lib/LAStools && cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=$PWD/../LASlib . && cmake --build build -- -j && cmake --install build)
+    rm -rf lib/LAStools
+    ```
+    
 - PCL version 1.15 (Optional) 
     Get 1.15 source code from  `https://github.com/PointCloudLibrary/pcl/releases` and build it. The folder were we installed it is `~/local/pcl`, but that can be changed to any other folder, with an appropiate change in `CMakeLibraries.cmake`. Can also change the version to look for in that file.
     ```bash
@@ -28,6 +31,13 @@ LiDAR (Light and Ranging Detection) technology has now become the quintessential
     make -j2 install
     ```
     If PCL is not found during compilation, code will compile just fine, but without support for PCL Octree and KD-Tree related benchmarks.
+
+- PAPI (Optional, for cache profiling)
+  ```bash
+    wget https://github.com/icl-utk-edu/papi/releases/download/papi-7-2-0-t/papi-7.2.0.tar.gz -P lib
+    tar xvf lib/papi-7.2.0.tar.gz -C lib && rm lib/papi-7.2.0.tar.gz && mv lib/papi-7.2.0 lib/papi/
+    (cd lib/papi/src && ./configure --prefix=$(pwd)/.. && make -j && make install)
+  ```
 
 ### Compilation
 

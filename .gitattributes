@@ -1,0 +1,3 @@
+*.ipynb linguist-documentation
+*.cpp linguist-language=C++
+*.h linguist-language=C++

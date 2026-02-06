@@ -68,37 +68,21 @@ else()
 endif()
 
 
-
 # PAPI
-set(PAPI_DIR "$ENV{HOME}/local/papi" CACHE PATH "Path to PAPI installation")
+find_package(Papi REQUIRED)
+if (${PAPI_FOUND})
+    include_directories(${PAPI_INCLUDE_DIRS})
+    message(STATUS "Papi include: ${PAPI_INCLUDE_DIRS}")
+    message(STATUS "Papi libraries: ${PAPI_LIBRARIES}")
+else ()
+    message(SEND_ERROR "Could not find Papi")
+endif ()
 
-find_path(PAPI_INCLUDE_DIR papi.h PATHS "${PAPI_DIR}/include")
-find_library(PAPI_LIBRARY NAMES papi PATHS "${PAPI_DIR}/lib")
-
-if (PAPI_INCLUDE_DIR AND PAPI_LIBRARY)
-    message(STATUS "PAPI found in ${PAPI_DIR}")
-    include_directories(${PAPI_INCLUDE_DIR})
-    link_directories(${PAPI_DIR}/lib)
-    add_definitions(-DHAVE_PAPI)
-else()
-    message(WARNING "PAPI not found in ${PAPI_DIR}. Building without PAPI support.")
-endif()
-
-
-# fetch picotree 1.0.0
-include(FetchContent)
-message(STATUS "Checking/Downloading pico_tree v1.0.0...")
-
-# Disable pico_tree's internal examples/benchmarks to save build time
-set(PICOTREE_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
-set(PICOTREE_BUILD_BENCHMARKS OFF CACHE BOOL "" FORCE)
-set(PICOTREE_BUILD_TESTS OFF CACHE BOOL "" FORCE)
-
-FetchContent_Declare(
-    pico_tree
-    GIT_REPOSITORY https://github.com/Jaybro/pico_tree.git
-    GIT_TAG        v1.0.0  # <--- CHANGED HERE
-    SOURCE_DIR     ${CMAKE_SOURCE_DIR}/lib/pico_tree
-)
-
-FetchContent_MakeAvailable(pico_tree)
+# Picotree
+find_package(Picotree)
+if (${Picotree_FOUND})
+    include_directories(${PICOTREE_INCLUDE_DIRS})
+    message(STATUS "Picotree include: ${PICOTREE_INCLUDE_DIRS}")
+else ()
+    message(WARNING "Could not find Picotree. Building without Picotree support.")
+endif ()
