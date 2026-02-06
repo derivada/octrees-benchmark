@@ -77,22 +77,3 @@ if (${PAPI_FOUND})
 else ()
     message(SEND_ERROR "Could not find Papi")
 endif ()
-
-
-# fetch picotree 1.0.0
-include(FetchContent)
-message(STATUS "Checking/Downloading pico_tree v1.0.0...")
-
-# Disable pico_tree's internal examples/benchmarks to save build time
-set(PICOTREE_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
-set(PICOTREE_BUILD_BENCHMARKS OFF CACHE BOOL "" FORCE)
-set(PICOTREE_BUILD_TESTS OFF CACHE BOOL "" FORCE)
-
-FetchContent_Declare(
-    pico_tree
-    GIT_REPOSITORY https://github.com/Jaybro/pico_tree.git
-    GIT_TAG        v1.0.0  # <--- CHANGED HERE
-    SOURCE_DIR     ${CMAKE_SOURCE_DIR}/lib/pico_tree
-)
-
-FetchContent_MakeAvailable(pico_tree)
