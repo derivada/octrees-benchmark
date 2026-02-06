@@ -79,8 +79,8 @@ else ()
 endif ()
 
 # Picotree
-find_package(PICOTREE)
-if (${PICOTREE_FOUND})
+find_package(Picotree)
+if (${Picotree_FOUND})
     include_directories(${PICOTREE_INCLUDE_DIRS})
     message(STATUS "Picotree include: ${PICOTREE_INCLUDE_DIRS}")
 else ()
