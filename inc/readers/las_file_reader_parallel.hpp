@@ -130,7 +130,7 @@ class LasFileReaderParallel : public FileReader<Container>
 					static_cast<unsigned short>(reader->point.get_scan_direction_flag()),
 					static_cast<unsigned short>(reader->point.get_edge_of_flight_line()),
 					static_cast<unsigned short>(reader->point.get_classification()),
-					static_cast<char>(reader->point.get_scan_angle_rank()),
+					static_cast<char>(reader->point.get_scan_angle()),
 					static_cast<unsigned short>(reader->point.get_user_data()),
 					static_cast<unsigned short>(reader->point.get_point_source_ID()),
 					static_cast<unsigned int>(reader->point.get_R()),
