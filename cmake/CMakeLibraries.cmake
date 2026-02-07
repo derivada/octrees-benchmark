@@ -43,7 +43,6 @@ endif ()
 
 # Picotree
 find_package(Picotree REQUIRED)
-
 if (${PICOTREE_FOUND})
     include_directories(${PICOTREE_INCLUDE_DIRS})
     message(STATUS "Picotree include: ${PICOTREE_INCLUDE_DIRS}")

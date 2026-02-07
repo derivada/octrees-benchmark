@@ -6,10 +6,11 @@
 
 find_path(PICOTREE_INCLUDE_DIR
         pico_tree/core.hpp
-        HINTS ${CMAKE_SOURCE_DIR}/lib/picotree/include)
+        HINTS ${CMAKE_SOURCE_DIR}/lib/picotree/include
+)
 
 if (PICOTREE_INCLUDE_DIR)
-    set(Picotree_FOUND ON)
+    set(PICOTREE_FOUND ON)
 endif (PICOTREE_INCLUDE_DIR)
 
 if (PICOTREE_FOUND)
