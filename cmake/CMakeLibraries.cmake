@@ -35,7 +35,7 @@ endif ()
 # LASlib
 find_package(LASLIB REQUIRED)
 if (${LASLIB_FOUND})
-  include_directories(${LASLIB_INCLUDE_DIR} ${LASZIP_INCLUDE_DIR})
+    include_directories(${LASLIB_INCLUDE_DIR} ${LASZIP_INCLUDE_DIR})
     message(STATUS "LASlib include: ${LASLIB_INCLUDE_DIR} ${LASZIP_INCLUDE_DIR}")
 else ()
     message(SEND_ERROR "Could not find LASLIB")
@@ -61,7 +61,6 @@ set(BOOST_INCLUDE_DIRS "${BOOST_ROOT}/include")
 include_directories(${BOOST_INCLUDE_DIRS})
 
 # PCL (PointCloudLibrary)
-
 find_package(PCL OPTIONAL)
 if (${PCL_FOUND})
     include_directories(${PCL_INCLUDE_DIRS})
@@ -71,31 +70,10 @@ else ()
     message(STATUS "Could not find PCL, building without PCL support")
 endif ()
 
-
-
-# set(PCL_DIR "${CMAKE_SOURCE_DIR}/lib/pcl")
-# message("PCL directory: ${PCL_DIR}")
-# find_package(Eigen3 3.3 REQUIRED NO_MODULE)
-# if(EXISTS ${PCL_DIR})
-#     # Include from from lib directory
-#     message("Loading PCL from \"${PCL_DIR}\".")
-#     set(PCL_INCLUDE_DIRS "${PCL_DIR}/include/pcl-1.15/")
-#     file(GLOB PCL_LIBRARIES "${PCL_DIR}/lib/*.so")
-#     add_definitions(-DHAVE_PCL)
-# else()
-#     message("Loading PCL from system.")
-#     find_package(PCL 1.15 REQUIRED)
-# endif()
-# message("PCL include: ${PCL_INCLUDE_DIRS}")
-# message("PCL libraries: ${PCL_LIBRARIES}")
-# include_directories(${PCL_INCLUDE_DIRS})
-# add_definitions(${PCL_DEFINITIONS})
-
-
 # PAPI
 find_package(Papi REQUIRED)
 if (${PAPI_FOUND})
-  include_directories(${PAPI_INCLUDE_DIRS})
+    include_directories(${PAPI_INCLUDE_DIRS})
     message(STATUS "Papi include: ${PAPI_INCLUDE_DIRS}")
     message(STATUS "Papi libraries: ${PAPI_LIBRARIES}")
 else ()

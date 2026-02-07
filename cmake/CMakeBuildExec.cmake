@@ -45,8 +45,15 @@ if (TARGET PCL::PCL)
     endforeach ()
 endif ()
 
-target_link_libraries(${PROJECT_NAME} PRIVATE ${PAPI_LIBRARY})
-target_include_directories(${PROJECT_NAME} PRIVATE ${PAPI_INCLUDE_DIR})
+if (TARGET Papi::Papi)
+    target_link_libraries(${PROJECT_NAME}
+            PRIVATE
+            Papi::Papi)
+else ()
+    target_link_libraries(${PROJECT_NAME}
+            PRIVATE
+            ${PAPI_LIBRARIES})
+endif ()
 
 # PicoTree
 if (TARGET pico_tree)
