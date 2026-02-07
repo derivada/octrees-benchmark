@@ -23,7 +23,7 @@ public:
     key_t encode2D(coords_t x, coords_t y) const {
         key_t d = 0;
         // Standard iterative Hilbert: rotate and flip quadrants
-        for (int s = (1 << (MAX_DEPTH - 1)); s > 0; s >>= 1) {
+        for (int s = (1U << (MAX_DEPTH - 1)); s > 0; s >>= 1) {
             coords_t rx = (x & s) > 0;
             coords_t ry = (y & s) > 0;
             
@@ -34,8 +34,8 @@ public:
             // Rotate and flip if necessary
             if (ry == 0) {
                 if (rx == 1) {
-                    x = (1 << MAX_DEPTH) - 1 - x;
-                    y = (1 << MAX_DEPTH) - 1 - y;
+                    x = (1U << MAX_DEPTH) - 1 - x;
+                    y = (1U << MAX_DEPTH) - 1 - y;
                 }
                 std::swap(x, y);
             }
@@ -62,7 +62,7 @@ public:
     void decode2D(key_t d, coords_t &x, coords_t &y) const {
         x = y = 0;
         key_t t = d;
-        for (int s = 1; s < (1 << MAX_DEPTH); s <<= 1) {
+        for (int s = 1; s < (1U << MAX_DEPTH); s <<= 1) {
             coords_t rx = 1 & (t / 2);
             coords_t ry = 1 & (t ^ rx);
             
