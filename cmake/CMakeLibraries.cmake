@@ -41,6 +41,16 @@ else ()
     message(SEND_ERROR "Could not find LASLIB")
 endif ()
 
+# Picotree
+find_package(Picotree REQUIRED)
+
+if (${PICOTREE_FOUND})
+    include_directories(${PICOTREE_INCLUDE_DIRS})
+    message(STATUS "Picotree include: ${PICOTREE_INCLUDE_DIRS}")
+else ()
+    message(SEND_ERROR "Could not find PICOTREE")
+endif ()
+
 
 # Hint Boost so PCL's own config can find the locally built Boost.
 set(BOOST_ROOT "${PROJECT_SOURCE_DIR}/lib/boost")
@@ -52,40 +62,43 @@ set(BOOST_INCLUDE_DIRS "${BOOST_ROOT}/include")
 include_directories(${BOOST_INCLUDE_DIRS})
 
 # PCL (PointCloudLibrary)
-set(PCL_DIR "${CMAKE_SOURCE_DIR}/lib/pcl")
-message("PCL directory: ${PCL_DIR}")
-find_package(Eigen3 3.3 REQUIRED NO_MODULE)
-if(EXISTS ${PCL_DIR})
-    # Include from from lib directory
-    message("Loading PCL from \"${PCL_DIR}\".")
-    set(PCL_INCLUDE_DIRS "${PCL_DIR}/include/pcl-1.15/")
-    file(GLOB PCL_LIBRARIES "${PCL_DIR}/lib/*.so")
-    add_definitions(-DHAVE_PCL)
-else()
-    message("Loading PCL from system.")
-    find_package(PCL 1.15 REQUIRED)
-endif()
-message("PCL include: ${PCL_INCLUDE_DIRS}")
-message("PCL libraries: ${PCL_LIBRARIES}")
-include_directories(${PCL_INCLUDE_DIRS})
-add_definitions(${PCL_DEFINITIONS})
+
+find_package(PCL REQUIRED)
+if (${PCL_FOUND})
+    include_directories(${PCL_INCLUDE_DIRS})
+    message(STATUS "PCL include: ${PCL_INCLUDE_DIRS}")
+    message(STATUS "PCL libraries: ${PCL_LIBRARIES}")
+else ()
+    message(SEND_ERROR "Could not find PCL")
+endif ()
+
+
+
+# set(PCL_DIR "${CMAKE_SOURCE_DIR}/lib/pcl")
+# message("PCL directory: ${PCL_DIR}")
+# find_package(Eigen3 3.3 REQUIRED NO_MODULE)
+# if(EXISTS ${PCL_DIR})
+#     # Include from from lib directory
+#     message("Loading PCL from \"${PCL_DIR}\".")
+#     set(PCL_INCLUDE_DIRS "${PCL_DIR}/include/pcl-1.15/")
+#     file(GLOB PCL_LIBRARIES "${PCL_DIR}/lib/*.so")
+#     add_definitions(-DHAVE_PCL)
+# else()
+#     message("Loading PCL from system.")
+#     find_package(PCL 1.15 REQUIRED)
+# endif()
+# message("PCL include: ${PCL_INCLUDE_DIRS}")
+# message("PCL libraries: ${PCL_LIBRARIES}")
+# include_directories(${PCL_INCLUDE_DIRS})
+# add_definitions(${PCL_DEFINITIONS})
 
 
 # PAPI
 find_package(Papi REQUIRED)
 if (${PAPI_FOUND})
-    include_directories(${PAPI_INCLUDE_DIRS})
+  include_directories(${PAPI_INCLUDE_DIRS})
     message(STATUS "Papi include: ${PAPI_INCLUDE_DIRS}")
     message(STATUS "Papi libraries: ${PAPI_LIBRARIES}")
 else ()
     message(SEND_ERROR "Could not find Papi")
-endif ()
-
-# Picotree
-find_package(Picotree)
-if (${Picotree_FOUND})
-    include_directories(${PICOTREE_INCLUDE_DIRS})
-    message(STATUS "Picotree include: ${PICOTREE_INCLUDE_DIRS}")
-else ()
-    message(WARNING "Could not find Picotree. Building without Picotree support.")
 endif ()

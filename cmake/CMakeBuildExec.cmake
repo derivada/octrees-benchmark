@@ -35,9 +35,15 @@ target_link_libraries(${PROJECT_NAME}
         PRIVATE
         ${LASLIB_LIBRARIES})
 
-target_link_libraries(${PROJECT_NAME}
-        PRIVATE
-        ${PCL_LIBRARIES})
+if (TARGET PCL::PCL)
+    target_compile_definitions(${PROJECT_NAME} PRIVATE HAVE_PCL)
+
+    foreach (lib ${PCL_LIBRARIES})
+        message(STATUS "PCL library: ${lib}")
+        target_link_libraries(${PROJECT_NAME}
+            PRIVATE ${lib})
+    endforeach ()
+endif ()
 
 target_link_libraries(${PROJECT_NAME} PRIVATE ${PAPI_LIBRARY})
 target_include_directories(${PROJECT_NAME} PRIVATE ${PAPI_INCLUDE_DIR})
