@@ -1,4 +1,5 @@
 .conda
+.idea
 .vscode
 build
 data
