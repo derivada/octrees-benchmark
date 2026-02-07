@@ -1,5 +1,5 @@
 #pragma once
-
+#ifdef HAVE_PICOTREE
 #include <iostream>
 #include <pico_tree/kd_tree.hpp>
 #include <streambuf>
@@ -52,3 +52,5 @@ struct space_traits<PointsAoS> {
 };
 
 }
+
+#endif

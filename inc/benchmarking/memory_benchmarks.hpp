@@ -7,8 +7,6 @@
 #include "structures/linear_octree.hpp"
 #include "structures/nanoflann.hpp"
 #include "structures/nanoflann_wrappers.hpp"
-#include "structures/picotree_profiler.hpp"
-#include "structures/picotree_wrappers.hpp"
 #include "structures/octree.hpp"
 #include "structures/unibn_octree.hpp"
 
@@ -17,6 +15,11 @@
 #include "encoding_log.hpp"
 #include "main_options.hpp"
 #include "time_watcher.hpp"
+
+#ifdef HAVE_PICOTREE
+#include "structures/picotree_profiler.hpp"
+#include "structures/picotree_wrappers.hpp"
+#endif
 
 #ifdef HAVE_PCL
 #include <pcl/point_cloud.h>
@@ -59,7 +62,7 @@ class MemoryBenchmarks {
             LinearOctree oct(points, codes, box, enc, log);
             return log->memoryUsed;
         }
-
+#ifdef HAVE_PCL
         size_t runPCLOct() {
             auto pclCloud = convertCloudToPCL(points);
                 pcl::octree::OctreePointCloudSearch<pcl::PointXYZ> oct(mainOptions.pclOctResolution);
@@ -76,13 +79,14 @@ class MemoryBenchmarks {
             kdtree.setInputCloud(cloudPtr);
             return 0;
         }
+#endif
 
         size_t runNano() {
             NanoflannPointCloud<Container> npc(points);
             NanoFlannKDTree<Container> kdtree(3, npc, {mainOptions.maxPointsLeaf});
             return kdtree.usedMemory(kdtree);
         }
-
+#ifdef HAVE_PICOTREE
         size_t runPico() {
             if constexpr (std::is_same_v<Container, PointsAoS>) {
                 pico_tree::kd_tree<PointsAoS> tree(
@@ -95,6 +99,7 @@ class MemoryBenchmarks {
                 return 0;
             }
         }
+#endif
     
     public:
         MemoryBenchmarks(Container &points, std::vector<key_t> &codes, Box box, PointEncoder &enc): 
@@ -116,17 +121,22 @@ class MemoryBenchmarks {
                 case UNIBN_OCTREE:
                     theoSize = runUnibn();
                     break;
+#ifdef HAVE_PCL
                 case PCL_OCTREE:
                     theoSize = runPCLOct();
                     break;
                 case PCL_KDTREE:
                     theoSize = runPCLKD();
                     break;
+#endif
                 case NANOFLANN_KDTREE:
                     theoSize = runNano();
                     break;
+#ifdef HAVE_PICOTREE
                 case PICOTREE:
                     theoSize = runPico();
+                    break;
+#endif
                 default:
                     std::cerr << "Unknown SearchStructure type!" << std::endl;
                     break;

@@ -10,10 +10,14 @@
 #include "structures/linear_octree.hpp"
 #include "structures/nanoflann.hpp"
 #include "structures/nanoflann_wrappers.hpp"
-#include "structures/picotree_profiler.hpp"
-#include "structures/picotree_wrappers.hpp"
+
 #include "structures/octree.hpp"
 #include "structures/unibn_octree.hpp"
+
+#ifdef HAVE_PICOTREE
+#include "structures/picotree_profiler.hpp"
+#include "structures/picotree_wrappers.hpp"
+#endif
 
 #ifdef HAVE_PCL
 #include <pcl/point_cloud.h>
@@ -150,6 +154,7 @@ class EncodingBuildBenchmarks {
                     log->buildTime = stats.mean();
                     break;
                 }
+#ifdef HAVE_PICOTREE
                 case SearchStructure::PICOTREE: {
                     if constexpr (std::is_same_v<Container, PointsAoS>) {
                         auto stats = benchmarking::benchmark(mainOptions.repeats, [&]() {
@@ -164,6 +169,7 @@ class EncodingBuildBenchmarks {
                     }
                     break;
                 }
+#endif
             }
             if(mainOptions.cacheProfiling) {
                 log->l1dMisses = eventValues[0];

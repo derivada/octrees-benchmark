@@ -17,6 +17,10 @@
 #include "search_set.hpp"
 #include "main_options.hpp"
 
+#ifdef HAVE_PICOTREE
+#include "structures/picotree_wrappers.hpp"
+#endif
+
 #ifdef HAVE_PCL
 #include <pcl/point_cloud.h>
 #include <pcl/octree/octree_search.h>
@@ -504,7 +508,7 @@ class NeighborsBenchmark {
                 executeBenchmark(neighborsPtrSearch, kernelName, SearchAlgo::NEIGHBORS_PTR);
             }
         }
-
+#ifdef HAVE_PICOTREE
         void benchmarkPicoTree(pico_tree::kd_tree<Container> &tree, std::string_view kernelName) {
             if(mainOptions.searchAlgos.contains(SearchAlgo::NEIGHBORS_PICOTREE)) {
                 auto neighborsPico = [&](double radius) -> size_t {
@@ -569,7 +573,7 @@ class NeighborsBenchmark {
                 std::cout << "WARNING: Skipping pico_tree neighbors benchmarks: Container is not PointsAoS." << std::endl;
             }
         }
-
+#endif
         void initializeBenchmarkNanoflannKDTree() {
             NanoflannPointCloud<Container> npc(points);
 
@@ -718,8 +722,13 @@ class NeighborsBenchmark {
                     case SearchStructure::NANOFLANN_KDTREE:
                         initializeBenchmarkNanoflannKDTree();
                     break;
+#ifdef HAVE_PICOTREE
                     case SearchStructure::PICOTREE:
                         initializeBenchmarkPicoTree();
+                    break;
+#endif
+                    default:
+                        std::cerr << "Unknown SearchStructure type!" << std::endl;
                     break;
                 }
                 currentStructureBenchmark++;

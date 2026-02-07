@@ -1,5 +1,5 @@
 #pragma once
-
+#ifdef HAVE_PICOTREE
 #include <pico_tree/kd_tree.hpp>
 
 namespace pico_tree_profiler {
@@ -53,3 +53,5 @@ size_t get_memory_usage(const TreeType& tree) {
 }
 
 } // namespace pico_tree_profiler
+
+#endif
