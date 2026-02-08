@@ -42,7 +42,7 @@ else ()
 endif ()
 
 # Picotree
-find_package(Picotree OPTIONAL)
+find_package(Picotree QUIET)
 if (${PICOTREE_FOUND})
     include_directories(${PICOTREE_INCLUDE_DIRS})
     message(STATUS "Picotree include: ${PICOTREE_INCLUDE_DIRS}")
@@ -61,7 +61,7 @@ set(BOOST_INCLUDE_DIRS "${BOOST_ROOT}/include")
 include_directories(${BOOST_INCLUDE_DIRS})
 
 # PCL (PointCloudLibrary)
-find_package(PCL OPTIONAL)
+find_package(PCL QUIET)
 if (${PCL_FOUND})
     include_directories(${PCL_INCLUDE_DIRS})
     message(STATUS "PCL include: ${PCL_INCLUDE_DIRS}")
