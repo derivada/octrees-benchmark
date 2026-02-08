@@ -6,7 +6,11 @@ set -e
 # Get the path of the script
 
 # Libs prefix
-LIB_PREFIX="$(dirname "$(readlink -f "$0")")../lib"
+LIB_PREFIX="$(dirname "$(readlink -f "$0")")/../lib"
+
+# Get absolute path of LIB_PREFIX
+LIB_PREFIX="$(readlink -f "${LIB_PREFIX}")"
+
 BOOST_PREFIX="${LIB_PREFIX}/boost"
 EIGEN3_PREFIX="${LIB_PREFIX}/eigen3"
 FLANN_PREFIX="${LIB_PREFIX}/flann"
