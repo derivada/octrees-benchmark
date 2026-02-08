@@ -8,3 +8,5 @@ lib
 old
 out
 plots/__pycache__
+cmake-build-debug
+cmake-build-release
