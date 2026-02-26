@@ -2,6 +2,7 @@
 
 #include <optional>
 #include <bitset>
+#include <fstream>
 #include <unordered_map>
 #include <filesystem>
 #include "benchmarking/build_log.hpp"

@@ -5,6 +5,7 @@
 
 namespace PointEncoding {
 class MortonEncoder2D : public PointEncoder {
+public:
     /// @brief The maximum depth that this encoding allows (in Morton 64 bit integers, we need 2 bits for each level, so 31)
     static constexpr unsigned MAX_DEPTH = 31;
 
@@ -18,8 +19,6 @@ class MortonEncoder2D : public PointEncoder {
     static constexpr uint32_t UNUSED_BITS = 2;
     
     const uint8_t axis = 0;
-
-
 
     /// @brief Encodes the given integer coordinates in the range [0,2^MAX_DEPTH]x[0,2^MAX_DEPTH]x[0,2^MAX_DEPTH] into their Morton key
     inline key_t encode(coords_t x, coords_t y, coords_t z) const override {

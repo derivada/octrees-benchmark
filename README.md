@@ -55,11 +55,38 @@ We provide scripts for replicating our results, check `bench_neighbors.bash` for
 Under the folder `plots` we include all the python scripts for generating the figures seen in the publication.
 
 ### Tests / Examples
-A small usage example of the library features is provided under `tests/example.cpp`. It is automatically built alongside the main project. To run it, simply execute from the `build/` directory:
+
+A small usage example of the library features is provided under `tests/example.cpp`. It is automatically built alongside the main project.
+
 ```bash
 make test_library
 ./tests/test_library
 ```
+
+#### Running the full test suite
+
+The project includes a comprehensive unit testing suite using GoogleTest. Build the project with option -DBUILD_TESTS=ON to enable it. After building the project, you can run all tests with:
+
+```bash
+make                # builds the library and all test executables
+ctest --output-on-failure
+```
+
+You can also run individual test executables directly, e.g.:
+
+```bash
+./tests/test_points
+./tests/test_encoders
+./tests/test_octree
+./tests/test_octree_advanced
+```
+
+To run a specific test case with CTest, use the `-R` option with the test name, for example:
+
+```bash
+ctest -R LinearOctreeTest.RadiusSearch
+```
+
 
 ## Main Options
 
