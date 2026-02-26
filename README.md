@@ -54,6 +54,13 @@ We provide scripts for replicating our results, check `bench_neighbors.bash` for
 
 Under the folder `plots` we include all the python scripts for generating the figures seen in the publication.
 
+### Tests / Examples
+A small usage example of the library features is provided under `tests/example.cpp`. It is automatically built alongside the main project. To run it, simply execute from the `build/` directory:
+```bash
+make test_library
+./tests/test_library
+```
+
 ## Main Options
 
 | Option | Alias | Description |

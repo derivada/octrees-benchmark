@@ -20,3 +20,6 @@ message("Libraries loaded!\n")
 message("Building ${PROJECT_NAME} ...")
 include(cmake/CMakeBuildExec.cmake)
 message("Project built!\n\n")
+
+# Tests
+add_subdirectory(tests)
