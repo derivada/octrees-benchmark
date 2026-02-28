@@ -1,42 +1,166 @@
-#ifndef CPP_MAIN_OPTIONS_HPP
-#define CPP_MAIN_OPTIONS_HPP
+#pragma once
 
 #include <filesystem>
 #include <getopt.h>
 #include <iostream>
-#include <vector>
-#include "omp.h"
+#include <omp.h>
+#include <optional>
 #include <set>
-#include "NeighborKernels/KernelFactory.hpp"
+#include <vector>
 
 namespace fs = std::filesystem;
 
-enum SearchAlgo { NEIGHBORS_PTR, NEIGHBORS, NEIGHBORS_PRUNE, NEIGHBORS_STRUCT, 
-	NEIGHBORS_APPROX, NEIGHBORS_UNIBN, NEIGHBORS_PCLKD, NEIGHBORS_PCLOCT };
-enum EncoderType { MORTON_ENCODER_3D, HILBERT_ENCODER_3D, NO_ENCODING };
+enum SearchStructure { 
+	PTR_OCTREE, LINEAR_OCTREE, UNIBN_OCTREE, 
+	PCL_OCTREE, PCL_KDTREE, NANOFLANN_KDTREE,
+	PICOTREE
+};
 
-constexpr std::string searchAlgoToString(SearchAlgo algo) {
-    switch (algo) {
-		case SearchAlgo::NEIGHBORS_PTR: return "neighborsPtr";
-        case SearchAlgo::NEIGHBORS: return "neighbors";
-        case SearchAlgo::NEIGHBORS_PRUNE: return "neighborsPrune";
-        case SearchAlgo::NEIGHBORS_STRUCT: return "neighborsStruct";
-		case SearchAlgo::NEIGHBORS_APPROX: return "neighbors";
-		case SearchAlgo::NEIGHBORS_UNIBN: return "neighborsUnibn";
-		case SearchAlgo::NEIGHBORS_PCLKD: return "neighborsPCLKD";
-		case SearchAlgo::NEIGHBORS_PCLOCT: return "neighborsPCLOct";
-        default: return "Unknown";
+constexpr std::pair<SearchStructure, std::string_view> structureMap[] = {
+    { SearchStructure::PTR_OCTREE,       "ptrOct" },
+    { SearchStructure::LINEAR_OCTREE,    "linOct" },
+    { SearchStructure::UNIBN_OCTREE,     "uniOct" },
+    { SearchStructure::PCL_OCTREE,       "pclOct" },
+    { SearchStructure::PCL_KDTREE,       "pclKD" },
+    { SearchStructure::NANOFLANN_KDTREE, "nanoKD" },
+    { SearchStructure::PICOTREE, 		 "picoTree" }
+};
+
+enum SearchAlgo { 
+	NEIGHBORS_PTR, NEIGHBORS, NEIGHBORS_PRUNE,
+	NEIGHBORS_STRUCT, NEIGHBORS_APPROX, NEIGHBORS_UNIBN, 
+	NEIGHBORS_PCLKD, NEIGHBORS_PCLOCT, NEIGHBORS_NANOFLANN, 
+	NEIGHBORS_PICOTREE, KNN_V2, KNN_NANOFLANN, 
+	KNN_PCLKD, KNN_PCLOCT, KNN_PICOTREE
+};
+
+constexpr std::pair<SearchAlgo, std::string_view> searchAlgoMap[] = {
+	{ SearchAlgo::NEIGHBORS_PTR, 		"neighborsPtr" },
+	{ SearchAlgo::NEIGHBORS, 			"neighbors" },
+	{ SearchAlgo::NEIGHBORS_PRUNE, 		"neighborsPrune" },
+	{ SearchAlgo::NEIGHBORS_STRUCT, 	"neighborsStruct" },
+	{ SearchAlgo::NEIGHBORS_APPROX, 	"neighborsApprox" },
+	{ SearchAlgo::NEIGHBORS_UNIBN, 		"neighborsUnibn" },
+	{ SearchAlgo::NEIGHBORS_PCLKD, 		"neighborsPCLKD" },
+	{ SearchAlgo::NEIGHBORS_PCLOCT, 	"neighborsPCLOct" },
+	{ SearchAlgo::NEIGHBORS_NANOFLANN, 	"neighborsNanoflann" },
+	{ SearchAlgo::NEIGHBORS_PICOTREE, 	"neighborsPico" },
+	{ SearchAlgo::KNN_V2, 				"KNNV2" },
+	{ SearchAlgo::KNN_NANOFLANN, 		"KNNNanoflann" },
+	{ SearchAlgo::KNN_PCLKD,			"KNNPCLKD" },
+	{ SearchAlgo::KNN_PCLOCT,			"KNNPCLOCT" },
+	{ SearchAlgo::KNN_PICOTREE,			"KNNPico" }
+};
+
+constexpr std::pair<SearchAlgo, SearchStructure> algoToStructureMap[] = {
+    { SearchAlgo::NEIGHBORS_PTR,      	SearchStructure::PTR_OCTREE },
+    { SearchAlgo::NEIGHBORS,          	SearchStructure::LINEAR_OCTREE },
+    { SearchAlgo::NEIGHBORS_PRUNE,    	SearchStructure::LINEAR_OCTREE },
+    { SearchAlgo::NEIGHBORS_STRUCT,   	SearchStructure::LINEAR_OCTREE },
+    { SearchAlgo::NEIGHBORS_APPROX,   	SearchStructure::LINEAR_OCTREE },
+    { SearchAlgo::NEIGHBORS_UNIBN,    	SearchStructure::UNIBN_OCTREE },
+    { SearchAlgo::NEIGHBORS_PCLKD,    	SearchStructure::PCL_KDTREE },
+    { SearchAlgo::NEIGHBORS_PCLOCT,   	SearchStructure::PCL_OCTREE },
+    { SearchAlgo::NEIGHBORS_NANOFLANN,	SearchStructure::NANOFLANN_KDTREE },
+    { SearchAlgo::NEIGHBORS_PICOTREE,	SearchStructure::PICOTREE },
+    { SearchAlgo::KNN_V2,             	SearchStructure::LINEAR_OCTREE },
+	{ SearchAlgo::KNN_NANOFLANN,		SearchStructure::NANOFLANN_KDTREE },
+	{ SearchAlgo::KNN_PCLKD,			SearchStructure::PCL_KDTREE },
+	{ SearchAlgo::KNN_PCLOCT,			SearchStructure::PCL_OCTREE },
+	{ SearchAlgo::KNN_PICOTREE,			SearchStructure::PICOTREE }
+};
+
+enum EncoderType { 
+	NO_ENCODING, 
+	MORTON_ENCODER_3D, 
+	MORTON_ENCODER_2D_X, 
+	MORTON_ENCODER_2D_Y, 
+	MORTON_ENCODER_2D_Z, 
+	HILBERT_ENCODER_3D, 
+	HILBERT_ENCODER_2D_X, 
+	HILBERT_ENCODER_2D_Y,
+	HILBERT_ENCODER_2D_Z 
+};
+
+constexpr std::pair<EncoderType, std::string_view> encoderTypeMap[] = {
+    { EncoderType::NO_ENCODING,       		"none" },
+    { EncoderType::MORTON_ENCODER_3D,   	"mort" },
+    { EncoderType::MORTON_ENCODER_2D_X,   	"mort_2d_x" },
+    { EncoderType::MORTON_ENCODER_2D_Y,   	"mort_2d_y" },
+    { EncoderType::MORTON_ENCODER_2D_Z,   	"mort_2d_z" },
+    { EncoderType::HILBERT_ENCODER_3D,  	"hilb" },
+    { EncoderType::HILBERT_ENCODER_2D_X,   	"hilb_2d_x" },
+    { EncoderType::HILBERT_ENCODER_2D_Y,   	"hilb_2d_y" },
+    { EncoderType::HILBERT_ENCODER_2D_Z,   	"hilb_2d_z" },
+};
+
+enum class Kernel_t
+{
+	circle,
+	sphere,
+	square,
+	cube
+};
+
+constexpr std::pair<Kernel_t, std::string_view> kernelMap[] = {
+	{Kernel_t::sphere, "sphere"},
+	{Kernel_t::circle, "circle"},
+	{Kernel_t::cube, "cube"},
+	{Kernel_t::square, "square"}
+};
+
+enum class ContainerType {
+	AoS,
+	SoA
+};
+
+constexpr std::pair<ContainerType, std::string_view> containerTypeMap[] = {
+    { ContainerType::AoS, 	"PointsAoS" },
+    { ContainerType::SoA,	"PointsSoA" },
+};
+
+constexpr SearchStructure algoToStructure(SearchAlgo algo) {
+    for (const auto& [key, val] : algoToStructureMap) {
+        if (key == algo) return val;
     }
+    return SearchStructure::PTR_OCTREE; // Default fallback
 }
 
-constexpr std::string encoderTypeToString(EncoderType enc) {
-    switch (enc) {
-		case EncoderType::NO_ENCODING: return "none";
-        case EncoderType::MORTON_ENCODER_3D: return "mort";
-        case EncoderType::HILBERT_ENCODER_3D: return "hilb";
-        default: return "Unknown";
+constexpr std::string_view searchStructureToString(SearchStructure structure) {
+    for (const auto& [key, val] : structureMap) {
+        if (key == structure) return val;
     }
+    return "Unknown";
 }
+
+constexpr std::string_view searchAlgoToString(SearchAlgo algo) {
+    for (const auto& [key, val] : searchAlgoMap) {
+        if (key == algo) return val;
+    }
+    return "Unknown";
+}
+
+constexpr std::string_view encoderTypeToString(EncoderType enc) {
+    for (const auto& [key, val] : encoderTypeMap) {
+        if (key == enc) return val;
+    }
+    return "Unknown";
+}
+
+constexpr std::string_view kernelToString(Kernel_t kernel) {
+    for (const auto& [key, val] : kernelMap) {
+        if (key == kernel) return val;
+    }
+    return "Unknown";
+}
+
+constexpr std::string_view containerTypeToString(ContainerType containerType) {
+    for (const auto& [key, val] : containerTypeMap) {
+        if (key == containerType) return val;
+    }
+    return "Unknown";
+}
+
 
 class main_options
 {
@@ -46,16 +170,37 @@ public:
 	fs::path outputDirName{"out"};
 	std::string inputFileName{};
 
+	// Container type
+	ContainerType containerType = ContainerType::AoS; // default == AoS == std::vector<Point> wrapper
+
 	// Benchmark parameters
 	std::vector<float> benchmarkRadii{2.5, 5.0, 7.5, 10.0};
+	std::vector<size_t> benchmarkKValues{10, 50, 250, 1000};
+
 	size_t repeats{2};
 	size_t numSearches{10000};
 	
 	std::set<Kernel_t> kernels{Kernel_t::sphere, Kernel_t::circle, Kernel_t::cube, Kernel_t::square};
 	std::set<SearchAlgo> searchAlgos{SearchAlgo::NEIGHBORS_PTR, SearchAlgo::NEIGHBORS, SearchAlgo::NEIGHBORS_PRUNE, SearchAlgo::NEIGHBORS_STRUCT};
-	std::set<EncoderType> encodings{EncoderType::NO_ENCODING, EncoderType::MORTON_ENCODER_3D, EncoderType::HILBERT_ENCODER_3D};
+	std::set<SearchStructure> searchStructures{SearchStructure::PTR_OCTREE, SearchStructure::LINEAR_OCTREE};
+	std::set<EncoderType> encodings{
+		EncoderType::NO_ENCODING, 
+		EncoderType::MORTON_ENCODER_3D, 
+		EncoderType::MORTON_ENCODER_2D_X, 
+		EncoderType::MORTON_ENCODER_2D_Y, 
+		EncoderType::MORTON_ENCODER_2D_Z, 
+		EncoderType::HILBERT_ENCODER_3D,
+		EncoderType::HILBERT_ENCODER_2D_X, 
+		EncoderType::HILBERT_ENCODER_2D_Y, 
+		EncoderType::HILBERT_ENCODER_2D_Z, 
+	};
+
 
 	bool debug{false};
+	bool buildEncBenchmarks{false};
+	std::optional<SearchStructure> memoryStructure{std::nullopt};
+	bool localityBenchmarks{false};
+	bool cacheProfiling{false};
 	bool checkResults{false};
 	bool useWarmup{true};
 	std::vector<double> approximateTolerances{50.0};
@@ -64,7 +209,6 @@ public:
 	bool searchAll{false};
 	size_t maxPointsLeaf = 128;
 	double pclOctResolution = 0.1;
-
 };
 
 extern main_options mainOptions;
@@ -73,8 +217,10 @@ enum LongOptions : int
 {
 	HELP,
 	INPUT,
+	CONTAINER_TYPE,
 	OUTPUT,
 	RADII,
+	K_VALUES,
 	REPEATS,
 	SEARCHES,
 	KERNELS,
@@ -82,6 +228,10 @@ enum LongOptions : int
 	ENCODINGS,
 	
 	DEBUG,
+	BUILD_ENC,
+	MEMORY,
+	LOCALITY,
+	CACHE_PROFILING,
 	CHECK,
 	NO_WARMUP,
 	APPROXIMATE_TOLERANCES,
@@ -92,14 +242,16 @@ enum LongOptions : int
 };
 
 // Define short options
-const char* const short_opts = "h:i:o:r:s:t:b:k:a:e:cb:";
+const char* const short_opts = "h:i:c:o:r:v:s:t:b:k:a:e:cb:";
 
 // Define long options
 const option long_opts[] = {
 	{ "help", no_argument, nullptr, LongOptions::HELP },
 	{ "input", required_argument, nullptr, LongOptions::INPUT },
+	{ "container-type", required_argument, nullptr, LongOptions::CONTAINER_TYPE },
 	{ "output", required_argument, nullptr, LongOptions::OUTPUT },
 	{ "radii", required_argument, nullptr, LongOptions::RADII },
+	{ "kvalues", required_argument, nullptr, LongOptions::K_VALUES },
 	{ "repeats", required_argument, nullptr, LongOptions::REPEATS },
 	{ "searches", required_argument, nullptr, LongOptions::SEARCHES },
 	{ "kernels", required_argument, nullptr, LongOptions::KERNELS},
@@ -107,6 +259,10 @@ const option long_opts[] = {
 	{ "encodings", required_argument, nullptr, LongOptions::ENCODINGS },
 
 	{ "debug", no_argument, nullptr, LongOptions::DEBUG },
+	{ "build-enc", no_argument, nullptr, LongOptions::BUILD_ENC },
+	{ "memory", required_argument, nullptr, LongOptions::MEMORY },
+	{ "locality", no_argument, nullptr, LongOptions::LOCALITY },
+	{ "cache-profiling", no_argument, nullptr, LongOptions::CACHE_PROFILING },
 	{ "check", no_argument, nullptr, LongOptions::CHECK },
 	{ "no-warmup", no_argument, nullptr, LongOptions::NO_WARMUP },
 	{ "approx-tol", required_argument, nullptr, LongOptions::APPROXIMATE_TOLERANCES },
@@ -126,6 +282,3 @@ std::string getKernelListString();
 std::string getSearchAlgoListString();
 std::string getEncoderListString();
 void processArgs(int argc, char** argv);
-
-
-#endif // CPP_MAIN_OPTIONS_HPP

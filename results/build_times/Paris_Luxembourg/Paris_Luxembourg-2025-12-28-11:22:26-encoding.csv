@@ -1,0 +1,2 @@
+container,enc_type,cloud_size,bbox_time,enc_time,sort_time,repeats,used_warmup
+PointsAoS,hilb,50000000,0.0680946,0.473543,4.49073,2,1

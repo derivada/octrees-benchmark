@@ -20,3 +20,14 @@ message("Libraries loaded!\n")
 message("Building ${PROJECT_NAME} ...")
 include(cmake/CMakeBuildExec.cmake)
 message("Project built!\n\n")
+
+# Tests
+option(BUILD_TESTS "Build unit tests (download GoogleTest)" ON)
+if(BUILD_TESTS)
+    include(CTest)
+    enable_testing()
+    add_subdirectory(tests)
+endif()
+
+# Examples
+add_subdirectory(examples)
