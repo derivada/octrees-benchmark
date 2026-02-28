@@ -133,7 +133,7 @@ constexpr inline Time_t square(const Time_t& n)
 template<typename Time_t>
 constexpr inline bool onInterval(const Time_t& n, const Time_t& min, const Time_t& max)
 {
-	return n > min && n < max;
+	return n >= min && n <= max;
 }
 
 template<typename Time_t>

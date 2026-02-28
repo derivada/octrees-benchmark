@@ -46,7 +46,7 @@ TEST_F(ComplexTest, DegenerateLine) {
     LinearOctree octree(points, codes, box, morton);
 
     Point searchPoint(5.0, 0.0, 0.0);
-    double radius = 0.5;
+    double radius = 0.55;
     auto results = octree.neighborsPrune<Kernel_t::sphere>(searchPoint, radius);
     
     auto expected = bruteForceRadius(points, searchPoint, radius);

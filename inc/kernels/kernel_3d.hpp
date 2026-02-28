@@ -91,7 +91,7 @@ class KernelSphere : public Kernel3D
 		double cy = y + octantRadius;
 		double cz = z + octantRadius;
 	
-		if ((cx * cx + cy * cy + cz * cz) < radiusSq_)
+		if ((cx * cx + cy * cy + cz * cz) <= radiusSq_)
 			return IntersectionJudgement::INSIDE;
 	
 		// === OVERLAPS ===
@@ -104,7 +104,7 @@ class KernelSphere : public Kernel3D
 		y = std::max(y - octantRadius, 0.0);
 		z = std::max(z - octantRadius, 0.0);
 	
-		if ((x * x + y * y + z * z) < radiusSq_)
+		if ((x * x + y * y + z * z) <= radiusSq_)
 			return IntersectionJudgement::OVERLAP;
 	
 		return IntersectionJudgement::OUTSIDE;
@@ -137,7 +137,7 @@ class KernelSphere : public Kernel3D
 		double cx = dx + rx;
 		double cy = dy + ry;
 		double cz = dz + rz;
-		if ((cx * cx + cy * cy + cz * cz) < radiusSq_)
+		if ((cx * cx + cy * cy + cz * cz) <= radiusSq_)
 			return IntersectionJudgement::INSIDE;
 
 		// === OVERLAPS ===
@@ -149,7 +149,7 @@ class KernelSphere : public Kernel3D
 		dy = std::max(dy - ry, 0.0);
 		dz = std::max(dz - rz, 0.0);
 
-		if ((dx * dx + dy * dy + dz * dz) < radiusSq_)
+		if ((dx * dx + dy * dy + dz * dz) <= radiusSq_)
 			return IntersectionJudgement::OVERLAP;
 
 		return IntersectionJudgement::OUTSIDE;

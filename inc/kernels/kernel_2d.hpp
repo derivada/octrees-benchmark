@@ -59,7 +59,7 @@ class KernelCircle : public Kernel2D
 	{
 		double d1 = p.getX() - center().getX();
 		double d2 = p.getY() - center().getY();
-		return d1*d1 + d2*d2 < radiusSq_;
+		return d1*d1 + d2*d2 <= radiusSq_;
 	}
 
 	/**
@@ -86,7 +86,7 @@ class KernelCircle : public Kernel2D
 		double cx = x + octantRadius;
 		double cy = y + octantRadius;
 	
-		if ((cx * cx + cy * cy) < radiusSq_)
+		if ((cx * cx + cy * cy) <= radiusSq_)
 			return IntersectionJudgement::INSIDE;
 	
 		// === OVERLAPS ===
@@ -98,7 +98,7 @@ class KernelCircle : public Kernel2D
 		x = std::max(x - octantRadius, 0.0);
 		y = std::max(y - octantRadius, 0.0);
 	
-		if ((x * x + y * y) < radiusSq_)
+		if ((x * x + y * y) <= radiusSq_)
 			return IntersectionJudgement::OVERLAP;
 	
 		return IntersectionJudgement::OUTSIDE;
@@ -126,7 +126,7 @@ class KernelCircle : public Kernel2D
 		// Farthest corner from center (Minkowski sum check)
 		double cx = dx + rx;
 		double cy = dy + ry;
-		if ((cx * cx + cy * cy) < radiusSq_)
+		if ((cx * cx + cy * cy) <= radiusSq_)
 			return IntersectionJudgement::INSIDE;
 
 		// === OVERLAPS ===
@@ -137,7 +137,7 @@ class KernelCircle : public Kernel2D
 		dx = std::max(dx - rx, 0.0);
 		dy = std::max(dy - ry, 0.0);
 
-		if ((dx * dx + dy * dy) < radiusSq_)
+		if ((dx * dx + dy * dy) <= radiusSq_)
 			return IntersectionJudgement::OVERLAP;
 
 		return IntersectionJudgement::OUTSIDE;

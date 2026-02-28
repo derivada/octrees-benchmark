@@ -1,0 +1,9 @@
+container,structure,max_leaf_points,enc_type,cloud_size,linear_octree_leaf_time,linear_octree_internal_time,build_time,memory_used,number_of_nodes,leaf_nodes,internal_nodes,max_depth_seen,min_radii_seen,repeats,used_warmup,l1d_miss,l2d_miss,l3_miss
+PointsAoS,ptrOct,128,hilb,29697591,0,0,8.47464,413233720,1372289,1200753,171536,17,0.000245972,2,1,0,0,0
+PointsAoS,linOct,128,hilb,29697591,0.123697,0.0778351,0.201532,71360152,1372289,1200753,171536,17,0.000245972,2,1,0,0,0
+PointsAoS,uniOct,128,hilb,29697591,0,0,2.85917,227801964,908430,742016,166414,17,0.000939884,2,1,0,0,0
+PointsAoS,pclOct,128,hilb,29697591,0,0,3.81564,62306128,0,0,0,0,0,2,1,0,0,0
+PointsAoS,pclKD,128,hilb,29697591,0,0,9.70757,0,0,0,0,0,0,2,1,0,0,0
+PointsAoS,nanoKD,128,hilb,29697591,0,0,7.94502,280163656,0,0,0,0,0,2,1,0,0,0
+PointsAoS,picoTree,128,hilb,29697591,0,0,3.89116,155615348,0,0,0,0,0,2,1,0,0,0
+PointsAoS,linOctSeqBuild,128,hilb,29697591,0.820625,0.242892,1.06352,71360152,1372289,1200753,171536,17,0.000245972,2,1,0,0,0
