@@ -88,7 +88,7 @@ def filter_by_params(df: pd.DataFrame, params: Dict) -> pd.DataFrame:
     return df[mask]
 
 def plot_runtime_comparison(data_path, cloud, viz_config, encoder="all", kernel="all", 
-                            show_warmup_time=False, cols=1, figsz=(7, 10), algos="all"):
+                            show_warmup_time=False, cols=1, figsz=(7, 10), algos="all", radius="all"):
     
     df = get_dataset_file(data_path, cloud)
     if algos != "all":
@@ -100,7 +100,8 @@ def plot_runtime_comparison(data_path, cloud, viz_config, encoder="all", kernel=
         df = df[df["kernel"].isin(kernel)]
     if encoder != "all":
         df = df[df["encoder"] == encoder]
-    
+    if radius != "all":
+        df = df[df["radius"].isin(radius)]
     radii = sorted(df['radius'].unique())
     unique_kernels = df['kernel'].unique()
 
@@ -170,7 +171,7 @@ def plot_runtime_comparison(data_path, cloud, viz_config, encoder="all", kernel=
         
         kernel_group_centers = [i * (group_width + group_gap) + group_width/2 for i in range(len(unique_kernels))]
         ax.set_xticks(kernel_group_centers)
-        ax.set_xticklabels(kernel_labels)
+        ax.set_xticklabels(kernel_labels, fontsize=12)
         
         ax.text(0, 1.1, f'$r = {radius}~m$', transform=ax.transAxes,
                 fontsize=16, va='top', ha='left')
@@ -184,7 +185,7 @@ def plot_runtime_comparison(data_path, cloud, viz_config, encoder="all", kernel=
             curr_row += 1
             
     fig.legend(legend_handles, legend_labels, loc="upper center",
-               bbox_to_anchor=(0.5, 1), ncol=len(legend_labels),
+               bbox_to_anchor=(0.5, 1.12), ncol=len(legend_labels),
                framealpha=0.9, borderpad=0.4, handletextpad=0.4,
                labelspacing=0.25, title=None)
     return fig
@@ -288,7 +289,7 @@ def plot_result_sizes_runtime_log(data_path, clouds_datasets, viz_config,
 
 def plot_knn_comparison(data_path, cloud, viz_config,
                         struct_whitelist=None, low_limit=0, high_limit=1e9,
-                        label_low_limit=0, fsz=(6, 6)):
+                        label_low_limit=0, fsz=(6, 6), show_legend=True):
     
     df = get_dataset_file(data_path, cloud)
     df = df[df["kernel"] == "KNN"]
@@ -302,10 +303,15 @@ def plot_knn_comparison(data_path, cloud, viz_config,
         df = df[df["avg_result_size"] <= high_limit]
     if struct_whitelist is not None:
         df = df[df["octree"].isin(struct_whitelist)]
-        
-    fig, ax = plt.subplots(figsize=fsz)
     
-    # Changed: List to store plot info for sorting later
+    x_limit =  df["avg_result_size"].max() * 1.02
+    y_limit = df["mean"].max() * 1.02
+
+    fig = plt.figure(figsize=fsz)
+    ax = fig.add_axes([0.1, 0.1, 0.9, 0.9])
+    ax.set_xlim(0, x_limit)    
+    ax.set_ylim(0, y_limit)
+    
     legend_items = [] 
     xticks_set = set()
 
@@ -333,7 +339,7 @@ def plot_knn_comparison(data_path, cloud, viz_config,
             color=color,
             label=label,
             linewidth=1.3,
-            markersize=7,
+            markersize=5,
         )
         xticks_set.update(grouped["avg_result_size"].unique())
 
@@ -353,6 +359,7 @@ def plot_knn_comparison(data_path, cloud, viz_config,
     ax.grid(True, linestyle="--", alpha=0.5)
 
     xticks = sorted(x for x in xticks_set if x >= label_low_limit)
+    xticks.remove(10)
     ax.set_xticks(xticks)
     ax.set_xticklabels(
         [str(int(x)) if x == int(x) else f"{x:.1f}" for x in xticks],
@@ -365,10 +372,10 @@ def plot_knn_comparison(data_path, cloud, viz_config,
 
     sorted_handles = [x["handle"] for x in legend_items]
     sorted_labels = [x["label"] for x in legend_items]
-
-    ax.legend(sorted_handles, sorted_labels, loc="upper left",
-              framealpha=0.9, borderpad=0.4, handletextpad=0.4,
-              labelspacing=0.25, title=None)
+    if show_legend:
+        ax.legend(sorted_handles, sorted_labels, loc="upper left",
+                    framealpha=0.9, borderpad=0.4, handletextpad=0.4,
+                    labelspacing=0.25, title=None)
 
     return fig
 
@@ -397,7 +404,7 @@ def plot_octree_parallelization(data_path, cloud, algo, annotated=False, encoder
     ax.set_xlabel("Number of threads", fontsize=15)
     ax.set_ylabel(r"$r$", fontsize=15)
     ax.set_xticklabels(ax.get_xticklabels(), fontsize=15)
-    ax.set_yticklabels(ax.get_yticklabels(), fontsize=15)
+    ax.set_yticklabels(ax.get_yticklabels(), fontsize=13)
     ax.xaxis.set_minor_locator(plt.NullLocator())
     ax.tick_params(axis="both", which="both", length=0)
     cbar.ax.tick_params(axis="y", which="both", length=0)
@@ -497,7 +504,7 @@ def table_speedup_vs_baseline(data_path, clouds_datasets, kernel, viz_config, en
 def plot_encoder_improvement(data_path, clouds_datasets, viz_config, 
                              base_encoder, improved_encoder, 
                              kernel="all", outlier_threshold=80,  # Added parameter
-                             fsz=(7, 7), fs_legend=14):
+                             fsz=(7, 7), fs_legend=14, show_legend=True, legend_loc="upper right"):
     
     dfs = read_multiple_datasets(data_path, clouds_datasets)
     
@@ -575,7 +582,7 @@ def plot_encoder_improvement(data_path, clouds_datasets, viz_config,
     
     ax.tick_params(axis='both', which='major', labelsize=12)
     ax.grid(True, which="both", ls="-", alpha=0.2)
-    
-    ax.legend(handles=structure_handles, loc="best", fontsize=fs_legend, framealpha=0.5)
+    if show_legend:
+        ax.legend(handles=structure_handles, loc=legend_loc, fontsize=fs_legend, framealpha=0.5)
     
     return fig

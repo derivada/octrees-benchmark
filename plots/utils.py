@@ -120,15 +120,19 @@ def read_points(data_path: str, cloud_name: str):
         points = np.array([list(map(float, row)) for row in reader])
     return points
 
-# Output a figure
-def output_fig(fig: plt.Figure, output_folder: str, filename: str) -> None: # type: ignore
-    # Create folder if it doesn't exist
+
+def output_fig(fig: plt.Figure, output_folder: str, filename: str, use_tight_layout: bool = False) -> None:
     os.makedirs(output_folder, exist_ok=True)
-    # Save the figure
-    filepath = os.path.join(output_folder, filename + ".pdf")
-    fig.savefig(filepath, dpi=OUTPUT_DPI, bbox_inches='tight', pad_inches=0)
-    plt.close(fig)
-
-
-
+    clean_filename = filename.removesuffix(".pdf")
+    filepath = os.path.join(output_folder, f"{clean_filename}.pdf")
+    bbox = 'tight' if use_tight_layout else None
     
+    fig.savefig(
+        filepath, 
+        bbox_inches=bbox, 
+        pad_inches=0,
+        transparent=True,
+        backend='pdf'
+    )
+    
+    plt.close(fig)
