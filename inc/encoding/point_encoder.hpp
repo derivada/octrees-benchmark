@@ -1,12 +1,12 @@
 #pragma once
 
 #include <bitset>
+#include <chrono>
 #include <cstdint>
 #include <immintrin.h>
 #include <optional>
 
 #include "benchmarking/encoding_log.hpp"
-#include "benchmarking/time_watcher.hpp"
 #include "geometry/box.hpp"
 #include "geometry/point.hpp"
 #include "geometry/point_metadata.hpp"
@@ -297,8 +297,7 @@ public:
 
             std::vector<key_t> keys;
 
-            TimeWatcher tw;
-            tw.start();
+            auto tEncodeStart = std::chrono::steady_clock::now();
 
             // Encoding
             if (mainOptions.containerType == ContainerType::SoA && this->getEncoder() == EncoderType::HILBERT_ENCODER_3D)
@@ -311,11 +310,11 @@ public:
                 keys = encodePoints(points, bbox);
             }
 
-            tw.stop();
+            auto tEncodeEnd = std::chrono::steady_clock::now();
             if (log)
-                log->encodingTime = tw.getElapsedDecimalSeconds();
+                log->encodingTime = std::chrono::duration<double>(tEncodeEnd - tEncodeStart).count();
 
-            tw.start();
+            auto tSortStart = std::chrono::steady_clock::now();
 
             std::vector<key_t> buffer(n);
             Container bufferDecoded(n);
@@ -376,9 +375,9 @@ public:
                     std::swap(*meta_opt, metadata_buffer);
             }
 
-            tw.stop();
+            auto tSortEnd = std::chrono::steady_clock::now();
             if (log)
-                log->sortingTime = tw.getElapsedDecimalSeconds();
+                log->sortingTime = std::chrono::duration<double>(tSortEnd - tSortStart).count();
 
             return keys;
         }
@@ -397,8 +396,7 @@ public:
             constexpr size_t BUCKET_MASK = NUM_BUCKETS - 1;
             constexpr int NUM_PASSES = sizeof(key_t) * 8 / BITS_PER_PASS;
         
-            TimeWatcher tw;
-            tw.start();
+            auto tSortStart = std::chrono::steady_clock::now();
         
             Container buffer(n);
             std::vector<PointMetadata> metadata_buffer;
@@ -453,9 +451,9 @@ public:
                 if (meta_opt) std::swap(*meta_opt, metadata_buffer);
             }
         
-            tw.stop();
-            if (log) log->sortingTime = tw.getElapsedDecimalSeconds();
-            tw.start();
+            auto tSortEnd = std::chrono::steady_clock::now();
+            if (log) log->sortingTime = std::chrono::duration<double>(tSortEnd - tSortStart).count();
+            auto tEncodeStart = std::chrono::steady_clock::now();
         
             // Final encoding
             std::vector<key_t> keys(n);
@@ -464,8 +462,8 @@ public:
                 keys[i] = encodeFromPoint(points[i], bbox);
             }
         
-            tw.stop();
-            if (log) log->encodingTime = tw.getElapsedDecimalSeconds();
+            auto tEncodeEnd = std::chrono::steady_clock::now();
+            if (log) log->encodingTime = std::chrono::duration<double>(tEncodeEnd - tEncodeStart).count();
         
             return keys;
         }
@@ -490,15 +488,14 @@ public:
             std::shared_ptr<EncodingLog> log = nullptr) const
         {
             // Find the bbox
-            TimeWatcher tw;
-            tw.start();
+            auto tBboxStart = std::chrono::steady_clock::now();
             Vector radii;
             Point center = mbb(points, radii);
             Box bbox = Box(center, radii);
-            tw.stop();
+            auto tBboxEnd = std::chrono::steady_clock::now();
             if (log)
             {
-                log->boundingBoxTime = tw.getElapsedDecimalSeconds();
+                log->boundingBoxTime = std::chrono::duration<double>(tBboxEnd - tBboxStart).count();
             }
 
             // Call the regular sortPoints with metadata

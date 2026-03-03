@@ -17,11 +17,11 @@
 
 #pragma once
 
+#include <chrono>
 #include <filesystem>
 #include <fstream>
 #include <optional>
 #include <lasreader.hpp>
-#include "benchmarking/time_watcher.hpp"
 #include "geometry/point.hpp"
 #include "geometry/point_containers.hpp"
 #include "geometry/point_metadata.hpp"
@@ -39,11 +39,11 @@ void createDirectory(const fs::path& dirName) {
 }
 
 template<PointContainer Container>
-void pointCloudReadLog(const Container &points, TimeWatcher &tw, const fs::path& fileName) {
+void pointCloudReadLog(const Container &points, double elapsedSeconds, const fs::path& fileName) {
     auto mem_size = (sizeof(Container) + (sizeof(Point) * points.size())) / (1024.0 * 1024.0);
     const std::string mem_size_str = std::to_string(mem_size) + " MB";
     const std::string point_size_str =  std::to_string(sizeof(Point)) + " bytes";
-    const std::string time_elapsed_str = std::to_string(tw.getElapsedDecimalSeconds()) + " seconds";
+    const std::string time_elapsed_str = std::to_string(elapsedSeconds) + " seconds";
     std::cout << std::fixed << std::setprecision(3); 
     std::cout << std::left << std::setw(LOG_FIELD_WIDTH) << "Point cloud read:"           << std::setw(LOG_FIELD_WIDTH) << fileName.stem()                   			  << "\n";
     std::cout << std::left << std::setw(LOG_FIELD_WIDTH) << "Time to read:"               << std::setw(LOG_FIELD_WIDTH) << time_elapsed_str                               << "\n";
@@ -64,10 +64,9 @@ std::pair<Container, std::optional<std::vector<PointMetadata>>> readPoints(const
 		exit(-1);
 	}
 	std::shared_ptr<FileReader<Container>> fileReader = FileReaderFactory::makeReader<Container>(readerType, fileName);
-	TimeWatcher tw;
-    tw.start();
+    auto t0 = std::chrono::steady_clock::now();
     auto [points, metadata] = fileReader->readMeta();
-    tw.stop();
-    pointCloudReadLog(points, tw, fileName);
+    auto t1 = std::chrono::steady_clock::now();
+    // pointCloudReadLog(points, std::chrono::duration<double>(t1 - t0).count(), fileName);
     return std::make_pair(points, std::optional<std::vector<PointMetadata>>(metadata));
 }
