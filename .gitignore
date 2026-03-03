@@ -2,6 +2,7 @@
 .idea
 .vscode
 build
+build-debug
 data
 heaptrack
 lib

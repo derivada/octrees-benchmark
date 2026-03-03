@@ -36,10 +36,20 @@ macro(link_project_dependencies target_name)
     endif ()
 
     # PicoTree
-    if (TARGET pico_tree)
+    if (PICOTREE_FOUND)
         target_compile_definitions(${target_name} PUBLIC HAVE_PICOTREE)
+    endif()
+
+    if (TARGET pico_tree)
         target_link_libraries(${target_name} PUBLIC pico_tree)
     endif()
+
+    # Google Benchmark
+    if (TARGET benchmark::benchmark)
+        target_compile_definitions(${target_name} PUBLIC HAVE_GOOGLE_BENCHMARK)
+        target_link_libraries(${target_name} PUBLIC benchmark::benchmark)
+    endif()
+
 endmacro()
 
 # Static library
@@ -53,6 +63,16 @@ link_project_dependencies(${PROJECT_NAME}_shared)
 # Executable
 add_executable(${PROJECT_NAME} ${sources})
 link_project_dependencies(${PROJECT_NAME})
+
+# Locality benchmarks with Google Benchmark
+if (BUILD_BENCHMARKS AND TARGET benchmark::benchmark)
+    if (EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/benchmarks/locality_google_benchmark.cpp")
+        add_executable(locality-benchmark benchmarks/locality_google_benchmark.cpp)
+        target_link_libraries(locality-benchmark PRIVATE ${PROJECT_NAME}_shared benchmark::benchmark)
+    else()
+        message(WARNING "Skipping locality-benchmark target: benchmarks/locality_google_benchmark.cpp not found")
+    endif()
+endif ()
 
 # Set Link Time Optimization (LTO)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -flto=auto")

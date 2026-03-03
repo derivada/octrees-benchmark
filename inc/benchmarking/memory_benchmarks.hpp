@@ -10,11 +10,9 @@
 #include "structures/octree.hpp"
 #include "structures/unibn_octree.hpp"
 
-#include "benchmarking.hpp"
 #include "build_log.hpp"
 #include "encoding_log.hpp"
 #include "main_options.hpp"
-#include "time_watcher.hpp"
 
 #ifdef HAVE_PICOTREE
 #include "structures/picotree_profiler.hpp"
@@ -27,6 +25,15 @@
 #include <pcl/kdtree/kdtree_flann.h>
 #include "structures/pcl_wrappers.hpp"
 #endif
+
+/**
+ * NOTE: Only used when profiling heap and called from debug mode in main. 
+ * Runs the build of the structure and then sleeps for 3 seconds so it is easier to do that.
+ * 
+ * If you are not doing that, can just run enc_build_benchmarks, which also records sizes of structures, 
+ * and also runs all the other benchmarks and records build times.
+ * 
+ */
 
 template <PointContainer Container>
 class MemoryBenchmarks {

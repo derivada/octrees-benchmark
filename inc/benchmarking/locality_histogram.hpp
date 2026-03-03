@@ -1,5 +1,6 @@
 #pragma once
 
+#include <chrono>
 #include <omp.h>
 #include <type_traits>
 
@@ -8,12 +9,10 @@
 #include "structures/nanoflann.hpp"
 #include "structures/nanoflann_wrappers.hpp"
 
-#include "benchmarking.hpp"
 #include "main_options.hpp"
-#include "time_watcher.hpp"
 
 template <PointContainer Container>
-class LocalityBenchmark {
+class LocalityHistogram {
     private:
         using PointEncoder = PointEncoding::PointEncoder;
         using key_t = PointEncoding::key_t;
@@ -25,7 +24,7 @@ class LocalityBenchmark {
         std::ofstream &outputFile;
         
     public:
-        LocalityBenchmark(Container& points, std::vector<key_t>& codes, Box box, PointEncoder& enc,
+        LocalityHistogram(Container& points, std::vector<key_t>& codes, Box box, PointEncoder& enc,
             std::ofstream &file) :
             points(points), 
             codes(codes),
@@ -42,8 +41,7 @@ class LocalityBenchmark {
             size_t totalIters = points.size();
             size_t step = std::max<size_t>(1, totalIters / 10);
             std::atomic<size_t> progress(0);
-            TimeWatcher tw;
-            tw.start();
+            auto t0 = std::chrono::steady_clock::now();
             #pragma omp parallel
             {
                 std::unordered_map<size_t, size_t> localIndexDistances;
@@ -78,12 +76,13 @@ class LocalityBenchmark {
                     }
                 }
             }
-            tw.stop();
-            std::cout << "Finished computing neighbours in " << tw.getElapsedDecimalSeconds() << " seconds" << std::endl;
+            auto t1 = std::chrono::steady_clock::now();
+            std::cout << "Finished computing neighbours in "
+                << std::chrono::duration<double>(t1 - t0).count() << " seconds" << std::endl;
             // printPapiResults(events, descriptions, eventValues);
             // Write CSV output
             std::cout << "Writing locality histogram" << std::endl;
-            tw.start();
+            auto t2 = std::chrono::steady_clock::now();
             auto encoderName = enc.getEncoderName();
             outputFile << "encoder,distance,count\n";
             
@@ -104,8 +103,8 @@ class LocalityBenchmark {
             }
             
             outputFile << std::flush;
-            tw.stop();
+            auto t3 = std::chrono::steady_clock::now();
             std::cout << "Finished writing histogram (" << total << " entries) in " 
-                << tw.getElapsedDecimalSeconds() << " seconds" << std::endl;
+                << std::chrono::duration<double>(t3 - t2).count() << " seconds" << std::endl;
         }
 };

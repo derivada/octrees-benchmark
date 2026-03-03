@@ -1,12 +1,12 @@
 #pragma once
 
+#include <chrono>
 #include <optional>
 #include <bitset>
 #include <fstream>
 #include <unordered_map>
 #include <filesystem>
 #include "benchmarking/build_log.hpp"
-#include "benchmarking/time_watcher.hpp"
 #include "encoding/no_encoding.hpp"
 #include "encoding/point_encoder.hpp"
 #include "geometry/box.hpp"
@@ -571,23 +571,21 @@ protected:
 
         setupBbox(inter);
 
-        TimeWatcher tw;
-
         // Leaf construction
-        tw.start();
+        auto tLeafStart = std::chrono::steady_clock::now();
         buildOctreeLeaves(leaf);
-        tw.stop();
+        auto tLeafEnd = std::chrono::steady_clock::now();
         if(log)
-            log->linearOctreeLeafTime = tw.getElapsedDecimalSeconds();
+            log->linearOctreeLeafTime = std::chrono::duration<double>(tLeafEnd - tLeafStart).count();
         
         // Internal part construction
-        tw.start();
+        auto tInternalStart = std::chrono::steady_clock::now();
         resize(inter);
         buildOctreeInternal(leaf, inter);
         computeGeometry(inter);
-        tw.stop();
+        auto tInternalEnd = std::chrono::steady_clock::now();
         if(log)
-            log->linearOctreeInternalTime = tw.getElapsedDecimalSeconds();
+            log->linearOctreeInternalTime = std::chrono::duration<double>(tInternalEnd - tInternalStart).count();
 
         // Output extra info from the build
         if (log) {

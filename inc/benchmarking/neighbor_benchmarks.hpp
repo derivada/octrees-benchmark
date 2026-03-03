@@ -11,11 +11,11 @@
 #include "structures/octree.hpp"
 #include "structures/unibn_octree.hpp"
 
-#include "benchmarking.hpp"
-#include "papi_events.hpp"
-#include "time_watcher.hpp"
-#include "search_set.hpp"
+#include "benchmarking_stats.hpp"
+#include "gb_wrappers.hpp"
 #include "main_options.hpp"
+#include "papi_events.hpp"
+#include "search_set.hpp"
 
 #ifdef HAVE_PICOTREE
 #include "structures/picotree_wrappers.hpp"
@@ -39,9 +39,77 @@ class NeighborsBenchmark {
         Box box;
         const std::string comment;
         Container& points;
-        size_t currentBenchmarkExecution = 0;
         std::ofstream &outputFile;
         SearchSet &searchSet;
+
+        std::string buildNeighborBenchmarkName(
+            SearchAlgo algo,
+            const std::string& parameter,
+            std::string_view kernelLabel) const {
+            return std::string("NEIGH-")
+                + std::string(searchStructureToString(algoToStructure(algo)))
+                + "-" + enc.getShortEncoderName()
+                + "-" + parameter
+                + "-" + std::string(kernelLabel);
+        }
+
+        template <typename F>
+        std::pair<benchmarking::BenchmarkingStats<double>, size_t> runTimedNeighborBenchmark(
+            const std::string& benchmarkName,
+            F&& function,
+            int eventSet = PAPI_NULL,
+            long long *eventValues = nullptr,
+            int ompThreads = 1) {
+            gb_wrappers::initializeGoogleBenchmark();
+            const size_t measuredRepeats = mainOptions.repeats;
+            size_t lastResult = 0;
+            std::vector<double> iterationMilliseconds;
+
+            benchmark::ClearRegisteredBenchmarks();
+            auto* benchmarkHandle = benchmark::RegisterBenchmark(benchmarkName.c_str(),
+                [function = std::forward<F>(function), eventSet, eventValues, measuredRepeats, ompThreads, &lastResult](benchmark::State& state) mutable {
+                    state.counters["omp_threads"] = static_cast<double>(ompThreads);
+                    state.counters["l1d_miss"] = 0.0;
+                    state.counters["l2d_miss"] = 0.0;
+                    state.counters["l3_miss"] = 0.0;
+                    size_t currentIteration = 0;
+                    for (auto _ : state) {
+                        (void) _;
+                        if (eventSet != PAPI_NULL && eventValues != nullptr && currentIteration == measuredRepeats - 1) {
+                            if (PAPI_start(eventSet) != PAPI_OK) {
+                                std::cout << "Failed to start PAPI." << std::endl;
+                                exit(1);
+                            }
+                        }
+                        lastResult = function();
+                        benchmark::DoNotOptimize(lastResult);
+                        if (eventSet != PAPI_NULL && eventValues != nullptr && currentIteration == measuredRepeats - 1) {
+                            if (PAPI_stop(eventSet, eventValues) != PAPI_OK) {
+                                std::cout << "Failed to stop PAPI." << std::endl;
+                                exit(1);
+                            }
+                            state.counters["l1d_miss"] = static_cast<double>(eventValues[0]);
+                            state.counters["l2d_miss"] = static_cast<double>(eventValues[1]);
+                            state.counters["l3_miss"] = static_cast<double>(eventValues[2]);
+                        }
+                        currentIteration++;
+                    }
+                }
+            );
+
+            benchmarkHandle->Iterations(measuredRepeats);
+            if (mainOptions.useWarmup) {
+                benchmarkHandle->MinWarmUpTime(0.1);
+            }
+            benchmarkHandle->Unit(benchmark::kMillisecond);
+
+            static benchmark::BenchmarkReporter* baseReporter = benchmark::CreateDefaultDisplayReporter();
+            gb_wrappers::ContextOnceReporter contextOnceReporter(baseReporter, nullptr, &iterationMilliseconds);
+            benchmark::RunSpecifiedBenchmarks(&contextOnceReporter, benchmarkName);
+            benchmark::ClearRegisteredBenchmarks();
+
+            return {gb_wrappers::statsFromIterationMilliseconds(iterationMilliseconds, mainOptions.useWarmup), lastResult};
+        }
         
         /**
          * main_parameter might be radius (fixed-radius searches) or k (knn searches)
@@ -49,7 +117,7 @@ class NeighborsBenchmark {
          * kernel is "kNN" or one of the 4 kernels for radius searches
          */
         template <typename ParameterType>
-        inline void appendToCsv(SearchAlgo algo, std::string_view kernel, ParameterType main_parameter, const benchmarking::Stats<>& stats, 
+        inline void appendToCsv(SearchAlgo algo, std::string_view kernel, ParameterType main_parameter, const benchmarking::BenchmarkingStats<>& stats, 
                                 size_t averageResultSize = 0, int numThreads = omp_get_max_threads(), double tolerancePercentage = 0.0) {
             // Check if the file is empty and append header if it is
             if (outputFile.tellp() == 0) {
@@ -102,7 +170,7 @@ class NeighborsBenchmark {
                 << std::endl;
         }
         template <typename ParameterType>
-        inline void appendToCsv(SearchAlgo algo, std::string_view kernel, ParameterType main_parameter, const benchmarking::Stats<>& stats, 
+        inline void appendToCsv(SearchAlgo algo, std::string_view kernel, ParameterType main_parameter, const benchmarking::BenchmarkingStats<>& stats, 
                                 std::vector<long long> &eventValues, size_t averageResultSize = 0, 
                                 int numThreads = omp_get_max_threads(), double tolerancePercentage = 0.0
                                 ) {
@@ -183,15 +251,21 @@ class NeighborsBenchmark {
         }
         
         void executeBenchmark(const std::function<size_t(double)>& searchCallback, std::string_view kernelName, SearchAlgo algo) {
-            std::cout << "  Running " << searchAlgoToString(algo) << " on kernel " << kernelName << std::endl;
+            // std::cout << "  Running " << searchAlgoToString(algo) << " on kernel " << kernelName << std::endl;
             const auto& radii = mainOptions.benchmarkRadii;
-            const size_t repeats = mainOptions.repeats;
             const auto& numThreads = mainOptions.numThreads;         
             for (size_t th = 0; th < numThreads.size(); th++) {    
                 size_t numberOfThreads = numThreads[th];                
                 omp_set_num_threads(numberOfThreads);
                 for (size_t r = 0; r < radii.size(); r++) {
                     double radius = radii[r];
+                    std::ostringstream radiusFormatted;
+                    radiusFormatted << std::fixed << std::setprecision(2) << radius;
+                    const std::string benchmarkName = buildNeighborBenchmarkName(
+                        algo,
+                        radiusFormatted.str(),
+                        kernelName
+                    );
                     if(mainOptions.cacheProfiling) {
                         auto [events, descriptions] = buildCombinedEventList();
                         int eventSet = initPapiEventSet(events);
@@ -200,37 +274,40 @@ class NeighborsBenchmark {
                             std::cout << "Failed to initialize PAPI event set." << std::endl;
                             exit(1);
                         }
-                        auto [stats, averageResultSize] = benchmarking::benchmark<size_t>(repeats, [&]() { 
+                        auto [stats, averageResultSize] = runTimedNeighborBenchmark(benchmarkName, [&]() {
                             return searchCallback(radius); 
-                        }, mainOptions.useWarmup, eventSet, eventValues.data());
+                        }, eventSet, eventValues.data(), numberOfThreads);
                         printPapiResults(events, descriptions, eventValues);
                         appendToCsv(algo, kernelName, radius, stats, eventValues, averageResultSize, numberOfThreads);
                     } else {
-                        auto [stats, averageResultSize] = benchmarking::benchmark<size_t>(repeats, [&]() { 
+                        auto [stats, averageResultSize] = runTimedNeighborBenchmark(benchmarkName, [&]() {
                             return searchCallback(radius); 
-                        }, mainOptions.useWarmup);
+                        }, PAPI_NULL, nullptr, numberOfThreads);
                         appendToCsv(algo, kernelName, radius, stats, averageResultSize, numberOfThreads);
                     }
                     searchSet.reset();
-                    std::cout << std::setprecision(2);
-                    std::cout << "    (" << r + th*numThreads.size() + 1 << "/" << numThreads.size() * radii.size() << ") " 
-                        << "Radius  " << std::setw(8) << radius 
-                        << "Threads " << std::setw(8) << numberOfThreads
-                        << std::endl;
+                    // std::cout << std::setprecision(2);
+                    // std::cout << "    (" << r + th*numThreads.size() + 1 << "/" << numThreads.size() * radii.size() << ") " 
+                    //     << "Radius  " << std::setw(8) << radius 
+                    //     << "Threads " << std::setw(8) << numberOfThreads
+                    //     << std::endl;
                 }
             }
         }
 
         void executeKNNBenchmark(const std::function<size_t(size_t)>& knnSearchCallback, SearchAlgo algo) {
-            std::cout << "  Running k-NN searches with " << searchAlgoToString(algo) << std::endl;
+            // std::cout << "  Running k-NN searches with " << searchAlgoToString(algo) << std::endl;
             const auto& kValues = mainOptions.benchmarkKValues;
-            const size_t repeats = mainOptions.repeats;
             const auto& numThreads = mainOptions.numThreads;         
             for (size_t th = 0; th < numThreads.size(); th++) {    
                 size_t numberOfThreads = numThreads[th];                
                 omp_set_num_threads(numberOfThreads);
                 for (size_t i = 0; i < kValues.size(); i++) {
                     size_t k = kValues[i];
+                    const std::string benchmarkName = buildNeighborBenchmarkName(
+                        algo,
+                        std::to_string(k),
+                        "KNN");
                     if(mainOptions.cacheProfiling) {
                         auto [events, descriptions] = buildCombinedEventList();
                         int eventSet = initPapiEventSet(events);
@@ -239,23 +316,23 @@ class NeighborsBenchmark {
                             std::cout << "Failed to initialize PAPI event set." << std::endl;
                             exit(1);
                         }
-                        auto [stats, averageResultSize] = benchmarking::benchmark<size_t>(repeats, [&]() { 
+                        auto [stats, averageResultSize] = runTimedNeighborBenchmark(benchmarkName, [&]() {
                             return knnSearchCallback(k); 
-                        }, mainOptions.useWarmup, eventSet, eventValues.data());
+                        }, eventSet, eventValues.data(), numberOfThreads);
                         printPapiResults(events, descriptions, eventValues);
                         appendToCsv(algo, "KNN", k, stats, eventValues, averageResultSize, numberOfThreads);
                     } else {
-                        auto [stats, averageResultSize] = benchmarking::benchmark<size_t>(repeats, [&]() { 
+                        auto [stats, averageResultSize] = runTimedNeighborBenchmark(benchmarkName, [&]() {
                             return knnSearchCallback(k); 
-                        }, mainOptions.useWarmup);
+                        }, PAPI_NULL, nullptr, numberOfThreads);
                         appendToCsv(algo, "KNN", k, stats, averageResultSize, numberOfThreads);
                     }
                     searchSet.reset();
-                    std::cout << std::setprecision(2);
-                    std::cout << "    (" << i + th*numThreads.size() + 1 << "/" << numThreads.size() * kValues.size() << ") " 
-                        << "k  " << std::setw(8) << k 
-                        << "Threads " << std::setw(8) << numberOfThreads
-                        << std::endl;
+                    // std::cout << std::setprecision(2);
+                    // std::cout << "    (" << i + th*numThreads.size() + 1 << "/" << numThreads.size() * kValues.size() << ") " 
+                    //     << "k  " << std::setw(8) << k 
+                    //     << "Threads " << std::setw(8) << numberOfThreads
+                    //     << std::endl;
                 }
             }
         }
@@ -691,19 +768,19 @@ class NeighborsBenchmark {
 
         /// @brief Main benchmarking function
         void runAllBenchmarks() {
-            printBenchmarkInfo();
+            // printBenchmarkInfo();
             int currentStructureBenchmark = 1;
             int totalStructureBenchmarks = mainOptions.searchStructures.size();
             for(SearchStructure structure: mainOptions.searchStructures) {
-                std::cout << "Starting benchmarks over structure " << searchStructureToString(structure) 
-                    << " (" << currentStructureBenchmark << " out of " << totalStructureBenchmarks << " structures)" << std::endl; 
+                // std::cout << "Starting benchmarks over structure " << searchStructureToString(structure) 
+                //     << " (" << currentStructureBenchmark << " out of " << totalStructureBenchmarks << " structures)" << std::endl; 
                 switch(structure) {
                     case SearchStructure::PTR_OCTREE:
                         initializeBenchmarkPtrOctree();
                     break;
                     case SearchStructure::LINEAR_OCTREE:
                         if(!enc.is3D()) {
-                            std::cout << "Skipping Linear Octree since reordering is not 3D!" << std::endl;
+                            // std::cout << "Skipping Linear Octree since reordering is not 3D!" << std::endl;
                         } else {
                             initializeBenchmarkLinearOctree();
                         }
