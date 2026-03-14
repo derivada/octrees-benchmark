@@ -82,7 +82,7 @@ Under the folder `plots` we include all the python scripts for generating the fi
 
 ### Tests / Examples
 
-A small usage example of the library features is provided under `tests/example.cpp`. It is automatically built alongside the main project.
+A small usage example of the library features is provided under `examples/example.cpp`. It is automatically built alongside the main project.
 
 ```bash
 make test_library
