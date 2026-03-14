@@ -3,40 +3,66 @@
 ## Background
 
 LiDAR (Light and Ranging Detection) technology has now become the quintessential technique for collecting geospatial data from the earth's surface. This code implements a linearized octree based on ideas from Keller et al. and Behley et al. for fast fixed-radius neighbourhood searches, achieving better performance than other Octrees and KD-trees tested, such as nanoflann KD-tree, picoTree, PCL Octree and KD-Tree, and unibnOctree. We also analyze the performance of Morton and Hilbert Space Filling Curves (SFCs). SFC Reordering allows for faster searches and is essential for the construction of the linear Octree. Extensive benchmarking and result plotting code and scripts are also provided.
-		
+
+## Publication
+
+This code is associated with a research paper published as a preprint:
+
+**Efficient Neighbourhood Search in 3D Point Clouds Through Space-Filling Curves and Linear Octrees**
+
+**Authors:** Pablo D. Viñambres, Miguel Yermo, Silvia R. Alcaraz, Oscar G. Lorenzo, Francisco F. Rivera, José C. Cabaleiro
+
+**arXiv Preprint:** https://arxiv.org/abs/2603.06771 ([PDF](https://arxiv.org/pdf/2603.06771))
+
+### Citation
+
+If you use this code in your research, please cite the associated paper using one of the following formats:
+
+**BibTeX:**
+```bibtex
+@article{Viñambres2026,
+  title={Efficient Neighbourhood Search in 3D Point Clouds Through Space-Filling Curves and Linear Octrees},
+  author={Viñambres, Pablo D. and Yermo, Miguel and Alcaraz, Silvia R. and Lorenzo, Oscar G. and Rivera, Francisco F. and Cabaleiro, José C.},
+  journal={arXiv preprint arXiv:2603.06771},
+  year={2026}
+}
+```
+
+**APA:**
+```
+Viñambres, P. D., Yermo, M., Alcaraz, S. R., Lorenzo, O. G., Rivera, F. F., & Cabaleiro, J. C. (2026). Efficient neighbourhood search in 3D point clouds through space-filling curves and linear octrees. arXiv Preprint, 2603.06771.
+```
+
+**DOI:** https://doi.org/10.48550/arXiv.2603.06771
+
 ## Installation
 
 ### Dependencies
-- LASTools:
-    First we need the dependencies, listed at https://github.com/LAStools/LAStools:
-    ```bash
-    sudo apt-get install libjpeg62 libpng-dev libtiff-dev libjpeg-dev libz-dev libproj-dev liblzma-dev libjbig-dev libzstd-dev libgeotiff-dev libwebp-dev liblzma-dev libsqlite3-dev
-    ```
 
-    Now we clone the repo and build:
-    ```bash
-    git clone --depth 1 https://github.com/LAStools/LAStools lib/LAStools
-    (cd lib/LAStools && cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=$PWD/../LASlib . && cmake --build build -- -j && cmake --install build)
-    rm -rf lib/LAStools
-    ```
-    
-- PCL version 1.15 (Optional) 
-    Get 1.15 source code from  `https://github.com/PointCloudLibrary/pcl/releases` and build it. The folder were we installed it is `~/local/pcl`, but that can be changed to any other folder, with an appropiate change in `CMakeLibraries.cmake`. Can also change the version to look for in that file.
-    ```bash
-    wget https://github.com/PointCloudLibrary/pcl/releases/download/pcl-1.15.0/source.tar.gz
-    tar xvf source.tar.gz
-    cd pcl && mkdir build && cd build
-    cmake .. -DCMAKE_INSTALL_PREFIX=$HOME/local/pcl -DCMAKE_BUILD_TYPE=Release
-    make -j2
-    make -j2 install
-    ```
-    If PCL is not found during compilation, code will compile just fine, but without support for PCL Octree and KD-Tree related benchmarks.
+Install system-level dependencies and build required libraries using the provided installation scripts:
 
-- PAPI (Optional, for cache profiling)
+**Build and install libraries:**
+The project includes installation scripts in the `scripts/` directory:
+
+- **LASlib** (required):
   ```bash
-    wget https://github.com/icl-utk-edu/papi/releases/download/papi-7-2-0-t/papi-7.2.0.tar.gz -P lib
-    tar xvf lib/papi-7.2.0.tar.gz -C lib && rm lib/papi-7.2.0.tar.gz && mv lib/papi-7.2.0 lib/papi/
-    (cd lib/papi/src && ./configure --prefix=$(pwd)/.. && make -j && make install)
+  bash scripts/install_laslib.sh
+  ```
+
+- **PAPI** (required for cache profiling):
+  ```bash
+  bash scripts/install_papi.sh
+  ```
+
+- **PCL** (optional, for PCL benchmark comparisons):
+  ```bash
+  bash scripts/install_pcl.sh
+  ```
+  If PCL is not found during compilation, the code will compile successfully but without PCL Octree and KD-Tree benchmark support.
+
+- **Picotree** (optional, for Picotree benchmark comparisons):
+  ```bash
+  bash scripts/install_picotree.sh
   ```
 
 ### Compilation
