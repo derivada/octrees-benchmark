@@ -79,3 +79,16 @@ if (${PAPI_FOUND})
 else ()
     message(SEND_ERROR "Could not find Papi")
 endif ()
+
+# Google Benchmark
+option(BUILD_BENCHMARKS "Build benchmarks using Google Benchmark" ON)
+if(BUILD_BENCHMARKS)
+    include(FetchContent)
+    FetchContent_Declare(
+        benchmark
+        URL https://github.com/google/benchmark/archive/refs/tags/v1.8.3.zip
+    )
+    set(BENCHMARK_ENABLE_TESTING OFF CACHE BOOL "" FORCE)
+    FetchContent_MakeAvailable(benchmark)
+    message(STATUS "Google Benchmark available")
+endif()

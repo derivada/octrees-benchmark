@@ -41,6 +41,9 @@ struct BuildLog {
     long long l2dMisses = 0;
     long long l3Misses = 0;
 
+    // OpenMP Threads used
+    size_t numThreads = 1;
+
     friend std::ostream& operator<<(std::ostream& os, const BuildLog& log) {
         std::string memoryUsedStr = std::to_string(log.memoryUsed / (1024.0 * 1024)) + " MB";
         os << "Encoding and octree construction log:\n";
@@ -65,6 +68,7 @@ struct BuildLog {
             os << std::left << std::setw(32) << "L2d cache misses:" << log.l2dMisses << "\n";
             os << std::left << std::setw(32) << "L3 cache misses:" << log.l3Misses << "\n";
         }
+        os << std::left << std::setw(32) << "OpenMP Threads:" << log.numThreads << "\n";
         os << "\n";
         return os;
     }
@@ -88,7 +92,8 @@ struct BuildLog {
              << mainOptions.useWarmup << ","
              << l1dMisses << ","
              << l2dMisses << ","
-             << l3Misses << "\n"; 
+             << l3Misses << ","
+             << numThreads << "\n"; 
     }
     
     static void writeCSVHeader(std::ostream& out) {
@@ -107,9 +112,10 @@ struct BuildLog {
              << "max_depth_seen,"
              << "min_radii_seen,"
              << "repeats,"
-             << "used_warmup,"
+             << "min_warmup_time,"
              << "l1d_miss,"
              << "l2d_miss,"
-             << "l3_miss\n";
+             << "l3_miss,"
+             << "num_threads\n";
     }
 };

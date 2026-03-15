@@ -1,3 +1,4 @@
+#include <chrono>
 #include <filesystem>
 #include <iomanip>
 #include <iostream>
@@ -12,13 +13,11 @@
 
 #include "readers/handlers.hpp"
 
-#include "benchmarking/benchmarking.hpp"
 #include "benchmarking/enc_build_benchmarks.hpp"
-#include "benchmarking/locality_benchmarks.hpp"
+#include "benchmarking/locality_histogram.hpp"
 #include "benchmarking/memory_benchmarks.hpp"
 #include "benchmarking/neighbor_benchmarks.hpp"
 #include "benchmarking/search_set.hpp"
-#include "benchmarking/time_watcher.hpp"
 
 #include "encoding/point_encoder_factory.hpp"
 
@@ -78,7 +77,7 @@ void localityBenchmark(std::ofstream &outputFile, EncoderType encoding = Encoder
     
     // Prepare the search set (must be done after sorting since it indexes points)
     // Run the benchmarks
-    LocalityBenchmark localityBenchmark(points, codes, box, enc, outputFile);   
+    LocalityHistogram localityBenchmark(points, codes, box, enc, outputFile);   
     localityBenchmark.histogramLocality(50);    
 }
 
@@ -166,10 +165,7 @@ void testKNN(EncoderType encoding = EncoderType::NO_ENCODING) {
     NanoFlannKDTree kdtree(3, npc, {mainOptions.maxPointsLeaf});
     auto pclCloud = convertCloudToPCL(points);
     
-    TimeWatcher twLoct; 
-    TimeWatcher twNano;
-    TimeWatcher twPcloct;
-    TimeWatcher twPclKD;
+    (void)pclCloud;
     long nanosOct = 0, nanosNano = 0, nanosPcloct = 0, nanosPclKD = 0;
     bool seq = true; 
     size_t n = 10000;
@@ -184,18 +180,18 @@ void testKNN(EncoderType encoding = EncoderType::NO_ENCODING) {
                     // Run loct
                     std::vector<size_t> indexesLoct(k);
                     std::vector<double> distancesLoct(k);
-                    twLoct.start();
+                    auto t0 = std::chrono::steady_clock::now();
                     loct.knn(points[searchPoints[i]], k, indexesLoct, distancesLoct);
-                    twLoct.stop();
-                    nanosOct += twLoct.getElapsedNanos();
+                    auto t1 = std::chrono::steady_clock::now();
+                    nanosOct += std::chrono::duration_cast<std::chrono::nanoseconds>(t1 - t0).count();
                     // Run nanoflann
                     std::vector<size_t> indexesNanoflann(k);
                     std::vector<double> distancesNanoflann(k);
                     const double pt[3] = {points[searchPoints[i]].getX(), points[searchPoints[i]].getY(), points[searchPoints[i]].getZ()};
-                    twNano.start();
+                    auto t2 = std::chrono::steady_clock::now();
                     kdtree.knnSearch(pt, k, &indexesNanoflann[0], &distancesNanoflann[0]);
-                    twNano.stop();
-                    nanosNano += twNano.getElapsedNanos();
+                    auto t3 = std::chrono::steady_clock::now();
+                    nanosNano += std::chrono::duration_cast<std::chrono::nanoseconds>(t3 - t2).count();
                 }
         std::cout << "k = " << k << std::endl << std::fixed << std::setprecision(5);
         std::cout << "  linear octree: "    << (double) nanosOct / 1e9  << std::endl;
